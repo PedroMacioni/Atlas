@@ -432,6 +432,7 @@ O que ele muda no lado do aplicativo:
 |---|---|
 | `osrmRouteProvider` chamava o OSRM público do aparelho. | `atlasRouteProvider` chama `POST /v1/routes`; o backend decide o provider e guarda o resultado em cache. |
 | `DEMO_PLACES` vinha no bundle. | `place-service` consulta `GET /v1/places`, com busca e filtro no banco — e cai na lista local se a rede falhar. |
+| Cada abertura da Viagem gastava uma chamada ao OSRM. | O trajeto repetido vem do `route_cache`: 1.767 ms na primeira vez, 98 ms depois. |
 | Uma chave de API precisaria ser embarcada. | As chaves ficam no servidor. Só a URL da API entra no bundle. |
 
 Três arquivos novos no aplicativo, e nenhuma tela reescrita:
@@ -465,17 +466,15 @@ Em ordem sugerida:
    Viagem em andamento, Recomendação e Resumo da viagem. O design system já
    cobre todos os elementos que elas usam; falta o conteúdo real de cada uma
    (Places, voz, modelo de recomendação, histórico).
-1. **Chave de serviço do Supabase** no `backend/.env` — é o que falta para o
-   cache de rotas sair do papel. Ver `backend/README.md`.
-2. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
+1. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
    backend, com a chave do lado do servidor, e não um release na loja.
-3. **Testes do aplicativo** — o backend já tem 26; do lado do app, os
+2. **Testes do aplicativo** — o backend já tem 30; do lado do app, os
    utilitários puros (`distance`, `duration`, `filter-places`) e o parsing dos
    providers estão isolados o bastante para serem testados sem simulador.
-4. **Recentralizar no usuário** — botão para voltar a câmera à posição atual,
+3. **Recentralizar no usuário** — botão para voltar a câmera à posição atual,
    separado do enquadramento da rota.
-5. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
-6. **Development build** — necessário assim que entrar um módulo nativo fora do
+4. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
+5. **Development build** — necessário assim que entrar um módulo nativo fora do
    Expo Go (voz, câmera avançada, mapas com chave própria).
 
 ---

@@ -169,6 +169,10 @@ RouteService.get_route
 Quatro casas decimais ≈ 11 m. Abaixo disso o trajeto calculado é o mesmo, e
 cada casa a mais só fragmenta o cache sem melhorar a resposta.
 
+Medido no trajeto Campinas → Ibirapuera (1.444 pontos, 104 km): **1.767 ms** na
+primeira chamada, **98 ms** na segunda. A geometria volta do banco idêntica,
+ponto a ponto.
+
 Uma falha no cache — leitura ou escrita — **não** derruba a resposta: a rota
 sai do provider, com um aviso no log. O cache é conveniência; o provider é a
 fonte da verdade.
@@ -222,9 +226,12 @@ Tudo por variável de ambiente, com o prefixo `ATLAS_`. Ver `.env.example`.
 
 A que mais importa é `ATLAS_SUPABASE_SERVICE_KEY`: a chave `service_role`, em
 *Project Settings → API Keys*. Ela ignora RLS de propósito — é ela que lê e
-escreve o `route_cache`. Com a chave `anon` no lugar dela, o catálogo de
-lugares funciona e o cache de rotas fica inerte, avisando no log e consultando
-o provider externo em toda chamada.
+escreve o `route_cache`.
+
+Se por acidente a chave `anon` entrar no lugar dela, a falha é silenciosa e
+fácil de diagnosticar: o catálogo de lugares continua funcionando, o cache de
+rotas fica inerte, e o log repete `Cache de rotas indisponível na escrita`. É
+o comportamento projetado — o cache é conveniência, não requisito.
 
 ### Testes
 
@@ -253,12 +260,11 @@ aplicativo não percebe.
 
 ## Próximos passos
 
-1. **Chave de serviço** no `.env`, para o cache de rotas sair do papel.
-2. **Provider de produção** — Google Routes ou Mapbox, com a chave aqui e o
+1. **Provider de produção** — Google Routes ou Mapbox, com a chave aqui e o
    OSRM restrito a desenvolvimento.
-3. **Autenticação** — Supabase Auth, com o token vindo do app e o RLS passando
+2. **Autenticação** — Supabase Auth, com o token vindo do app e o RLS passando
    a distinguir usuários. `places` ganha lugares salvos por pessoa.
-4. **Histórico de viagens** — `POST /v1/trips`, que alimenta o modelo de
+3. **Histórico de viagens** — `POST /v1/trips`, que alimenta o modelo de
    previsão de tempo de trajeto.
-5. **Limpeza do cache** — um `pg_cron` diário apagando linhas vencidas.
-6. **Google Places** — entra em `place_service`, sem o router nem o app mudarem.
+4. **Limpeza do cache** — um `pg_cron` diário apagando linhas vencidas.
+5. **Google Places** — entra em `place_service`, sem o router nem o app mudarem.
