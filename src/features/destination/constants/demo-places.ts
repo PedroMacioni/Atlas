@@ -9,8 +9,29 @@ import type { Place } from '@/features/destination/types/place';
  *
  * Quando o Places entrar, esta constante vira o resultado vazio inicial e a
  * lista passa a vir da API; a tela não muda.
+ *
+ * A ordem do array é a ordem exibida — `filterPlaces` preserva a sequência
+ * original. No banco o mesmo papel cabe à coluna `priority`, porque lá as
+ * linhas não têm ordem própria.
  */
 export const DEMO_PLACES: Place[] = [
+  {
+    /**
+     * Destino recorrente, e por isso o primeiro da lista.
+     *
+     * A coordenada foi conferida em duas fontes: o OpenStreetMap mapeia o
+     * campus pelo acesso da Rodovia Miguel Noel Nascentes Burnier, e o ViaCEP
+     * confirma que o CEP 13087-018 — o mesmo que o OSM devolve — é a Rua Luiz
+     * Otávio, no Parque Taquaral.
+     */
+    id: 'anhanguera-taquaral',
+    name: 'Faculdade Anhanguera',
+    address: 'R. Luiz Otávio, 1313 — Taquaral, Campinas, SP',
+    category: 'saved',
+    saved: true,
+    latitude: -22.8616224,
+    longitude: -47.0451977,
+  },
   {
     id: 'viracopos',
     name: 'Aeroporto de Viracopos',

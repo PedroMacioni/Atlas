@@ -10,6 +10,8 @@ zero rodando estes arquivos na ordem do nome.
 | `20260917223656_seed_demo_places.sql` | Os oito lugares que vinham no bundle do aplicativo. |
 | `20260917223946_create_search_places_function.sql` | `search_places`, a busca insensível a acento. |
 | `20260917224641_fix_saved_filter_semantics.sql` | `saved` passa a filtrar pela marcação do usuário, não pela categoria. |
+| `20260918_add_place_priority.sql` | Coluna `priority`: ordem explícita no catálogo, acima do alfabeto. |
+| `20260918_seed_anhanguera_taquaral.sql` | Faculdade Anhanguera (Taquaral, Campinas) como destino no topo. |
 
 ## Como aplicar
 

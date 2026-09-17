@@ -92,6 +92,13 @@ Os nomes dos campos são idênticos ao tipo `Place` do aplicativo.
 por `saved` devolve o que está marcado, e um posto salvo continua aparecendo em
 `fuel` — a mesma regra de `filter-places.ts`.
 
+A ordem é `saved desc, priority desc, name asc`. A coluna `priority` existe
+porque o alfabeto não expressa importância: sem ela o destino de todo dia
+ficaria abaixo de um aeroporto só porque "Aeroporto" vem antes de
+"Anhanguera". Maior vem primeiro, empate cai no alfabeto, e o padrão `0`
+mantém a ordem de quem não a usa. `priority` não entra na resposta da API — a
+ordem é responsabilidade do servidor, não da tela.
+
 ### Erros
 
 Toda falha sai no mesmo envelope:
