@@ -1,19 +1,32 @@
 # Atlas
 
-Copiloto inteligente de viagem — **Fase 1: base arquitetural e MVP de mapas**.
+Copiloto inteligente de viagem — **Fase 2: backend e API**.
 
 ---
 
 ## 1. Objetivo atual
 
-Esta primeira versão existe para validar um único eixo técnico, de ponta a ponta:
+A fase 1 validou um eixo técnico, de ponta a ponta:
 
 ```
 Expo + React Native + Localização + Mapa + Rotas
 ```
 
-Nada além disso. Não há backend, autenticação, banco de dados, Python nem
-inteligência de qualquer tipo. O que o aplicativo faz hoje:
+A fase 2 acrescentou o segundo:
+
+```
+FastAPI + Supabase + cache de rotas + catálogo de lugares
+```
+
+O backend vive em [`backend/`](backend/README.md) e tem o seu próprio README.
+Ainda não há autenticação nem inteligência de qualquer tipo.
+
+O aplicativo continua funcionando **sem** o backend: sem
+`EXPO_PUBLIC_ATLAS_API_URL` definida, ele chama o OSRM direto e usa a lista
+local de lugares, exatamente como na fase 1. Definir a variável move as
+chamadas para a API sem tocar em nenhuma tela.
+
+O que o aplicativo faz hoje:
 
 1. Pede permissão de localização em primeiro plano ao abrir.
 2. Mostra um mapa com o indicador azul nativo da sua posição.
@@ -123,10 +136,14 @@ atlas/
 │   │   ├── app-header.tsx          # Cabeçalho de marca com safe area
 │   │   └── status-message.tsx      # Faixa de carregando / erro / retry
 │   │
+│   ├── config/
+│   │   └── api.ts                  # EXPO_PUBLIC_ATLAS_API_URL e as URLs
+│   │
 │   ├── features/
 │   │   ├── destination/
 │   │   │   ├── constants/{demo-places,place-categories}.ts
 │   │   │   ├── hooks/use-place-search.ts
+│   │   │   ├── services/place-service.ts   # API do Atlas ou lista local
 │   │   │   ├── types/place.ts
 │   │   │   └── utils/filter-places.ts
 │   │   ├── location/
@@ -137,7 +154,8 @@ atlas/
 │   │   │   ├── constants/map-style.ts
 │   │   │   └── types/coordinate.ts
 │   │   ├── routing/
-│   │   │   ├── providers/osrm-route-provider.ts
+│   │   │   ├── providers/atlas-route-provider.ts   # fala com o backend
+│   │   │   ├── providers/osrm-route-provider.ts    # direto, sem backend
 │   │   │   ├── services/route-service.ts
 │   │   │   └── types/route-provider.ts, route-result.ts
 │   │   └── trip/
@@ -148,9 +166,16 @@ atlas/
 │   ├── theme/                      # colors, typography, spacing, radius, shadows
 │   └── utils/                      # http.ts, distance.ts, duration.ts
 │
+├── backend/                        # API do Atlas — FastAPI + Supabase
+│   ├── app/                        # ver backend/README.md
+│   ├── tests/
+│   ├── pyproject.toml
+│   └── .env.example
+│
 ├── assets/
 ├── app.json
 ├── package.json
+├── .env.example                    # EXPO_PUBLIC_ATLAS_API_URL
 └── tsconfig.json
 ```
 
@@ -169,6 +194,8 @@ atlas/
 | Nenhum hexadecimal fora de `theme/colors.ts` | A identidade visual muda em um arquivo só. |
 | Nenhum `fontSize` ou `fontFamily` fora de `theme/typography.ts` | Todo texto passa pelo componente `Text` e por uma variante nomeada. |
 | Nenhum `fetch` solto em componente | Toda rede passa por `utils/http.ts`. |
+| Nenhuma URL de serviço fora de `config/api.ts` | O endereço da API muda em um arquivo só. |
+| Nenhuma chave de API no aplicativo | Credenciais vivem no backend. `EXPO_PUBLIC_` é texto puro no bundle. |
 | Nenhum `Dimensions.get` | Layout só com flexbox e `react-native-safe-area-context`. |
 | Nenhuma coordenada literal em telas | Ficam em `features/trip/constants/demo-route.ts`. |
 
@@ -394,7 +421,43 @@ dentro do provider — a tradução é responsabilidade dele, não da interface.
 
 ---
 
-## 10. Próximos passos
+## 10. A API do Atlas
+
+O backend tem README próprio, com os endpoints, o envelope de erro e o esquema
+do banco: **[`backend/README.md`](backend/README.md)**.
+
+O que ele muda no lado do aplicativo:
+
+| Antes | Agora |
+|---|---|
+| `osrmRouteProvider` chamava o OSRM público do aparelho. | `atlasRouteProvider` chama `POST /v1/routes`; o backend decide o provider e guarda o resultado em cache. |
+| `DEMO_PLACES` vinha no bundle. | `place-service` consulta `GET /v1/places`, com busca e filtro no banco — e cai na lista local se a rede falhar. |
+| Uma chave de API precisaria ser embarcada. | As chaves ficam no servidor. Só a URL da API entra no bundle. |
+
+Três arquivos novos no aplicativo, e nenhuma tela reescrita:
+
+| Arquivo | Papel |
+|---|---|
+| `config/api.ts` | Lê `EXPO_PUBLIC_ATLAS_API_URL` e monta as URLs. |
+| `features/routing/providers/atlas-route-provider.ts` | Provider de rotas que fala com a API. |
+| `features/destination/services/place-service.ts` | Catálogo de lugares, com as duas fontes atrás de uma assinatura. |
+
+`route-service.ts` escolhe o provider por configuração, e não por `__DEV__`:
+quem clona o projeto e roda `npx expo start` sem subir o backend continua
+vendo o aplicativo funcionar de ponta a ponta.
+
+`utils/http.ts` ganhou `POST` e passou a ler o envelope de erro da API — o
+`code` estável (`route_not_found`, `route_provider_timeout`) chega às telas
+pelo `HttpError.code`, ao lado do `kind` que já existia.
+
+A tela **Definir destino** passou a ter estado de rede, porque agora existe
+rede: um debounce de 250 ms para não disparar uma chamada por tecla,
+cancelamento para que uma resposta atrasada não sobrescreva uma busca mais
+recente, e uma faixa de aviso quando o resultado exibido veio da cópia local.
+
+---
+
+## 11. Próximos passos
 
 Em ordem sugerida:
 
@@ -402,12 +465,13 @@ Em ordem sugerida:
    Viagem em andamento, Recomendação e Resumo da viagem. O design system já
    cobre todos os elementos que elas usam; falta o conteúdo real de cada uma
    (Places, voz, modelo de recomendação, histórico).
-1. **Busca de endereço** — substituir o trajeto fixo por origem e destino reais
-   (Google Places Autocomplete), mantendo as constantes como fallback.
-2. **Provider de produção** — Google Routes ou Mapbox, com chave em variável de
-   ambiente e o OSRM restrito a desenvolvimento.
-3. **Testes** — os utilitários puros (`distance`, `duration`) e o parsing do
-   provider OSRM já estão isolados o bastante para serem testados sem simulador.
+1. **Chave de serviço do Supabase** no `backend/.env` — é o que falta para o
+   cache de rotas sair do papel. Ver `backend/README.md`.
+2. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
+   backend, com a chave do lado do servidor, e não um release na loja.
+3. **Testes do aplicativo** — o backend já tem 26; do lado do app, os
+   utilitários puros (`distance`, `duration`, `filter-places`) e o parsing dos
+   providers estão isolados o bastante para serem testados sem simulador.
 4. **Recentralizar no usuário** — botão para voltar a câmera à posição atual,
    separado do enquadramento da rota.
 5. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
@@ -418,24 +482,26 @@ Em ordem sugerida:
 
 ## Future architecture
 
-Nada abaixo está implementado. A lista existe para que as decisões de hoje não
-fechem portas amanhã.
+| Camada | Tecnologia | Papel | Estado |
+|---|---|---|---|
+| Backend | **FastAPI / Python** | Orquestração, cache de rotas, chaves de API fora do app. | **Implementado** |
+| Dados | **Supabase** | Catálogo de lugares e cache de rotas hoje; autenticação e perfis depois. | **Parcial** — banco sim, auth não |
+| Inteligência | **Random Forest** | Previsão de tempo de trajeto a partir de histórico e contexto. | Previsto |
+| Visão | **Classificação de imagem** | Reconhecimento de pontos de interesse e placas. | Previsto |
+| Áudio | **Análise de voz** | Comandos e interação em viagem, sem uso das mãos. | Previsto |
+| Lugares | **Google Places** | Busca de endereços, autocomplete e metadados de destinos. | Previsto |
+| Histórico | Supabase + FastAPI | Viagens anteriores alimentando o modelo de previsão. | Previsto |
 
-| Camada | Tecnologia prevista | Papel |
-|---|---|---|
-| Backend | **FastAPI / Python** | Orquestração, cache de rotas, chaves de API fora do app. |
-| Inteligência | **Random Forest** | Previsão de tempo de trajeto a partir de histórico e contexto. |
-| Visão | **Classificação de imagem** | Reconhecimento de pontos de interesse e placas. |
-| Áudio | **Análise de voz** | Comandos e interação em viagem, sem uso das mãos. |
-| Dados | **Supabase** | Autenticação, perfis e sincronização entre aparelhos. |
-| Lugares | **Google Places** | Busca de endereços, autocomplete e metadados de destinos. |
-| Histórico | Supabase + FastAPI | Viagens anteriores alimentando o modelo de previsão. |
+O que já está pronto para receber o resto:
 
-O que já está pronto para receber isso:
-
-- `RouteProvider` isola o serviço de rotas — o backend próprio pode virar só
-  mais um provider.
-- `utils/http.ts` centraliza timeout e tratamento de erro; autenticação entra
-  em um lugar só.
-- A organização por feature permite adicionar `features/auth`, `features/voice`
-  ou `features/history` sem tocar no que existe.
+- `RouteProvider` isola o serviço de rotas, no app **e** no backend — o mesmo
+  contrato nas duas pontas. A previsão do Random Forest pode entrar como um
+  ajuste sobre `durationSeconds`, dentro do `route_service` do backend, sem
+  que o aplicativo perceba.
+- `utils/http.ts` centraliza timeout, erro e agora o envelope da API;
+  autenticação entra em um lugar só, tanto no app quanto no `core/database.py`.
+- A organização por feature — nas duas pontas — permite adicionar
+  `features/auth`, `features/voice` ou `features/history` sem tocar no que
+  existe.
+- O prefixo `/v1` nas rotas deixa espaço para evoluir o contrato sem romper
+  aplicativos já instalados.

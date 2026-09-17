@@ -6,6 +6,7 @@ import { CategoryChip } from '@/components/ui/category-chip';
 import { PlaceRow } from '@/components/ui/place-row';
 import { SearchField } from '@/components/ui/search-field';
 import { SectionHeader } from '@/components/ui/section-header';
+import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import { PLACE_CATEGORIES } from '@/features/destination/constants/place-categories';
 import { usePlaceSearch } from '@/features/destination/hooks/use-place-search';
@@ -24,9 +25,10 @@ const CATEGORY_VISUALS = {
 /**
  * Definir destino.
  *
- * Busca por texto e filtros por categoria, sobre a lista local de lugares.
- * Escolher um destino abre a viagem e a rota é calculada de verdade para as
- * coordenadas dele — não é uma tela de fachada.
+ * Busca por texto e filtros por categoria. Os lugares vêm da API do Atlas
+ * quando ela está configurada, e da lista local quando não — a tela é a mesma
+ * nos dois casos. Escolher um destino abre a viagem e a rota é calculada de
+ * verdade para as coordenadas dele — não é uma tela de fachada.
  *
  * O cabeçalho e o botão de voltar são os nativos da plataforma, configurados
  * em `_layout.tsx`. O microfone existe mas está atenuado: captura de voz é uma
@@ -88,6 +90,10 @@ export default function DestinationScreen() {
               title={sectionTitle}
               hint={search.isEmpty ? undefined : `${search.results.length}`}
             />
+
+            {search.error ? (
+              <StatusMessage tone="error" message={search.error} />
+            ) : null}
           </View>
         }
         renderItem={({ item }) => {
@@ -105,9 +111,13 @@ export default function DestinationScreen() {
         }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
-          <Text variant="bodySoft" color="textSecondary" align="center" style={styles.empty}>
-            Nenhum lugar encontrado. A busca por endereço completo chega com o Google Places.
-          </Text>
+          search.isLoading ? (
+            <StatusMessage tone="info" message="Buscando lugares…" busy />
+          ) : (
+            <Text variant="bodySoft" color="textSecondary" align="center" style={styles.empty}>
+              Nenhum lugar encontrado. A busca por endereço completo chega com o Google Places.
+            </Text>
+          )
         }
       />
     </View>

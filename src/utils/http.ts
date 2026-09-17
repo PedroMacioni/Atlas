@@ -12,12 +12,50 @@ export type HttpErrorKind = 'timeout' | 'network' | 'status' | 'invalid-response
 export class HttpError extends Error {
   readonly kind: HttpErrorKind;
   readonly status?: number;
+  /**
+   * Código de domínio devolvido pela API do Atlas — `route_not_found`,
+   * `route_provider_timeout` e afins. Ausente quando o erro veio de outro
+   * serviço ou da própria rede.
+   */
+  readonly code?: string;
 
-  constructor(kind: HttpErrorKind, message: string, status?: number) {
+  constructor(kind: HttpErrorKind, message: string, status?: number, code?: string) {
     super(message);
     this.name = 'HttpError';
     this.kind = kind;
     this.status = status;
+    this.code = code;
+  }
+}
+
+/** Formato de erro da API do Atlas. */
+type ErrorEnvelope = {
+  error?: { code?: unknown; message?: unknown };
+};
+
+/**
+ * Lê o envelope de erro sem nunca falhar por causa dele.
+ *
+ * Um serviço que responde 500 com HTML não pode transformar o tratamento de
+ * erro em um segundo erro.
+ */
+async function readErrorEnvelope(
+  response: Response,
+): Promise<{ code?: string; message?: string } | null> {
+  try {
+    const payload = (await response.json()) as ErrorEnvelope;
+    const failure = payload?.error;
+
+    if (!failure) {
+      return null;
+    }
+
+    return {
+      code: typeof failure.code === 'string' ? failure.code : undefined,
+      message: typeof failure.message === 'string' ? failure.message : undefined,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -28,6 +66,10 @@ export type FetchJsonOptions = {
   timeoutMs?: number;
   /** Sinal externo, para cancelar quando a tela é desmontada. */
   signal?: AbortSignal;
+  /** Verbo HTTP. Padrão: `GET`. */
+  method?: 'GET' | 'POST';
+  /** Corpo da requisição, serializado como JSON. */
+  body?: unknown;
 };
 
 /**
@@ -37,7 +79,7 @@ export type FetchJsonOptions = {
  * acima possam decidir a mensagem de interface a partir de `error.kind`.
  */
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal } = options;
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, method = 'GET', body } = options;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -50,8 +92,13 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
 
   try {
     response = await fetch(url, {
+      method,
       signal: controller.signal,
-      headers: { accept: 'application/json' },
+      headers:
+        body === undefined
+          ? { accept: 'application/json' }
+          : { accept: 'application/json', 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     if (controller.signal.aborted) {
@@ -68,7 +115,16 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
   }
 
   if (!response.ok) {
-    throw new HttpError('status', `Resposta HTTP inesperada: ${response.status}.`, response.status);
+    // A API do Atlas responde erro com `{ error: { code, message } }`. O código
+    // é estável e vale mais que o status: é ele que escolhe a mensagem de tela.
+    const failure = await readErrorEnvelope(response);
+
+    throw new HttpError(
+      'status',
+      failure?.message ?? `Resposta HTTP inesperada: ${response.status}.`,
+      response.status,
+      failure?.code,
+    );
   }
 
   try {
