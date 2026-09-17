@@ -1,15 +1,17 @@
-import { useLocalSearchParams } from 'expo-router';
-import { useMemo, useRef } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StatusMessage } from '@/components/ui/status-message';
 import { StatusPill } from '@/components/ui/status-pill';
-import { useCurrentLocation } from '@/features/location/hooks/use-current-location';
+import { useLocationTracking } from '@/features/location/hooks/use-location-tracking';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
-import type { NamedCoordinate } from '@/features/map/types/coordinate';
-import { TripSummaryCard } from '@/features/trip/components/trip-summary-card';
-import { DEMO_DESTINATION, DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
+import { TripProgressCard } from '@/features/trip/components/trip-progress-card';
+import { DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
+import { useTripDestination } from '@/features/trip/hooks/use-trip-destination';
+import { useTripOrigin } from '@/features/trip/hooks/use-trip-origin';
+import { useTripProgress } from '@/features/trip/hooks/use-trip-progress';
 import { useTripRoute } from '@/features/trip/hooks/use-trip-route';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -19,81 +21,83 @@ import { formatDuration } from '@/utils/duration';
 const EMPTY_ROUTE: never[] = [];
 
 /**
- * Viagem em andamento: mapa com a rota desenhada e o resumo do trajeto.
+ * Quanto tempo a rota inteira fica enquadrada antes de a câmera descer para o
+ * acompanhamento.
+ *
+ * Existe porque as duas informações são necessárias em ordem: primeiro "para
+ * onde eu vou", que só o trajeto inteiro responde, depois "onde eu estou
+ * agora", que é o resto da viagem. Abrir direto no zoom fechado esconde a
+ * primeira; nunca descer esconde a segunda.
+ */
+const OVERVIEW_HOLD_MS = 2_200;
+
+/**
+ * Viagem em andamento.
  *
  * Tela empilhada sobre as abas — ocupa a tela inteira, sem barra inferior, e
- * traz o próprio botão de voltar. É aqui que a rota será desenvolvida.
+ * traz o próprio botão de voltar. Escolher um destino na busca abre direto
+ * aqui: não há etapa de confirmação.
+ *
+ * O que a torna "em andamento" é o acompanhamento: a posição é rastreada
+ * continuamente, a câmera segue o aparelho, e tempo, distância e progresso são
+ * recalculados sobre a rota a cada leitura. A rota em si é calculada uma única
+ * vez — recalcular quando o motorista desvia é a fase do turn-by-turn.
  *
  * Cabe em uma tela, sem rolagem. O mapa é o único elemento elástico — cresce
- * para ocupar o que sobra entre o cabeçalho e o card, o que o mantém dominante
- * em telas grandes e ainda legível em aparelhos pequenos.
+ * para ocupar o que sobra entre as pílulas e o card.
  *
- * A tela apenas compõe: localização, rota e apresentação vivem cada uma em sua
- * própria feature.
+ * A tela apenas compõe: localização, rota, progresso e apresentação vivem cada
+ * um em sua própria feature.
  */
 export default function TripScreen() {
-  const params = useLocalSearchParams<{
-    name?: string;
-    latitude?: string;
-    longitude?: string;
-  }>();
-
-  /**
-   * Destino escolhido na busca, quando houver. Coordenada inválida cai no
-   * trajeto de demonstração em vez de derrubar a tela.
-   */
-  const destination = useMemo<NamedCoordinate>(() => {
-    const latitude = Number(params.latitude);
-    const longitude = Number(params.longitude);
-
-    if (params.name && Number.isFinite(latitude) && Number.isFinite(longitude)) {
-      return { name: params.name, latitude, longitude };
-    }
-
-    return DEMO_DESTINATION;
-  }, [params.name, params.latitude, params.longitude]);
-
-  /**
-   * Dentro de `NativeTabs` o inset inferior já contempla a barra de abas — no
-   * iOS ela é translúcida e o conteúdo passa por baixo dela. Sem este respiro,
-   * o botão de centralizar fica atrás da barra.
-   */
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<AtlasMapHandle>(null);
 
-  const location = useCurrentLocation();
+  const destination = useTripDestination();
 
   /**
-   * Origem da viagem: a posição do aparelho.
+   * Rastreamento contínuo, e não leitura única: é o que faz os números
+   * descerem conforme o trajeto avança.
+   */
+  const tracking = useLocationTracking();
+
+  /**
+   * Origem da viagem: onde o aparelho estava quando a tela abriu.
    *
-   * Enquanto a localização está sendo resolvida o valor é `null`, e o cálculo
-   * da rota espera — assim não gastamos uma consulta com uma origem
-   * provisória para refazê-la um instante depois. Se o GPS falhar ou a
-   * permissão for negada, cai no ponto de partida de demonstração, e a tela
-   * continua funcionando.
+   * Congelada de propósito na primeira leitura. A posição segue mudando — é o
+   * que o acompanhamento usa — mas o ponto de partida do trajeto é um só, e
+   * deixá-lo seguir o aparelho recalcularia a rota a cada dez metros.
    */
-  const origin = useMemo<NamedCoordinate | null>(() => {
-    if (location.isLoading) {
-      return null;
-    }
-
-    if (location.coordinate) {
-      return { ...location.coordinate, name: 'Sua localização' };
-    }
-
-    return DEMO_ORIGIN;
-  }, [location.isLoading, location.coordinate]);
-
-  /**
-   * Quando a origem é a própria posição do aparelho, o indicador azul nativo
-   * já a representa — um marcador em cima dele seria redundante.
-   */
-  const originIsUser = location.coordinate !== null;
+  const origin = useTripOrigin(tracking.position?.coordinate ?? null, tracking.isStarting);
 
   const trip = useTripRoute(origin, destination);
+  const progress = useTripProgress(trip.route, tracking.position?.coordinate ?? null);
+
+  /**
+   * Foco da câmera. Abre no trajeto inteiro e desce para o acompanhamento
+   * sozinho; o botão do card alterna a qualquer momento.
+   */
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  // A contagem começa quando a rota chega, não quando a tela monta: antes
+  // disso não há trajeto para enquadrar, e o tempo passaria em branco.
+  useEffect(() => {
+    if (!trip.route) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => setIsFollowing(true), OVERVIEW_HOLD_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [trip.route]);
+
+  const hasPosition = tracking.position !== null;
 
   const tripStatus = trip.route
-    ? `${formatDistance(trip.route.distanceMeters)} • ${formatDuration(trip.route.durationSeconds)}`
+    ? progress
+      ? `Faltam ${formatDistance(progress.remainingMeters)} • ${formatDuration(progress.remainingSeconds)}`
+      : `${formatDistance(trip.route.distanceMeters)} • ${formatDuration(trip.route.durationSeconds)}`
     : trip.error
       ? 'Rota indisponível'
       : 'Calculando rota...';
@@ -111,7 +115,7 @@ export default function TripScreen() {
             dotColor={trip.error ? 'danger' : 'success'}
             tone={trip.error ? 'neutral' : 'positive'}
             titleColor={trip.error ? 'danger' : undefined}
-            title={trip.error ? 'Rota com erro' : 'Rota calculada'}
+            title={trip.error ? 'Rota com erro' : progress ? 'Em viagem' : 'Rota calculada'}
             subtitle={tripStatus}
           />
         </View>
@@ -119,30 +123,42 @@ export default function TripScreen() {
         <View style={styles.mapArea}>
           <AtlasMap
             ref={mapRef}
-            currentLocation={location.coordinate}
+            currentLocation={tracking.position?.coordinate ?? null}
             origin={origin ?? DEMO_ORIGIN}
             destination={destination}
             routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
-            showsUserLocation={location.coordinate !== null}
-            showsOriginMarker={!originIsUser}
-            onLocatePress={() => mapRef.current?.fitRoute()}
+            showsUserLocation={hasPosition}
+            // Com a posição conhecida, o indicador azul nativo já marca a
+            // origem — um pino em cima dele seria redundante.
+            showsOriginMarker={!hasPosition}
+            focus={isFollowing ? 'user' : 'route'}
+            onLocatePress={() => {
+              // O botão do mapa continua sendo "me mostre o trajeto", e por
+              // isso sai do acompanhamento: senão a próxima leitura do GPS
+              // desfaria o enquadramento em um segundo.
+              setIsFollowing(false);
+              mapRef.current?.fitRoute();
+            }}
+            locateLabel="Enquadrar o trajeto inteiro"
             badgeLabel={
-              trip.route
-                ? `${formatDistance(trip.route.distanceMeters)} até ${destination.name}`
-                : undefined
+              progress
+                ? `${formatDistance(progress.remainingMeters)} restantes`
+                : trip.route
+                  ? `${formatDistance(trip.route.distanceMeters)} até ${destination.name}`
+                  : undefined
             }
           />
 
           {/* Estados de localização flutuam sobre o mapa, sem empurrar o layout. */}
-          {location.isLoading || location.error ? (
+          {tracking.isStarting || (tracking.error && !hasPosition) ? (
             <View style={styles.overlay} pointerEvents="box-none">
-              {location.isLoading ? (
+              {tracking.isStarting ? (
                 <StatusMessage tone="info" message="Obtendo sua localização..." busy floating />
               ) : (
                 <StatusMessage
                   tone="error"
-                  message={location.error ?? ''}
-                  onRetry={location.retry}
+                  message={tracking.error ?? ''}
+                  onRetry={tracking.retry}
                   floating
                 />
               )}
@@ -150,14 +166,26 @@ export default function TripScreen() {
           ) : null}
         </View>
 
-        <TripSummaryCard
-          origin={origin ?? DEMO_ORIGIN}
+        <TripProgressCard
           destination={destination}
           route={trip.route}
-          isLoading={trip.isLoading}
-          error={trip.error}
-          onRetry={trip.retry}
-          onRecenter={() => mapRef.current?.fitRoute()}
+          progress={progress}
+          isLoadingRoute={trip.isLoading}
+          routeError={trip.error}
+          // Um erro de GPS com posição em mãos é só um aviso: o acompanhamento
+          // continua a partir da última leitura boa.
+          trackingError={hasPosition ? tracking.error : null}
+          onRetryRoute={trip.retry}
+          onEndTrip={() => router.back()}
+          onToggleFocus={() => {
+            setIsFollowing((following) => {
+              if (following) {
+                mapRef.current?.fitRoute();
+              }
+              return !following;
+            });
+          }}
+          isFollowing={isFollowing}
         />
       </View>
     </View>

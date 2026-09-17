@@ -1,6 +1,6 @@
 # Atlas
 
-Copiloto inteligente de viagem — **Fase 2: backend e API**.
+Copiloto inteligente de viagem — **Fase 3: viagem em andamento**.
 
 ---
 
@@ -16,6 +16,12 @@ A fase 2 acrescentou o segundo:
 
 ```
 FastAPI + Supabase + cache de rotas + catálogo de lugares
+```
+
+E a fase 3 o terceiro — o trajeto deixa de ser uma foto e passa a acontecer:
+
+```
+Rastreamento contínuo + progresso sobre a rota + câmera que acompanha
 ```
 
 O backend vive em [`backend/`](backend/README.md) e tem o seu próprio README.
@@ -35,7 +41,10 @@ O que o aplicativo faz hoje:
 5. Desenha a rota sobre o mapa como uma `Polyline`.
 6. Enquadra a rota inteira automaticamente assim que ela chega.
 7. Exibe distância e tempo estimado devolvidos pelo serviço de rotas.
-8. Oferece um botão **Centralizar rota** para reenquadrar o trajeto.
+8. **Acompanha a viagem**: a câmera segue o aparelho, e tempo restante,
+   distância restante e progresso são recalculados a cada leitura do GPS.
+9. Avisa quando você se afasta da rota, e reconhece a chegada ao destino.
+10. Oferece um botão para alternar entre **ver o trajeto** e **ser acompanhado**.
 
 A interface segue o design de referência do ATLAS: tipografia Plus Jakarta
 Sans, cards arredondados com elevação suave, pílulas de contexto no topo, o
@@ -48,18 +57,19 @@ mapa como card e botões em pílula com gradiente.
 > deliberada: nativo onde a plataforma tem opinião (navegação), custom onde o
 > design tem (ações).
 
-### As três telas
+### As quatro telas
 
-Duas abas e uma tela empilhada por cima delas:
+Duas abas e duas telas empilhadas por cima delas:
 
 | Tela | Onde vive | Papel |
 |---|---|---|
 | **Início** | aba | Boas-vindas. Mostra onde o usuário está e convida a começar. Não consulta rotas. |
 | **Sobre** | aba | Contexto. Procedência dos números, acesso rápido e arquitetura. |
 | **Definir destino** | empilhada | Busca por texto, filtros por categoria e lista de lugares. |
-| **Viagem** | empilhada | Operação. Mapa com a rota real, distância e tempo do serviço, e o botão de reenquadrar. |
+| **Viagem em andamento** | empilhada | Operação. Mapa com a rota real, acompanhamento da posição e o que falta até o destino. |
 
-O fluxo é `Início → Definir destino → Viagem`, com `router.push`. As duas
+O fluxo é `Início → Definir destino → Viagem em andamento`, com `router.push`.
+Escolher um destino abre a viagem **direto**, sem etapa de confirmação. As duas
 últimas sobem por cima das abas e usam o **cabeçalho nativo** do `Stack` —
 seta, gesto de voltar e `Toolbar` da própria plataforma, só com a tipografia
 alinhada ao tema.
@@ -80,6 +90,63 @@ trajeto de demonstração se a coordenada vier inválida.
 
 A hierarquia de rotas reflete isso: o grupo `(tabs)` guarda a barra nativa, e
 `trip.tsx` fica fora dele, como irmão na pilha da raiz.
+
+### Viagem em andamento
+
+O que separa esta tela de um mapa com uma linha desenhada é o **acompanhamento**:
+
+- **A posição é rastreada continuamente** (`watchPositionAsync`, precisão
+  `BestForNavigation`, uma leitura a cada 10 m). A tela Início segue usando
+  leitura única — só a viagem precisa acompanhar.
+- **Tempo e distância restantes** são recalculados a cada leitura, projetando a
+  posição sobre a geometria da rota. A barra de progresso é a mesma conta.
+- **A câmera acompanha** o aparelho, num zoom mais fechado que o de
+  centralizar. O botão do card alterna entre acompanhar e ver o trajeto todo.
+- **Abre enquadrando a rota inteira** por 2,2 s antes de descer para o
+  acompanhamento: primeiro "para onde eu vou", depois "onde estou agora".
+- **Avisa o desvio** acima de 60 m da rota, e congela o progresso enquanto ele
+  durar — um número que deixou de ser confiável não deve continuar sendo
+  exibido como se fosse.
+- **Reconhece a chegada** a 40 m do destino.
+
+O ponto azul no mapa é o indicador **nativo** da plataforma, e já se movia
+antes desta fase — quem o desenha é o iOS/Android. O que a fase acrescentou foi
+o resto da tela reagir a ele.
+
+A rota é calculada **uma vez**. Recalcular quando o motorista desvia é a fase
+do turn-by-turn, junto com as instruções de manobra: sem recálculo, uma
+instrução vira mentira no primeiro desvio.
+
+#### Como o progresso é calculado
+
+```
+posição do GPS
+      │
+      ▼
+projeção sobre o segmento mais próximo da rota   (utils/geo.ts)
+      │
+      ├─ distância percorrida  = acumulado até o vértice + fração do segmento
+      ├─ distância restante    = total − percorrida
+      ├─ tempo restante        = duração total × (1 − fração)
+      └─ distância até a rota  → acima de 60 m, desvio
+```
+
+Duas decisões dentro disso merecem registro:
+
+**A busca não retrocede.** Ela começa no último vértice alcançado e caminha
+para frente, e só varre a rota inteira se não achar nada perto. Sem isso, uma
+rota que passa duas vezes pelo mesmo lugar — um retorno, uma alça de rodovia,
+ida e volta na mesma avenida — casaria a posição com o trecho errado, e o tempo
+restante saltaria para trás. Medido na rota Campinas → Viracopos: deslocar
+400 m de um ponto do trajeto encontra um vértice **410 m atrás** dele.
+
+**O tempo restante é proporcional, não previsto.** O serviço de rotas entrega
+uma duração para o trajeto inteiro, sem trânsito; falta 60% da distância,
+estima-se 60% do tempo. Previsão de verdade — com histórico e contexto — é a
+fase do modelo.
+
+O cálculo é uma função pura em `features/trip/utils/trip-progress.ts`, sem
+React e sem GPS: recebe geometria e um ponto, devolve números.
 
 Nem a Início nem a Viagem **rolam**. O cabeçalho, os botões e os cards
 têm altura de conteúdo, e o mapa é o único elemento elástico — encolhe ou
@@ -124,6 +191,7 @@ atlas/
 │   │   ├── search-field.tsx        # Campo de busca com microfone
 │   │   ├── place-row.tsx           # Linha de lugar em lista
 │   │   ├── section-header.tsx      # Título de seção com nota à direita
+│   │   ├── progress-bar.tsx        # Traço de progresso do trajeto
 │   │   ├── voice-prompt-card.tsx   # Chamada de voz (inerte nesta fase)
 │   │   ├── text.tsx                # Único componente de texto do app
 │   │   ├── card.tsx                # Superfície arredondada com elevação
@@ -147,8 +215,10 @@ atlas/
 │   │   │   ├── types/place.ts
 │   │   │   └── utils/filter-places.ts
 │   │   ├── location/
-│   │   │   ├── hooks/use-current-location.ts
-│   │   │   └── services/location-service.ts
+│   │   │   ├── hooks/use-current-location.ts       # leitura única (Início)
+│   │   │   ├── hooks/use-location-tracking.ts      # contínua (Viagem)
+│   │   │   ├── services/location-service.ts
+│   │   │   └── services/location-tracking-service.ts
 │   │   ├── map/
 │   │   │   ├── components/atlas-map.tsx
 │   │   │   ├── constants/map-style.ts
@@ -159,12 +229,16 @@ atlas/
 │   │   │   ├── services/route-service.ts
 │   │   │   └── types/route-provider.ts, route-result.ts
 │   │   └── trip/
-│   │       ├── components/trip-summary-card.tsx
+│   │       ├── components/trip-progress-card.tsx   # painel da viagem
 │   │       ├── constants/demo-route.ts
-│   │       └── hooks/use-trip-route.ts
+│   │       ├── hooks/use-trip-destination.ts
+│   │       ├── hooks/use-trip-origin.ts            # origem congelada
+│   │       ├── hooks/use-trip-progress.ts
+│   │       ├── hooks/use-trip-route.ts
+│   │       └── utils/trip-progress.ts              # o cálculo, puro
 │   │
 │   ├── theme/                      # colors, typography, spacing, radius, shadows
-│   └── utils/                      # http.ts, distance.ts, duration.ts
+│   └── utils/                      # http.ts, geo.ts, distance.ts, duration.ts
 │
 ├── backend/                        # API do Atlas — FastAPI + Supabase
 │   ├── app/                        # ver backend/README.md
@@ -198,6 +272,8 @@ atlas/
 | Nenhuma chave de API no aplicativo | Credenciais vivem no backend. `EXPO_PUBLIC_` é texto puro no bundle. |
 | Nenhum `Dimensions.get` | Layout só com flexbox e `react-native-safe-area-context`. |
 | Nenhuma coordenada literal em telas | Ficam em `features/trip/constants/demo-route.ts`. |
+| Nenhum cálculo geográfico em componente | Vive em `utils/geo.ts` e `features/trip/utils/`, como função pura. |
+| Nenhum `ref` lido ou escrito durante a renderização | O React Compiler está ligado (`app.json`); estado derivado usa ajuste durante o render. |
 
 ### Design system
 
@@ -462,17 +538,17 @@ recente, e uma faixa de aviso quando o resultado exibido veio da cópia local.
 
 Em ordem sugerida:
 
-0. **As outras cinco telas do design** — Definir destino, Opções próximas,
-   Viagem em andamento, Recomendação e Resumo da viagem. O design system já
-   cobre todos os elementos que elas usam; falta o conteúdo real de cada uma
-   (Places, voz, modelo de recomendação, histórico).
-1. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
+0. **Turn-by-turn** — instruções de manobra, com o recálculo da rota que elas
+   exigem. Pede `steps=true` no provider, as manobras no contrato da API e uma
+   tradução dos códigos do OSRM para português.
+1. **As outras três telas do design** — Opções próximas, Recomendação e Resumo
+   da viagem. O design system já cobre os elementos que elas usam; falta o
+   conteúdo real de cada uma (Places, modelo de recomendação, histórico).
+2. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
    backend, com a chave do lado do servidor, e não um release na loja.
-2. **Testes do aplicativo** — o backend já tem 30; do lado do app, os
-   utilitários puros (`distance`, `duration`, `filter-places`) e o parsing dos
-   providers estão isolados o bastante para serem testados sem simulador.
-3. **Recentralizar no usuário** — botão para voltar a câmera à posição atual,
-   separado do enquadramento da rota.
+3. **Testes do aplicativo** — o backend tem 30; o app tem zero, e já acumulou
+   funções puras pedindo teste: `trip-progress`, `geo`, `filter-places`,
+   `distance`, `duration` e o parsing dos dois providers. Falta só o runner.
 4. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
 5. **Development build** — necessário assim que entrar um módulo nativo fora do
    Expo Go (voz, câmera avançada, mapas com chave própria).

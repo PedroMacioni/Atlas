@@ -47,7 +47,10 @@ export type AtlasMapProps = {
   showsOriginMarker?: boolean;
   /** Desenha o marcador de destino. */
   showsDestinationMarker?: boolean;
-  /** `user` centraliza na posição atual; `route` enquadra o trajeto. */
+  /**
+   * `route` enquadra o trajeto inteiro; `user` acompanha a posição atual,
+   * reposicionando a câmera a cada leitura nova.
+   */
   focus?: 'route' | 'user';
 };
 
@@ -63,8 +66,18 @@ const EDGE_PADDING: EdgePadding = {
   left: 48,
 };
 
-/** Enquadramento próximo, para quando o foco é a posição do usuário. */
+/** Enquadramento ao centralizar na posição do usuário, sob demanda. */
 const USER_FOCUS_DELTA = 0.045;
+
+/**
+ * Enquadramento do acompanhamento contínuo — mais fechado que o de
+ * centralizar.
+ *
+ * Cerca de um quilômetro de janela: largo o bastante para mostrar a próxima
+ * curva, fechado o bastante para o deslocamento ser perceptível. No zoom de
+ * `USER_FOCUS_DELTA` o carro pareceria imóvel.
+ */
+const FOLLOW_DELTA = 0.01;
 
 /** Duração das transições de câmera. */
 const ANIMATION_MS = 450;
@@ -106,8 +119,8 @@ export function AtlasMap({
     if (focus === 'user' && currentLocation) {
       return {
         ...currentLocation,
-        latitudeDelta: USER_FOCUS_DELTA,
-        longitudeDelta: USER_FOCUS_DELTA,
+        latitudeDelta: FOLLOW_DELTA,
+        longitudeDelta: FOLLOW_DELTA,
       };
     }
     return buildInitialRegion(origin, destination);
@@ -146,6 +159,34 @@ export function AtlasMap({
       fitRoute();
     }
   }, [focus, isMapReady, routeCoordinates, fitRoute]);
+
+  /**
+   * Acompanha a posição enquanto o foco é o usuário.
+   *
+   * A dependência é a coordenada em si, não o objeto: durante a viagem chega
+   * uma leitura a cada dez metros, e reagir à identidade do objeto animaria a
+   * câmera mesmo quando o aparelho reporta a mesma posição — o que acontece
+   * com o carro parado.
+   */
+  useEffect(() => {
+    if (focus !== 'user' || !isMapReady || !currentLocation) {
+      return;
+    }
+
+    mapRef.current?.animateToRegion(
+      {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: FOLLOW_DELTA,
+        longitudeDelta: FOLLOW_DELTA,
+      },
+      ANIMATION_MS,
+    );
+    // `currentLocation` inteiro fora das dependências é deliberado: as duas
+    // coordenadas já cobrem tudo que o efeito lê, e o objeto muda de
+    // identidade a cada leitura do GPS mesmo quando a posição é a mesma.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude]);
 
   return (
     <View style={styles.container}>
