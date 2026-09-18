@@ -45,10 +45,40 @@ Resposta:
   "coordinates": [{ "latitude": -22.909918, "longitude": -47.062606 }],
   "distanceMeters": 17854.8,
   "durationSeconds": 1327.3,
+  "steps": [
+    {
+      "type": "turn",
+      "modifier": "right",
+      "roadName": "Rua Barreto Leme",
+      "distanceAlongRouteMeters": 408.0,
+      "location": { "latitude": -22.902322, "longitude": -47.062644 }
+    }
+  ],
   "provider": "osrm-public-demo",
   "cached": false
 }
 ```
+
+#### As manobras
+
+`steps` traz as manobras em ordem, e a API entrega **dados, não frases**: tipo,
+modificador, nome da via e posição. Quem escreve "Vire à direita na Rua Barreto
+Leme" é o aplicativo, porque isso é texto de interface — depende do idioma, do
+espaço na tela e de a via ter nome.
+
+`distanceAlongRouteMeters` é a distância **desde a partida** até a manobra, e
+não o tamanho do passo como o OSRM devolve. A conversão acontece aqui para que
+o aplicativo saiba o que falta até a próxima curva por subtração, sem refazer
+geometria.
+
+O vocabulário é normalizado: `"end of road"` vira `end-of-road`, `"sharp
+left"` vira `sharp-left`, e um tipo que o provider inventar vira `continue` —
+seguir em frente é a única instrução que nunca manda o motorista para o lugar
+errado.
+
+Manobras nunca derrubam uma rota. Provider sem instruções, formato inesperado
+ou linha de cache corrompida devolvem `[]`, e a tela mostra o trajeto sem a
+faixa — que é exatamente o comportamento anterior a elas.
 
 Os três primeiros campos são exatamente o `RouteResult` que a interface do
 Atlas já consome — o app não traduz nada. `provider` e `cached` são aditivos e
@@ -184,12 +214,17 @@ Uma falha no cache — leitura ou escrita — **não** derruba a resposta: a rot
 sai do provider, com um aviso no log. O cache é conveniência; o provider é a
 fonte da verdade.
 
+O cache guarda as manobras junto com a geometria. Sem isso ele mentiria por
+omissão: a primeira consulta traria as instruções e a segunda, servida do
+cache, devolveria a mesma rota sem manobra nenhuma — e a faixa desapareceria
+da tela sem motivo visível.
+
 ### Banco
 
 | Tabela | Papel | RLS |
 |---|---|---|
 | `places` | Catálogo de destinos. Dado público. | Leitura liberada para `anon`. |
-| `route_cache` | Rotas já calculadas, com validade. Dado interno. | **Sem policy**, de propósito. |
+| `route_cache` | Rotas já calculadas, com validade e manobras. Dado interno. | **Sem policy**, de propósito. |
 
 `route_cache` não tem policy alguma para que só este processo, com a chave de
 serviço, o alcance. Um cliente com a chave `anon` não lê nem escreve — o

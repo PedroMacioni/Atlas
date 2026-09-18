@@ -11,22 +11,27 @@ chave de API pode finalmente existir sem ser embarcada no binário.
 from typing import Protocol, runtime_checkable
 
 from app.schemas.coordinate import Coordinate
+from app.schemas.route import RouteStep
 
 
 class ProviderRoute:
     """Resultado cru de um provider, antes de virar resposta HTTP."""
 
-    __slots__ = ("coordinates", "distance_meters", "duration_seconds")
+    __slots__ = ("coordinates", "distance_meters", "duration_seconds", "steps")
 
     def __init__(
         self,
         coordinates: list[Coordinate],
         distance_meters: float,
         duration_seconds: float,
+        steps: list[RouteStep] | None = None,
     ) -> None:
         self.coordinates = coordinates
         self.distance_meters = distance_meters
         self.duration_seconds = duration_seconds
+        # Lista vazia, e não `None`, para que quem consome não precise checar:
+        # um provider sem manobras simplesmente não tem manobras.
+        self.steps = steps or []
 
 
 @runtime_checkable

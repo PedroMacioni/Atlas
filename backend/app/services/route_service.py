@@ -44,6 +44,7 @@ class RouteService:
                 coordinates=cached.coordinates,
                 distance_meters=cached.distance_meters,
                 duration_seconds=cached.duration_seconds,
+                steps=cached.steps,
                 provider=self._provider.id,
                 cached=True,
             )
@@ -56,6 +57,7 @@ class RouteService:
             coordinates=route.coordinates,
             distance_meters=route.distance_meters,
             duration_seconds=route.duration_seconds,
+            steps=route.steps,
             provider=self._provider.id,
             cached=False,
         )

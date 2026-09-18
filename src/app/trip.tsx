@@ -1,22 +1,25 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StatusMessage } from '@/components/ui/status-message';
-import { StatusPill } from '@/components/ui/status-pill';
+import { Text } from '@/components/ui/text';
 import { useLocationTracking } from '@/features/location/hooks/use-location-tracking';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
-import { TripProgressCard } from '@/features/trip/components/trip-progress-card';
+import { ManeuverBanner } from '@/features/trip/components/maneuver-banner';
+import { TripBottomSheet } from '@/features/trip/components/trip-bottom-sheet';
 import { DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
 import { useTripDestination } from '@/features/trip/hooks/use-trip-destination';
 import { useTripOrigin } from '@/features/trip/hooks/use-trip-origin';
 import { useTripProgress } from '@/features/trip/hooks/use-trip-progress';
 import { useTripRoute } from '@/features/trip/hooks/use-trip-route';
+import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
 import { colors } from '@/theme/colors';
+import { radius } from '@/theme/radius';
+import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
-import { formatDistance } from '@/utils/distance';
-import { formatDuration } from '@/utils/duration';
 
 const EMPTY_ROUTE: never[] = [];
 
@@ -26,28 +29,35 @@ const EMPTY_ROUTE: never[] = [];
  *
  * Existe porque as duas informações são necessárias em ordem: primeiro "para
  * onde eu vou", que só o trajeto inteiro responde, depois "onde eu estou
- * agora", que é o resto da viagem. Abrir direto no zoom fechado esconde a
- * primeira; nunca descer esconde a segunda.
+ * agora", que é o resto da viagem.
  */
 const OVERVIEW_HOLD_MS = 2_200;
 
 /**
+ * Respiro que a câmera reserva ao enquadrar a rota.
+ *
+ * A faixa de instrução e o painel inferior cobrem parte do mapa; sem isso o
+ * trajeto seria enquadrado atrás deles.
+ */
+const MAP_EDGE_PADDING = { top: 150, bottom: 210, left: 56, right: 56 };
+
+/**
  * Viagem em andamento.
  *
- * Tela empilhada sobre as abas — ocupa a tela inteira, sem barra inferior, e
- * traz o próprio botão de voltar. Escolher um destino na busca abre direto
- * aqui: não há etapa de confirmação.
+ * O mapa **é** a tela: encosta nas quatro bordas, e o resto flutua sobre ele —
+ * a instrução da próxima manobra no topo, o painel de chegada embaixo. É o
+ * arranjo dos aplicativos de navegação, e a razão é a mesma: dirigindo, o que
+ * se olha é o mapa, e todo o resto precisa caber na periferia da atenção.
  *
- * O que a torna "em andamento" é o acompanhamento: a posição é rastreada
- * continuamente, a câmera segue o aparelho, e tempo, distância e progresso são
- * recalculados sobre a rota a cada leitura. A rota em si é calculada uma única
- * vez — recalcular quando o motorista desvia é a fase do turn-by-turn.
+ * Por isso o cabeçalho nativo sai daqui (`headerShown: false`, em
+ * `_layout.tsx`) e a tela traz o próprio botão de voltar.
  *
- * Cabe em uma tela, sem rolagem. O mapa é o único elemento elástico — cresce
- * para ocupar o que sobra entre as pílulas e o card.
+ * O painel inferior responde à pergunta que se faz numa viagem — **a que horas
+ * eu chego?** — e por isso o horário vem primeiro, centralizado. Tempo e
+ * distância ficam abaixo, menores, separados por um ponto.
  *
- * A tela apenas compõe: localização, rota, progresso e apresentação vivem cada
- * um em sua própria feature.
+ * A tela apenas compõe: localização, rota, progresso, manobras e apresentação
+ * vivem cada um em sua própria feature.
  */
 export default function TripScreen() {
   const router = useRouter();
@@ -55,33 +65,14 @@ export default function TripScreen() {
   const mapRef = useRef<AtlasMapHandle>(null);
 
   const destination = useTripDestination();
-
-  /**
-   * Rastreamento contínuo, e não leitura única: é o que faz os números
-   * descerem conforme o trajeto avança.
-   */
   const tracking = useLocationTracking();
-
-  /**
-   * Origem da viagem: onde o aparelho estava quando a tela abriu.
-   *
-   * Congelada de propósito na primeira leitura. A posição segue mudando — é o
-   * que o acompanhamento usa — mas o ponto de partida do trajeto é um só, e
-   * deixá-lo seguir o aparelho recalcularia a rota a cada dez metros.
-   */
   const origin = useTripOrigin(tracking.position?.coordinate ?? null, tracking.isStarting);
 
   const trip = useTripRoute(origin, destination);
   const progress = useTripProgress(trip.route, tracking.position?.coordinate ?? null);
 
-  /**
-   * Foco da câmera. Abre no trajeto inteiro e desce para o acompanhamento
-   * sozinho; o botão do card alterna a qualquer momento.
-   */
   const [isFollowing, setIsFollowing] = useState(false);
 
-  // A contagem começa quando a rota chega, não quando a tela monta: antes
-  // disso não há trajeto para enquadrar, e o tempo passaria em branco.
   useEffect(() => {
     if (!trip.route) {
       return;
@@ -92,99 +83,115 @@ export default function TripScreen() {
     return () => clearTimeout(timeoutId);
   }, [trip.route]);
 
-  const hasPosition = tracking.position !== null;
+  /**
+   * Próxima manobra à frente.
+   *
+   * Depende do quanto já foi percorrido, e por isso só existe depois da
+   * primeira posição — antes dela a instrução seria a de partida, que não
+   * orienta ninguém.
+   */
+  const nextManeuver = useMemo(() => {
+    if (!trip.route || !progress) {
+      return null;
+    }
 
-  const tripStatus = trip.route
-    ? progress
-      ? `Faltam ${formatDistance(progress.remainingMeters)} • ${formatDuration(progress.remainingSeconds)}`
-      : `${formatDistance(trip.route.distanceMeters)} • ${formatDuration(trip.route.durationSeconds)}`
-    : trip.error
-      ? 'Rota indisponível'
-      : 'Calculando rota...';
+    return findNextManeuver(trip.route.steps, progress.traveledMeters);
+  }, [trip.route, progress]);
+
+  const hasPosition = tracking.position !== null;
+  const hasArrived = progress?.hasArrived ?? false;
+
+  // Sem posição, os totais do trajeto são a melhor verdade disponível.
+  const remainingMeters = progress?.remainingMeters ?? trip.route?.distanceMeters ?? 0;
+  const remainingSeconds = progress?.remainingSeconds ?? trip.route?.durationSeconds ?? 0;
+
+  const toggleFocus = () => {
+    setIsFollowing((following) => {
+      if (following) {
+        mapRef.current?.fitRoute();
+      }
+      return !following;
+    });
+  };
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.body, { paddingBottom: insets.bottom + spacing.md }]}>
-        <View style={styles.pills}>
-          <StatusPill
-            icon="map-marker"
-            title={origin ? origin.name : 'Obtendo origem...'}
-            subtitle={`Em rota para ${destination.name}`}
-          />
-          <StatusPill
-            dotColor={trip.error ? 'danger' : 'success'}
-            tone={trip.error ? 'neutral' : 'positive'}
-            titleColor={trip.error ? 'danger' : undefined}
-            title={trip.error ? 'Rota com erro' : progress ? 'Em viagem' : 'Rota calculada'}
-            subtitle={tripStatus}
-          />
-        </View>
+      <AtlasMap
+        ref={mapRef}
+        shape="full"
+        edgePadding={MAP_EDGE_PADDING}
+        currentLocation={tracking.position?.coordinate ?? null}
+        origin={origin ?? DEMO_ORIGIN}
+        destination={destination}
+        routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
+        showsUserLocation={hasPosition}
+        showsOriginMarker={!hasPosition}
+        focus={isFollowing ? 'user' : 'route'}
+      />
 
-        <View style={styles.mapArea}>
-          <AtlasMap
-            ref={mapRef}
-            currentLocation={tracking.position?.coordinate ?? null}
-            origin={origin ?? DEMO_ORIGIN}
-            destination={destination}
-            routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
-            showsUserLocation={hasPosition}
-            // Com a posição conhecida, o indicador azul nativo já marca a
-            // origem — um pino em cima dele seria redundante.
-            showsOriginMarker={!hasPosition}
-            focus={isFollowing ? 'user' : 'route'}
-            onLocatePress={() => {
-              // O botão do mapa continua sendo "me mostre o trajeto", e por
-              // isso sai do acompanhamento: senão a próxima leitura do GPS
-              // desfaria o enquadramento em um segundo.
-              setIsFollowing(false);
-              mapRef.current?.fitRoute();
-            }}
-            locateLabel="Enquadrar o trajeto inteiro"
-            badgeLabel={
-              progress
-                ? `${formatDistance(progress.remainingMeters)} restantes`
-                : trip.route
-                  ? `${formatDistance(trip.route.distanceMeters)} até ${destination.name}`
-                  : undefined
-            }
-          />
+      {/* Camada de controles. `box-none` deixa o arrasto do mapa passar. */}
+      <View style={styles.overlay} pointerEvents="box-none">
+        <View
+          style={[styles.top, { paddingTop: insets.top + spacing.sm }]}
+          pointerEvents="box-none">
+          <View style={styles.topRow} pointerEvents="box-none">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Voltar"
+              onPress={() => router.back()}
+              style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}>
+              <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
+            </Pressable>
 
-          {/* Estados de localização flutuam sobre o mapa, sem empurrar o layout. */}
-          {tracking.isStarting || (tracking.error && !hasPosition) ? (
-            <View style={styles.overlay} pointerEvents="box-none">
-              {tracking.isStarting ? (
-                <StatusMessage tone="info" message="Obtendo sua localização..." busy floating />
+            {/*
+              A instrução ocupa o resto da linha. Sem manobra em mãos, a faixa
+              mostra o destino: um espaço reservado e vazio seria pior que uma
+              faixa que diz para onde se vai.
+            */}
+            <View style={styles.bannerSlot}>
+              {nextManeuver && !hasArrived ? (
+                <ManeuverBanner maneuver={nextManeuver} />
               ) : (
-                <StatusMessage
-                  tone="error"
-                  message={tracking.error ?? ''}
-                  onRetry={tracking.retry}
-                  floating
-                />
+                <View style={[styles.plainBanner, shadows.raised]}>
+                  <Text variant="body" numberOfLines={1}>
+                    {hasArrived ? 'Você chegou' : `Em rota para ${destination.name}`}
+                  </Text>
+                </View>
               )}
             </View>
+          </View>
+
+          {/* Avisos empilham sob a faixa, sem empurrar o mapa. */}
+          {trip.error ? (
+            <StatusMessage tone="error" message={trip.error} onRetry={trip.retry} floating />
+          ) : trip.isLoading ? (
+            <StatusMessage tone="info" message="Calculando rota..." busy floating />
+          ) : null}
+
+          {tracking.isStarting ? (
+            <StatusMessage tone="info" message="Obtendo sua localização..." busy floating />
+          ) : tracking.error ? (
+            <StatusMessage
+              tone="error"
+              message={tracking.error}
+              // Com posição em mãos o erro é passageiro e o acompanhamento
+              // segue da última leitura boa; sem ela, vale oferecer a retomada.
+              onRetry={hasPosition ? undefined : tracking.retry}
+              floating
+            />
+          ) : null}
+
+          {progress?.isOffRoute ? (
+            <StatusMessage tone="info" message="Você saiu da rota." floating />
           ) : null}
         </View>
 
-        <TripProgressCard
-          destination={destination}
-          route={trip.route}
-          progress={progress}
-          isLoadingRoute={trip.isLoading}
-          routeError={trip.error}
-          // Um erro de GPS com posição em mãos é só um aviso: o acompanhamento
-          // continua a partir da última leitura boa.
-          trackingError={hasPosition ? tracking.error : null}
-          onRetryRoute={trip.retry}
+        <TripBottomSheet
+          remainingSeconds={remainingSeconds}
+          remainingMeters={remainingMeters}
+          bottomInset={insets.bottom}
           onEndTrip={() => router.back()}
-          onToggleFocus={() => {
-            setIsFollowing((following) => {
-              if (following) {
-                mapRef.current?.fitRoute();
-              }
-              return !following;
-            });
-          }}
+          onToggleFocus={toggleFocus}
           isFollowing={isFollowing}
         />
       </View>
@@ -197,24 +204,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  body: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
+  /**
+   * Cobre o mapa inteiro e distribui os dois blocos — controles no topo,
+   * painel no rodapé — com o espaço livre no meio, que é onde o mapa fica
+   * visível e arrastável.
+   */
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'space-between',
   },
-  pills: {
-    flexDirection: 'row',
+  top: {
+    paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
-  /** Único elemento elástico da tela. */
-  mapArea: {
-    flex: 1,
-    minHeight: 180,
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
-  overlay: {
-    position: 'absolute',
-    top: spacing.md,
-    left: spacing.md,
-    right: 64,
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.raised,
+  },
+  backPressed: {
+    opacity: 0.7,
+  },
+  bannerSlot: {
+    flex: 1,
+  },
+  /** Faixa de contexto quando não há manobra para anunciar. */
+  plainBanner: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+    minHeight: 44,
   },
 });

@@ -5,7 +5,7 @@ import {
   type GetRouteParams,
   type RouteProvider,
 } from '@/features/routing/types/route-provider';
-import type { RouteResult } from '@/features/routing/types/route-result';
+import type { RouteResult, RouteStep } from '@/features/routing/types/route-result';
 import { HttpError, fetchJson } from '@/utils/http';
 
 /**
@@ -27,6 +27,8 @@ type AtlasRouteResponse = {
   coordinates: Coordinate[];
   distanceMeters: number;
   durationSeconds: number;
+  /** Ausente em respostas de versões anteriores da API. */
+  steps?: RouteStep[];
   provider: string;
   cached: boolean;
 };
@@ -86,7 +88,30 @@ function parseRoute(payload: AtlasRouteResponse): RouteResult {
     coordinates,
     distanceMeters: payload.distanceMeters,
     durationSeconds: payload.durationSeconds,
+    steps: parseSteps(payload.steps),
   };
+}
+
+/**
+ * Valida as manobras devolvidas pela API.
+ *
+ * O formato já é o do aplicativo — a API expõe exatamente o tipo `RouteStep` —
+ * então aqui não há tradução, apenas a checagem de que cada item tem o que a
+ * tela vai ler. Uma manobra malformada é descartada em vez de derrubar a rota:
+ * instruções são um extra sobre um trajeto que já é útil sem elas.
+ */
+function parseSteps(steps: RouteStep[] | undefined): RouteStep[] {
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+
+  return steps.filter(
+    (step): step is RouteStep =>
+      typeof step?.type === 'string' &&
+      Number.isFinite(step?.distanceAlongRouteMeters) &&
+      Number.isFinite(step?.location?.latitude) &&
+      Number.isFinite(step?.location?.longitude),
+  );
 }
 
 export const atlasRouteProvider: RouteProvider = {

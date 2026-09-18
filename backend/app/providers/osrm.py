@@ -25,6 +25,7 @@ import httpx
 from app.core.errors import RouteNotFound, RouteProviderTimeout, RouteProviderUnavailable
 from app.providers.base import ProviderRoute
 from app.schemas.coordinate import Coordinate
+from app.schemas.route import ManeuverModifier, ManeuverType, RouteStep
 
 # O servidor público expõe apenas o perfil de carro.
 OSRM_PROFILE = "driving"
@@ -67,7 +68,10 @@ class OsrmRouteProvider:
                     "overview": "full",
                     "geometries": "geojson",
                     "alternatives": "false",
-                    "steps": "false",
+                    # As manobras são o que permite a faixa de instrução na
+                    # tela de viagem. Custam bytes na resposta, não uma
+                    # chamada a mais.
+                    "steps": "true",
                     # Um raio por ponto, na ordem em que eles aparecem na URL.
                     "radiuses": f"{SNAP_RADIUS_METERS};{SNAP_RADIUS_METERS}",
                 },
@@ -146,7 +150,106 @@ class OsrmRouteProvider:
                 "O serviço de rotas não informou distância e duração.", error
             ) from error
 
-        return ProviderRoute(coordinates, distance, duration)
+        return ProviderRoute(coordinates, distance, duration, _parse_steps(route))
+
+
+# Vocabulário do OSRM traduzido para o do Atlas. O que não estiver aqui vira
+# `CONTINUE`: seguir em frente é a instrução que nunca manda o motorista para o
+# lugar errado.
+_MANEUVER_TYPES: dict[str, ManeuverType] = {
+    "depart": ManeuverType.DEPART,
+    "arrive": ManeuverType.ARRIVE,
+    "turn": ManeuverType.TURN,
+    "continue": ManeuverType.CONTINUE,
+    "merge": ManeuverType.MERGE,
+    "on ramp": ManeuverType.ON_RAMP,
+    "off ramp": ManeuverType.OFF_RAMP,
+    "fork": ManeuverType.FORK,
+    "end of road": ManeuverType.END_OF_ROAD,
+    "roundabout": ManeuverType.ROUNDABOUT,
+    "rotary": ManeuverType.ROTARY,
+    "roundabout turn": ManeuverType.ROUNDABOUT,
+    "new name": ManeuverType.NEW_NAME,
+    "notification": ManeuverType.CONTINUE,
+    "exit roundabout": ManeuverType.ROUNDABOUT,
+    "exit rotary": ManeuverType.ROTARY,
+}
+
+_MANEUVER_MODIFIERS: dict[str, ManeuverModifier] = {
+    "left": ManeuverModifier.LEFT,
+    "right": ManeuverModifier.RIGHT,
+    "sharp left": ManeuverModifier.SHARP_LEFT,
+    "sharp right": ManeuverModifier.SHARP_RIGHT,
+    "slight left": ManeuverModifier.SLIGHT_LEFT,
+    "slight right": ManeuverModifier.SLIGHT_RIGHT,
+    "straight": ManeuverModifier.STRAIGHT,
+    "uturn": ManeuverModifier.UTURN,
+}
+
+
+def _parse_steps(route: dict[str, Any]) -> list[RouteStep]:
+    """
+    Converte os passos do OSRM em manobras posicionadas sobre a rota.
+
+    O OSRM descreve cada passo com a manobra no **início** dele e a distância
+    que ele cobre até a próxima. A API converte isso para distância acumulada
+    desde a partida: assim o aplicativo sabe quanto falta para a próxima
+    manobra subtraindo o que já percorreu, sem refazer geometria.
+
+    Manobras nunca derrubam uma rota. Se o provider não as mandou, ou mandou em
+    formato inesperado, a lista volta vazia e a tela mostra o trajeto sem a
+    faixa de instrução — que é exatamente o comportamento anterior a elas.
+    """
+    steps: list[RouteStep] = []
+    traveled = 0.0
+
+    for leg in route.get("legs") or []:
+        if not isinstance(leg, dict):
+            continue
+
+        for raw in leg.get("steps") or []:
+            if not isinstance(raw, dict):
+                continue
+
+            maneuver = raw.get("maneuver")
+
+            if not isinstance(maneuver, dict):
+                continue
+
+            location = _parse_location(maneuver.get("location"))
+
+            if location is None:
+                continue
+
+            steps.append(
+                RouteStep(
+                    type=_MANEUVER_TYPES.get(
+                        str(maneuver.get("type")), ManeuverType.CONTINUE
+                    ),
+                    modifier=_MANEUVER_MODIFIERS.get(str(maneuver.get("modifier"))),
+                    road_name=str(raw.get("name") or ""),
+                    distance_along_route_meters=traveled,
+                    location=location,
+                )
+            )
+
+            step_distance = raw.get("distance")
+
+            if isinstance(step_distance, int | float) and step_distance > 0:
+                traveled += float(step_distance)
+
+    return steps
+
+
+def _parse_location(raw: Any) -> Coordinate | None:
+    """Ponto da manobra, em [longitude, latitude] como todo GeoJSON."""
+    if not isinstance(raw, list | tuple) or len(raw) < 2:
+        return None
+
+    if not _is_finite_pair(raw[0], raw[1]):
+        return None
+
+    return Coordinate(latitude=raw[1], longitude=raw[0])
 
 
 def _is_finite_pair(longitude: Any, latitude: Any) -> bool:

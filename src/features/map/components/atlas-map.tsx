@@ -52,6 +52,19 @@ export type AtlasMapProps = {
    * reposicionando a câmera a cada leitura nova.
    */
   focus?: 'route' | 'user';
+  /**
+   * `card` arredonda os cantos, para o mapa que convive com outros elementos.
+   * `full` encosta nas bordas, para a navegação — onde o mapa é a tela, e não
+   * um bloco dentro dela.
+   */
+  shape?: 'card' | 'full';
+  /**
+   * Respiro que a câmera reserva nas bordas ao enquadrar a rota.
+   *
+   * Na navegação a faixa de instrução e o painel inferior cobrem parte do
+   * mapa, e sem esse ajuste o trajeto seria enquadrado atrás deles.
+   */
+  edgePadding?: Partial<EdgePadding>;
 };
 
 /**
@@ -111,6 +124,8 @@ export function AtlasMap({
   showsOriginMarker = true,
   showsDestinationMarker = true,
   focus = 'route',
+  shape = 'card',
+  edgePadding,
 }: AtlasMapProps) {
   const mapRef = useRef<MapView>(null);
   const [isMapReady, setIsMapReady] = useState(false);
@@ -130,10 +145,10 @@ export function AtlasMap({
     const points = routeCoordinates.length >= 2 ? routeCoordinates : [origin, destination];
 
     mapRef.current?.fitToCoordinates(points, {
-      edgePadding: EDGE_PADDING,
+      edgePadding: { ...EDGE_PADDING, ...edgePadding },
       animated: true,
     });
-  }, [routeCoordinates, origin, destination]);
+  }, [routeCoordinates, origin, destination, edgePadding]);
 
   const centerOnUser = useCallback(() => {
     if (!currentLocation) {
@@ -189,7 +204,7 @@ export function AtlasMap({
   }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, shape === 'card' ? styles.card : styles.full]}>
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
@@ -271,9 +286,14 @@ const styles = StyleSheet.create({
      * pai, com flexbox — nunca `Dimensions.get`.
      */
     flex: 1,
-    borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceMuted,
+  },
+  card: {
+    borderRadius: radius.lg,
+  },
+  full: {
+    borderRadius: 0,
   },
   locateButton: {
     position: 'absolute',

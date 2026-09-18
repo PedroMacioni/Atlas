@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from app.core.database import SupabaseRest
 from app.providers.base import ProviderRoute
 from app.schemas.coordinate import Coordinate
+from app.schemas.route import RouteStep
 
 TABLE = "route_cache"
 
@@ -57,7 +58,7 @@ class RouteCacheRepository:
         rows = await self._database.select(
             TABLE,
             params={
-                "select": "distance_meters,duration_seconds,geometry",
+                "select": "distance_meters,duration_seconds,geometry,steps",
                 "cache_key": f"eq.{cache_key}",
                 # A validade é filtrada no banco: uma linha vencida nunca chega.
                 "expires_at": f"gt.{now}",
@@ -95,6 +96,9 @@ class RouteCacheRepository:
                 "distance_meters": route.distance_meters,
                 "duration_seconds": route.duration_seconds,
                 "geometry": [[c.longitude, c.latitude] for c in route.coordinates],
+                # As manobras vão como a API as expõe (camelCase), para que a
+                # leitura seja uma desserialização direta, sem tradução.
+                "steps": [step.model_dump(by_alias=True) for step in route.steps],
                 "expires_at": (datetime.now(UTC) + self._ttl).isoformat(),
             },
             on_conflict="cache_key",
@@ -119,4 +123,22 @@ def _row_to_route(row: dict) -> ProviderRoute | None:
         coordinates=coordinates,
         distance_meters=float(row["distance_meters"]),
         duration_seconds=float(row["duration_seconds"]),
+        steps=_parse_steps(row.get("steps")),
     )
+
+
+def _parse_steps(raw: object) -> list[RouteStep]:
+    """
+    Reconstrói as manobras guardadas.
+
+    Uma linha gravada antes de as manobras existirem não tem nada aqui, e uma
+    linha corrompida não deve derrubar a rota — nos dois casos a resposta sai
+    sem instruções, que é degradação aceitável: o trajeto continua desenhado.
+    """
+    if not isinstance(raw, list):
+        return []
+
+    try:
+        return [RouteStep.model_validate(step) for step in raw]
+    except ValueError:
+        return []

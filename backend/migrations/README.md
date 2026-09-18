@@ -12,6 +12,7 @@ zero rodando estes arquivos na ordem do nome.
 | `20260917224641_fix_saved_filter_semantics.sql` | `saved` passa a filtrar pela marcação do usuário, não pela categoria. |
 | `20260918_add_place_priority.sql` | Coluna `priority`: ordem explícita no catálogo, acima do alfabeto. |
 | `20260918_seed_anhanguera_taquaral.sql` | Faculdade Anhanguera (Taquaral, Campinas) como destino no topo. |
+| `20260918_add_route_cache_steps.sql` | Coluna `steps`: as manobras sobrevivem ao cache. |
 
 ## Como aplicar
 

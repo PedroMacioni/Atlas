@@ -4,7 +4,12 @@ import {
   type GetRouteParams,
   type RouteProvider,
 } from '@/features/routing/types/route-provider';
-import type { RouteResult } from '@/features/routing/types/route-result';
+import type {
+  ManeuverModifier,
+  ManeuverType,
+  RouteResult,
+  RouteStep,
+} from '@/features/routing/types/route-result';
 import { HttpError, fetchJson } from '@/utils/http';
 
 /**
@@ -42,7 +47,56 @@ type OsrmRouteResponse = {
       /** GeoJSON usa a ordem [longitude, latitude]. */
       coordinates: [number, number][];
     };
+    legs?: {
+      steps?: {
+        name?: string;
+        distance?: number;
+        maneuver?: {
+          type?: string;
+          modifier?: string;
+          location?: [number, number];
+        };
+      }[];
+    }[];
   }[];
+};
+
+/**
+ * Vocabulário do OSRM traduzido para o do Atlas.
+ *
+ * Esta tabela existe também no backend, em `providers/osrm.py`, e a
+ * duplicação é deliberada: este provider é o caminho **sem** backend, e
+ * precisa se sustentar sozinho. Quando a API do Atlas passar a ser o único
+ * provider de produção, é este arquivo que sai — não a tabela do servidor.
+ */
+const MANEUVER_TYPES: Record<string, ManeuverType> = {
+  depart: 'depart',
+  arrive: 'arrive',
+  turn: 'turn',
+  continue: 'continue',
+  merge: 'merge',
+  'on ramp': 'on-ramp',
+  'off ramp': 'off-ramp',
+  fork: 'fork',
+  'end of road': 'end-of-road',
+  roundabout: 'roundabout',
+  rotary: 'rotary',
+  'roundabout turn': 'roundabout',
+  'new name': 'new-name',
+  notification: 'continue',
+  'exit roundabout': 'roundabout',
+  'exit rotary': 'rotary',
+};
+
+const MANEUVER_MODIFIERS: Record<string, ManeuverModifier> = {
+  left: 'left',
+  right: 'right',
+  'sharp left': 'sharp-left',
+  'sharp right': 'sharp-right',
+  'slight left': 'slight-left',
+  'slight right': 'slight-right',
+  straight: 'straight',
+  uturn: 'uturn',
 };
 
 function buildRouteUrl(origin: Coordinate, destination: Coordinate): string {
@@ -108,7 +162,56 @@ function parseRoute(payload: OsrmRouteResponse): RouteResult {
     coordinates,
     distanceMeters: route.distance,
     durationSeconds: route.duration,
+    steps: parseSteps(route),
   };
+}
+
+/**
+ * Converte os passos do OSRM em manobras posicionadas sobre a rota.
+ *
+ * O OSRM descreve cada passo com a manobra no **início** dele e a distância
+ * que ele cobre até a próxima. Aqui isso vira distância acumulada desde a
+ * partida, que é o formato que a tela usa: o que falta até a manobra é uma
+ * subtração do quanto já se percorreu.
+ *
+ * Manobra nunca derruba uma rota — formato inesperado devolve lista vazia, e a
+ * tela simplesmente não mostra a faixa de instrução.
+ */
+function parseSteps(route: NonNullable<OsrmRouteResponse['routes']>[number]): RouteStep[] {
+  const steps: RouteStep[] = [];
+  let traveled = 0;
+
+  for (const leg of route.legs ?? []) {
+    for (const step of leg.steps ?? []) {
+      const maneuver = step.maneuver;
+      const location = maneuver?.location;
+
+      if (
+        !Array.isArray(location) ||
+        location.length < 2 ||
+        !Number.isFinite(location[0]) ||
+        !Number.isFinite(location[1])
+      ) {
+        continue;
+      }
+
+      steps.push({
+        // Tipo desconhecido vira "continue": seguir em frente é a única
+        // instrução que nunca manda o motorista para o lugar errado.
+        type: MANEUVER_TYPES[String(maneuver?.type)] ?? 'continue',
+        modifier: MANEUVER_MODIFIERS[String(maneuver?.modifier)],
+        roadName: step.name ?? '',
+        distanceAlongRouteMeters: traveled,
+        location: { latitude: location[1], longitude: location[0] },
+      });
+
+      if (Number.isFinite(step.distance) && (step.distance ?? 0) > 0) {
+        traveled += step.distance as number;
+      }
+    }
+  }
+
+  return steps;
 }
 
 export const osrmRouteProvider: RouteProvider = {

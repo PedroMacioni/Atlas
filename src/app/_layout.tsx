@@ -60,7 +60,12 @@ export default function RootLayout() {
       <Stack screenOptions={STACK_OPTIONS}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="destination" options={{ title: 'Definir destino' }} />
-        <Stack.Screen name="trip" options={{ title: 'Viagem' }} />
+        {/*
+          A viagem esconde o cabeçalho: o mapa encosta nas quatro bordas e a
+          tela traz o próprio botão de voltar, sobre o mapa. Um cabeçalho ali
+          roubaria a faixa onde vive a instrução de manobra.
+        */}
+        <Stack.Screen name="trip" options={{ headerShown: false }} />
       </Stack>
     </SafeAreaProvider>
   );

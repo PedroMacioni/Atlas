@@ -1,6 +1,6 @@
 # Atlas
 
-Copiloto inteligente de viagem — **Fase 3: viagem em andamento**.
+Copiloto inteligente de viagem — **Fase 4: navegação**.
 
 ---
 
@@ -24,6 +24,12 @@ E a fase 3 o terceiro — o trajeto deixa de ser uma foto e passa a acontecer:
 Rastreamento contínuo + progresso sobre a rota + câmera que acompanha
 ```
 
+A fase 4 fechou a navegação:
+
+```
+Instruções de manobra + mapa em tela cheia + painel de chegada
+```
+
 O backend vive em [`backend/`](backend/README.md) e tem o seu próprio README.
 Ainda não há autenticação nem inteligência de qualquer tipo.
 
@@ -41,10 +47,13 @@ O que o aplicativo faz hoje:
 5. Desenha a rota sobre o mapa como uma `Polyline`.
 6. Enquadra a rota inteira automaticamente assim que ela chega.
 7. Exibe distância e tempo estimado devolvidos pelo serviço de rotas.
-8. **Acompanha a viagem**: a câmera segue o aparelho, e tempo restante,
-   distância restante e progresso são recalculados a cada leitura do GPS.
-9. Avisa quando você se afasta da rota, e reconhece a chegada ao destino.
-10. Oferece um botão para alternar entre **ver o trajeto** e **ser acompanhado**.
+8. **Acompanha a viagem**: a câmera segue o aparelho, e tempo e distância
+   restantes são recalculados a cada leitura do GPS.
+9. **Anuncia a próxima manobra** — "Em 200 m, vire à direita na Rua Barreto
+   Leme" — com ícone e distância em degraus grossos.
+10. Mostra o **horário previsto de chegada**, com tempo e distância restantes.
+11. Avisa quando você se afasta da rota, e reconhece a chegada ao destino.
+12. Oferece alternar entre **ver o trajeto** e **ser acompanhado**.
 
 A interface segue o design de referência do ATLAS: tipografia Plus Jakarta
 Sans, cards arredondados com elevação suave, pílulas de contexto no topo, o
@@ -66,7 +75,7 @@ Duas abas e duas telas empilhadas por cima delas:
 | **Início** | aba | Boas-vindas. Mostra onde o usuário está e convida a começar. Não consulta rotas. |
 | **Sobre** | aba | Contexto. Procedência dos números, acesso rápido e arquitetura. |
 | **Definir destino** | empilhada | Busca por texto, filtros por categoria e lista de lugares. |
-| **Viagem em andamento** | empilhada | Operação. Mapa com a rota real, acompanhamento da posição e o que falta até o destino. |
+| **Viagem em andamento** | empilhada | Navegação. Mapa em tela cheia, instrução de manobra no topo e painel de chegada embaixo. |
 
 O fluxo é `Início → Definir destino → Viagem em andamento`, com `router.push`.
 Escolher um destino abre a viagem **direto**, sem etapa de confirmação. As duas
@@ -93,29 +102,87 @@ A hierarquia de rotas reflete isso: o grupo `(tabs)` guarda a barra nativa, e
 
 ### Viagem em andamento
 
-O que separa esta tela de um mapa com uma linha desenhada é o **acompanhamento**:
+O mapa **é** a tela: encosta nas quatro bordas, e o resto flutua sobre ele. É o
+arranjo dos aplicativos de navegação, pela mesma razão — dirigindo, o que se
+olha é o mapa, e todo o resto precisa caber na periferia da atenção. O
+cabeçalho nativo sai daqui, e a tela traz o próprio botão de voltar.
+
+```
+┌────────────────────────────────┐
+│ ‹   ┌────────────────────────┐ │
+│     │ ↰  Em 200 m            │ │  faixa de manobra
+│     │    Vire à esquerda na  │ │  (fundo escuro, vence o mapa)
+│     │    Av. José de Souza   │ │
+│     └────────────────────────┘ │
+│                                │
+│                                │
+│            MAPA                │  tela cheia, câmera acompanhando
+│                                │
+│                                │
+│ ┌────────────────────────────┐ │
+│ │     CHEGADA PREVISTA       │ │
+│ │          14:32             │ │  a pergunta da viagem
+│ │                            │ │
+│ │     11 min  •  7,9 km      │ │  tempo • distância restantes
+│ │                            │ │
+│ │  Me acompanhar   Encerrar  │ │
+│ └────────────────────────────┘ │
+└────────────────────────────────┘
+```
+
+O painel inferior responde à pergunta que de fato se faz numa viagem — **a que
+horas eu chego?**. Por isso o horário vem primeiro e centralizado; tempo e
+distância ficam abaixo, menores, porque respondem a mesma coisa de forma
+indireta. Quem quer saber "dá tempo?" lê o relógio, não faz a conta.
+
+#### O acompanhamento
 
 - **A posição é rastreada continuamente** (`watchPositionAsync`, precisão
-  `BestForNavigation`, uma leitura a cada 10 m). A tela Início segue usando
+  `BestForNavigation`, uma leitura a cada 10 m). A tela Início segue com
   leitura única — só a viagem precisa acompanhar.
 - **Tempo e distância restantes** são recalculados a cada leitura, projetando a
-  posição sobre a geometria da rota. A barra de progresso é a mesma conta.
+  posição sobre a geometria da rota.
 - **A câmera acompanha** o aparelho, num zoom mais fechado que o de
-  centralizar. O botão do card alterna entre acompanhar e ver o trajeto todo.
+  centralizar. O painel alterna entre acompanhar e ver o trajeto todo.
 - **Abre enquadrando a rota inteira** por 2,2 s antes de descer para o
   acompanhamento: primeiro "para onde eu vou", depois "onde estou agora".
 - **Avisa o desvio** acima de 60 m da rota, e congela o progresso enquanto ele
-  durar — um número que deixou de ser confiável não deve continuar sendo
-  exibido como se fosse.
+  durar — um número que deixou de ser confiável não deve seguir na tela.
 - **Reconhece a chegada** a 40 m do destino.
 
 O ponto azul no mapa é o indicador **nativo** da plataforma, e já se movia
-antes desta fase — quem o desenha é o iOS/Android. O que a fase acrescentou foi
-o resto da tela reagir a ele.
+antes destas fases — quem o desenha é o iOS/Android. O que elas acrescentaram
+foi o resto da tela reagir a ele.
 
-A rota é calculada **uma vez**. Recalcular quando o motorista desvia é a fase
-do turn-by-turn, junto com as instruções de manobra: sem recálculo, uma
-instrução vira mentira no primeiro desvio.
+#### As instruções de manobra
+
+O provider pede `steps=true` ao OSRM e traduz o vocabulário dele para o do
+Atlas: `"end of road"` vira `end-of-road`, `"sharp left"` vira `sharp-left`,
+e um tipo desconhecido vira `continue` — seguir em frente é a única instrução
+que nunca manda o motorista para o lugar errado.
+
+A **frase** não vem do servidor. A API devolve tipo, modificador e nome da via;
+quem escreve "Vire à direita na Rua Barreto Leme" é
+`features/trip/utils/maneuver-text.ts`. A separação não é cerimônia: o mesmo
+dado precisa virar frase curta na faixa, frase falada quando houver voz, e
+outro idioma quando houver tradução.
+
+Duas combinações exigem tratamento próprio, porque a junção crua de tipo e
+modificador produz português torto:
+
+| OSRM | Cru | Corrigido |
+|---|---|---|
+| `turn` + `straight` | "Vire em frente" | **"Siga em frente"** |
+| `continue` + `uturn` | "Continue o retorno" | **"Faça o retorno"** |
+
+O nome da via é omitido quando o provider não o informa — comum em alças e
+retornos. "Pegue a saída" é instrução completa; "Pegue a saída na" seria uma
+frase quebrada na cara de quem dirige.
+
+A distância usa degraus grossos de propósito: `Agora` abaixo de 30 m, múltiplos
+de 50 m até 1 km, e quilômetros com uma decimal acima disso. "Em 320 m" e "Em
+340 m" são a mesma informação para quem está dirigindo, e um número que muda a
+cada segundo pede atenção que deveria estar na rua.
 
 #### Como o progresso é calculado
 
@@ -128,10 +195,11 @@ projeção sobre o segmento mais próximo da rota   (utils/geo.ts)
       ├─ distância percorrida  = acumulado até o vértice + fração do segmento
       ├─ distância restante    = total − percorrida
       ├─ tempo restante        = duração total × (1 − fração)
+      ├─ próxima manobra       = primeira à frente do percorrido
       └─ distância até a rota  → acima de 60 m, desvio
 ```
 
-Duas decisões dentro disso merecem registro:
+Três decisões dentro disso merecem registro:
 
 **A busca não retrocede.** Ela começa no último vértice alcançado e caminha
 para frente, e só varre a rota inteira se não achar nada perto. Sem isso, uma
@@ -139,6 +207,11 @@ rota que passa duas vezes pelo mesmo lugar — um retorno, uma alça de rodovia,
 ida e volta na mesma avenida — casaria a posição com o trecho errado, e o tempo
 restante saltaria para trás. Medido na rota Campinas → Viracopos: deslocar
 400 m de um ponto do trajeto encontra um vértice **410 m atrás** dele.
+
+**A manobra é posicionada, não sequencial.** O OSRM descreve cada passo com a
+manobra no início e a distância que ele cobre; a API converte para distância
+acumulada desde a partida. Saber o que falta até a próxima curva passa a ser
+uma subtração do quanto já se percorreu, sem refazer geometria.
 
 **O tempo restante é proporcional, não previsto.** O serviço de rotas entrega
 uma duração para o trajeto inteiro, sem trânsito; falta 60% da distância,
@@ -148,11 +221,11 @@ fase do modelo.
 O cálculo é uma função pura em `features/trip/utils/trip-progress.ts`, sem
 React e sem GPS: recebe geometria e um ponto, devolve números.
 
-Nem a Início nem a Viagem **rolam**. O cabeçalho, os botões e os cards
-têm altura de conteúdo, e o mapa é o único elemento elástico — encolhe ou
-cresce para fechar a conta. Isso mantém o mapa dominante em telas grandes,
-ainda legível em aparelhos pequenos, e elimina a competição de gesto entre o
-arrasto do mapa e o rolamento da tela.
+Nenhuma tela **rola**, e a Viagem levou isso ao limite: o mapa ocupa a tela
+inteira e os controles flutuam sobre ele. Nas outras, o cabeçalho, os botões e
+os cards têm altura de conteúdo e o mapa é o único elemento elástico. Em todas,
+o efeito é o mesmo — nenhuma competição de gesto entre o arrasto do mapa e o
+rolamento da tela.
 
 ### O que aparece mas não funciona
 
@@ -191,8 +264,7 @@ atlas/
 │   │   ├── search-field.tsx        # Campo de busca com microfone
 │   │   ├── place-row.tsx           # Linha de lugar em lista
 │   │   ├── section-header.tsx      # Título de seção com nota à direita
-│   │   ├── progress-bar.tsx        # Traço de progresso do trajeto
-│   │   ├── voice-prompt-card.tsx   # Chamada de voz (inerte nesta fase)
+│   │   │   ├── voice-prompt-card.tsx   # Chamada de voz (inerte nesta fase)
 │   │   ├── text.tsx                # Único componente de texto do app
 │   │   ├── card.tsx                # Superfície arredondada com elevação
 │   │   ├── icon-badge.tsx          # Ícone dentro de círculo suave
@@ -229,16 +301,19 @@ atlas/
 │   │   │   ├── services/route-service.ts
 │   │   │   └── types/route-provider.ts, route-result.ts
 │   │   └── trip/
-│   │       ├── components/trip-progress-card.tsx   # painel da viagem
+│   │       ├── components/maneuver-banner.tsx      # faixa de instrução
+│   │       ├── components/trip-bottom-sheet.tsx    # painel de chegada
 │   │       ├── constants/demo-route.ts
 │   │       ├── hooks/use-trip-destination.ts
 │   │       ├── hooks/use-trip-origin.ts            # origem congelada
 │   │       ├── hooks/use-trip-progress.ts
 │   │       ├── hooks/use-trip-route.ts
+│   │       ├── utils/maneuver-text.ts              # as palavras, em pt-BR
+│   │       ├── utils/next-maneuver.ts              # qual manobra vem
 │   │       └── utils/trip-progress.ts              # o cálculo, puro
 │   │
 │   ├── theme/                      # colors, typography, spacing, radius, shadows
-│   └── utils/                      # http.ts, geo.ts, distance.ts, duration.ts
+│   └── utils/                      # http.ts, geo.ts, distance, duration, arrival
 │
 ├── backend/                        # API do Atlas — FastAPI + Supabase
 │   ├── app/                        # ver backend/README.md
@@ -508,6 +583,7 @@ O que ele muda no lado do aplicativo:
 |---|---|
 | `osrmRouteProvider` chamava o OSRM público do aparelho. | `atlasRouteProvider` chama `POST /v1/routes`; o backend decide o provider e guarda o resultado em cache. |
 | `DEMO_PLACES` vinha no bundle. | `place-service` consulta `GET /v1/places`, com busca e filtro no banco — e cai na lista local se a rede falhar. |
+| A rota vinha sem instruções. | `RouteResult` ganhou `steps`: as manobras, posicionadas sobre o trajeto. Os dois providers as fornecem. |
 | Cada abertura da Viagem gastava uma chamada ao OSRM. | O trajeto repetido vem do `route_cache`: 1.767 ms na primeira vez, 98 ms depois. |
 | Uma chave de API precisaria ser embarcada. | As chaves ficam no servidor. Só a URL da API entra no bundle. |
 
@@ -538,20 +614,24 @@ recente, e uma faixa de aviso quando o resultado exibido veio da cópia local.
 
 Em ordem sugerida:
 
-0. **Turn-by-turn** — instruções de manobra, com o recálculo da rota que elas
-   exigem. Pede `steps=true` no provider, as manobras no contrato da API e uma
-   tradução dos códigos do OSRM para português.
-1. **As outras três telas do design** — Opções próximas, Recomendação e Resumo
+0. **Recálculo ao sair da rota** — é a dívida que as manobras criaram. Hoje o
+   desvio é avisado e o progresso congela, mas a instrução continua sendo a da
+   rota antiga: no primeiro desvio ela passa a mentir. O recálculo é o que
+   fecha a navegação de verdade.
+1. **Voz** — as instruções já existem como dado e como frase; falta falá-las.
+   `expo-speech` roda no Expo Go, então não exige development build.
+2. **As outras três telas do design** — Opções próximas, Recomendação e Resumo
    da viagem. O design system já cobre os elementos que elas usam; falta o
    conteúdo real de cada uma (Places, modelo de recomendação, histórico).
-2. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
+3. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
    backend, com a chave do lado do servidor, e não um release na loja.
-3. **Testes do aplicativo** — o backend tem 30; o app tem zero, e já acumulou
-   funções puras pedindo teste: `trip-progress`, `geo`, `filter-places`,
-   `distance`, `duration` e o parsing dos dois providers. Falta só o runner.
-4. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
-5. **Development build** — necessário assim que entrar um módulo nativo fora do
-   Expo Go (voz, câmera avançada, mapas com chave própria).
+4. **Testes do aplicativo** — o backend tem 39; o app tem zero, e já acumulou
+   funções puras pedindo teste: `trip-progress`, `geo`, `maneuver-text`,
+   `next-maneuver`, `arrival`, `filter-places`, `distance`, `duration` e o
+   parsing dos dois providers. Falta só o runner.
+5. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
+6. **Development build** — necessário assim que entrar um módulo nativo fora do
+   Expo Go (câmera avançada, mapas com chave própria).
 
 ---
 

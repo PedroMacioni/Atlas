@@ -221,3 +221,122 @@ def test_erro_sem_corpo_utilizavel_cai_no_status(client):
 
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "route_provider_unavailable"
+
+
+# --- manobras no contrato ---------------------------------------------------
+
+OSRM_COM_STEPS = {
+    "code": "Ok",
+    "routes": [
+        {
+            "distance": 1000.0,
+            "duration": 600.0,
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[-47.0626, -22.9099], [-47.1345, -23.0074]],
+            },
+            "legs": [
+                {
+                    "steps": [
+                        {
+                            "name": "Rua José Paulino",
+                            "distance": 400.0,
+                            "maneuver": {
+                                "type": "depart",
+                                "modifier": "right",
+                                "location": [-47.0626, -22.9099],
+                            },
+                        },
+                        {
+                            "name": "Rua Luiz Otávio",
+                            "distance": 600.0,
+                            "maneuver": {
+                                "type": "turn",
+                                "modifier": "left",
+                                "location": [-47.10, -22.95],
+                            },
+                        },
+                    ]
+                }
+            ],
+        }
+    ],
+}
+
+
+@respx.mock
+def test_manobras_saem_em_camel_case_como_o_app_espera(client):
+    respx.get(**OSRM_ROUTE).mock(return_value=httpx.Response(200, json=OSRM_COM_STEPS))
+
+    body = client.post("/v1/routes", json=PEDIDO).json()
+
+    assert len(body["steps"]) == 2
+    primeira = body["steps"][0]
+    # Os nomes são os do tipo `RouteStep` do aplicativo — sem tradução no meio.
+    assert set(primeira) == {
+        "type",
+        "modifier",
+        "roadName",
+        "distanceAlongRouteMeters",
+        "location",
+    }
+    assert body["steps"][1]["roadName"] == "Rua Luiz Otávio"
+    assert body["steps"][1]["distanceAlongRouteMeters"] == 400.0
+
+
+@respx.mock
+def test_manobras_sobrevivem_ao_cache(client, database):
+    # Uma rota servida do cache sem manobras faria a faixa de instrução
+    # desaparecer da tela sem motivo visível.
+    database.rows["route_cache"] = [
+        {
+            "distance_meters": 1000.0,
+            "duration_seconds": 600.0,
+            "geometry": [[-47.0626, -22.9099], [-47.1345, -23.0074]],
+            "steps": [
+                {
+                    "type": "turn",
+                    "modifier": "left",
+                    "roadName": "Rua Luiz Otávio",
+                    "distanceAlongRouteMeters": 400.0,
+                    "location": {"latitude": -22.95, "longitude": -47.10},
+                }
+            ],
+        }
+    ]
+
+    body = client.post("/v1/routes", json=PEDIDO).json()
+
+    assert body["cached"] is True
+    assert body["steps"][0]["roadName"] == "Rua Luiz Otávio"
+
+
+@respx.mock
+def test_manobras_gravadas_no_cache_em_camel_case(client, database):
+    respx.get(**OSRM_ROUTE).mock(return_value=httpx.Response(200, json=OSRM_COM_STEPS))
+
+    client.post("/v1/routes", json=PEDIDO)
+
+    _, row = database.upserts[0]
+
+    # Grava no formato em que será lido, para que a leitura seja direta.
+    assert row["steps"][1]["roadName"] == "Rua Luiz Otávio"
+    assert row["steps"][1]["distanceAlongRouteMeters"] == 400.0
+
+
+@respx.mock
+def test_cache_com_manobras_corrompidas_devolve_rota_sem_instrucoes(client, database):
+    database.rows["route_cache"] = [
+        {
+            "distance_meters": 1000.0,
+            "duration_seconds": 600.0,
+            "geometry": [[-47.0626, -22.9099], [-47.1345, -23.0074]],
+            "steps": [{"type": "isso nao e um tipo valido"}],
+        }
+    ]
+
+    response = client.post("/v1/routes", json=PEDIDO)
+
+    # Degradação aceitável: o trajeto continua desenhado, sem a faixa.
+    assert response.status_code == 200
+    assert response.json()["steps"] == []
