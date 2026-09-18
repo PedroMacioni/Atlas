@@ -26,8 +26,14 @@ const QUICK_CATEGORIES = [
 const ARCHITECTURE = [
   { title: 'features/location', description: 'Permissão de foreground e leitura do GPS.' },
   { title: 'features/map', description: 'Apresentação do mapa. Recebe tudo por props.' },
-  { title: 'features/routing', description: 'Contrato RouteProvider e a implementação OSRM.' },
-  { title: 'features/trip', description: 'Trajeto de demonstração e o resumo da viagem.' },
+  { title: 'features/routing', description: 'Contrato RouteProvider: API do Atlas ou OSRM.' },
+  { title: 'features/trip', description: 'Viagem em andamento: rota, progresso e manobras.' },
+  {
+    title: 'features/trip-session',
+    description: 'Registro da viagem: diário de bordo, paradas, resumo e histórico.',
+  },
+  { title: 'features/emergency', description: 'Hospital, SAMU 192 e Polícia 190.' },
+  { title: 'features/device', description: 'Identificador anônimo do aparelho, sem login.' },
 ] as const;
 
 /** Aba de contexto: o que já existe, o que vem depois e de onde vêm os números. */
@@ -42,9 +48,10 @@ export default function AboutScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Text variant="bodySoft" color="textSecondary">
-          Esta versão valida o eixo Expo + React Native + localização + mapa + rotas. Não há
-          backend, autenticação nem persistência — apenas a fundação sobre a qual o copiloto
-          será construído.
+          Copiloto de viagem multimodal — projeto acadêmico da Faculdade Anhanguera. Hoje: mapa,
+          rotas, acompanhamento da viagem, diário de bordo, resumo, histórico sem login e
+          emergência. A seguir: voz, análise de emoção, classificação de imagem e o Random
+          Forest que recomenda a próxima ação.
         </Text>
 
         <MetricTile

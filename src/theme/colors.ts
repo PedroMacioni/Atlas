@@ -33,6 +33,8 @@ export const colors = {
   successSoft: '#E4F7EE',
   /** Falhas e estados bloqueantes. */
   danger: '#E2473D',
+  /** Extremo escuro do gradiente vermelho, para a ação destrutiva. */
+  dangerDeep: '#B62F27',
   /** Fundo do chip de erro. */
   dangerSoft: '#FDECEA',
 
@@ -51,3 +53,12 @@ export type ColorToken = keyof typeof colors;
 
 /** Gradiente dos botões e superfícies primárias, do claro para o escuro. */
 export const primaryGradient = [colors.primary, colors.primaryDeep] as const;
+
+/**
+ * Gradiente da ação destrutiva.
+ *
+ * Existe para que "Parar" tenha o mesmo peso visual de "Continuar" quando os
+ * dois dividem uma linha: um botão chapado claro ao lado de um com gradiente e
+ * sombra não se lê como par, se lê como um botão e um aviso.
+ */
+export const dangerGradient = [colors.danger, colors.dangerDeep] as const;

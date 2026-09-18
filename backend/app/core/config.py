@@ -11,10 +11,13 @@ Google Routes ou de qualquer provider.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, HttpUrl
+from pydantic import Field, HttpUrl, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -44,6 +47,23 @@ class Settings(BaseSettings):
 
     # Timeout de qualquer chamada de saída, espelhando os 12 s de `utils/http.ts`.
     outbound_timeout_seconds: float = Field(default=12.0, gt=0)
+
+    # --- Lugares próximos ------------------------------------------------
+    # Chave do Google Places (API New). Vazia, a busca usa só o
+    # OpenStreetMap — funciona, mas sem nota. Nunca vai para o aplicativo.
+    google_places_api_key: SecretStr | None = Field(default=None, repr=False)
+    # Consultas ao Google por dia, contadas por esta API. A cota gratuita do
+    # plano com nota é de 1.000 por mês (~33 por dia); 30 deixa folga.
+    google_places_daily_limit: int = Field(default=30, ge=0)
+    overpass_url: HttpUrl = HttpUrl("https://overpass-api.de/api/interpreter")
+
+    # --- Random Forest --------------------------------------------------
+    # Modelo gerado por `ml/train.py`. Ausente, a API sobe mesmo assim e as
+    # recomendações respondem `model_unavailable`.
+    ml_model_path: Path = _BACKEND_DIR / "ml" / "models" / "decision_rf.joblib"
+    # Modo de demonstração: permite trocar as 6 variáveis numa avaliação. É o
+    # que torna o Cenário 3 do escopo demonstrável em sala.
+    ml_simulation_enabled: bool = True
 
     # --- Rede -----------------------------------------------------------
     # Em desenvolvimento o app roda no Expo Go, em outro dispositivo da rede.

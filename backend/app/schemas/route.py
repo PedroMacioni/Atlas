@@ -20,6 +20,9 @@ class RouteRequest(BaseModel):
 
     origin: Coordinate
     destination: Coordinate
+    # Paradas intermediárias, em ordem. Um desvio para um posto sugerido pelo
+    # Atlas entra aqui, e o destino da viagem continua o mesmo.
+    waypoints: list[Coordinate] = Field(default_factory=list, max_length=5)
 
 
 class ManeuverType(StrEnum):

@@ -23,6 +23,9 @@ export type FloatingIconButtonProps = {
    * o carro em movimento.
    */
   size?: 'md' | 'lg';
+  /** Ação secundária, por toque longo — descrita em `accessibilityHint`. */
+  onLongPress?: () => void;
+  accessibilityHint?: string;
 };
 
 const SIZES = {
@@ -44,6 +47,8 @@ export function FloatingIconButton({
   accessibilityLabel,
   iconColor = 'primary',
   size = 'md',
+  onLongPress,
+  accessibilityHint,
 }: FloatingIconButtonProps) {
   const { box, icon: iconSize } = SIZES[size];
 
@@ -51,7 +56,9 @@ export function FloatingIconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.button,
         { width: box, height: box },

@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/ui/card';
 import { IconBadge } from '@/components/ui/icon-badge';
@@ -10,38 +10,56 @@ import { spacing } from '@/theme/spacing';
 export type VoicePromptCardProps = {
   title: string;
   subtitle: string;
+  /**
+   * Ação do toque. Sem ela o card fica atenuado e marcado "Em breve" — é o
+   * que acontece no Expo Go, onde não há reconhecimento de fala: um microfone
+   * que não ouve é pior que um microfone ausente.
+   */
+  onPress?: () => void;
+  /** `true` enquanto ouve — o microfone fica vermelho. */
+  listening?: boolean;
 };
 
-/**
- * Chamada para o comando de voz do Atlas.
- *
- * Inerte nesta fase. Reconhecimento de fala exige um módulo nativo de
- * terceiros que não roda no Expo Go, e a análise de voz é uma etapa futura do
- * projeto. O bloco aparece atenuado e marcado como indisponível em vez de
- * simular escuta — um microfone que não ouve é pior que um microfone ausente.
- */
-export function VoicePromptCard({ title, subtitle }: VoicePromptCardProps) {
+/** Chamada para o comando de voz do Atlas. */
+export function VoicePromptCard({ title, subtitle, onPress, listening = false }: VoicePromptCardProps) {
+  const inert = !onPress;
+
   return (
-    <Card tone="muted" style={styles.card}>
-      <View style={styles.badgeRow}>
-        <View style={styles.halo}>
-          <IconBadge name="microphone" size="md" color="primary" />
-        </View>
+    <Pressable
+      accessibilityRole={inert ? undefined : 'button'}
+      accessibilityLabel={inert ? undefined : title}
+      disabled={inert}
+      onPress={onPress}>
+      {({ pressed }) => (
+        <Card
+          tone="muted"
+          style={[styles.card, inert && styles.inert, pressed && styles.pressed]}>
+          <View style={styles.badgeRow}>
+            <View style={[styles.halo, listening && styles.haloListening]}>
+              <IconBadge
+                name="microphone"
+                size="md"
+                color={listening ? 'danger' : 'primary'}
+              />
+            </View>
+            {inert ? (
+              <View style={styles.soonTag}>
+                <Text variant="label" color="textSecondary">
+                  Em breve
+                </Text>
+              </View>
+            ) : null}
+          </View>
 
-        <View style={styles.soonTag}>
-          <Text variant="label" color="textSecondary">
-            Em breve
+          <Text variant="body" align="center" numberOfLines={2}>
+            {title}
           </Text>
-        </View>
-      </View>
-
-      <Text variant="body" align="center">
-        {title}
-      </Text>
-      <Text variant="label" color="textSecondary" align="center">
-        {subtitle}
-      </Text>
-    </Card>
+          <Text variant="label" color="textSecondary" align="center">
+            {subtitle}
+          </Text>
+        </Card>
+      )}
+    </Pressable>
   );
 }
 
@@ -50,7 +68,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
     gap: spacing.xs,
+  },
+  inert: {
     opacity: 0.72,
+  },
+  pressed: {
+    opacity: 0.8,
   },
   badgeRow: {
     alignSelf: 'stretch',
@@ -63,6 +86,9 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
+  },
+  haloListening: {
+    backgroundColor: colors.dangerSoft,
   },
   soonTag: {
     position: 'absolute',

@@ -51,7 +51,9 @@ export function CategoryChip({
         variant="label"
         color={selected ? 'primary' : 'text'}
         align="center"
-        numberOfLines={2}>
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}>
         {label}
       </Text>
     </Pressable>
@@ -60,9 +62,12 @@ export function CategoryChip({
 
 const styles = StyleSheet.create({
   container: {
+    // Larguras iguais, quantos chips houver na linha: com base zero, o
+    // espaço é repartido por igual e um rótulo longo ("Restaurante") não
+    // empurra os vizinhos.
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: '21%',
+    flexBasis: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,

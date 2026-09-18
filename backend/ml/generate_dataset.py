@@ -1,0 +1,174 @@
+"""
+Gera o dataset sintético do Random Forest.
+
+    uv run python -m ml.generate_dataset
+
+Saída: `ml/data/synthetic.csv`. Reprodutível — a semente é fixa, e rodar de
+novo produz o mesmo arquivo byte a byte.
+
+Como cada linha nasce:
+
+1. **Situação plausível.** Tempo de viagem, velocidade média (para derivar a
+   distância), tempo desde a última parada (nunca maior que a viagem), horário,
+   emoção e imagem. As proporções imitam uma viagem real: na maior parte do
+   tempo não há leitura de voz nem de câmera — daí o peso alto de
+   "desconhecido".
+2. **Rótulo com limiares individuais.** Cada linha usa os limiares de
+   `labeling.py` deslocados em até ±15%, como motoristas diferentes.
+3. **Cobertura de casos raros.** 30% das linhas saem de um "foco": restaurante
+   em horário de refeição, posto na estrada, ponto turístico com cada emoção,
+   madrugada, tensão. Sorteadas ao acaso, essas combinações quase não
+   apareceriam — e o modelo não aprende o que não viu. As regras de rótulo
+   continuam as mesmas; só a amostragem muda.
+4. **Ruído de rótulo.** 5% das linhas trocam para uma decisão vizinha
+   plausível (DESCANSAR ↔ FAZER UMA PARADA, por exemplo). Pessoas não são
+   consistentes, e um modelo que só viu regras perfeitas fica frágil na
+   fronteira.
+"""
+
+import csv
+import random
+from dataclasses import replace
+from pathlib import Path
+
+from app.ml.features import TripContext
+from ml.labeling import DEFAULT_THRESHOLDS, label
+
+SEED = 42
+ROWS = 4_000
+LABEL_NOISE = 0.05
+FOCUS_SHARE = 0.30
+
+DATA_DIR = Path(__file__).parent / "data"
+OUTPUT = DATA_DIR / "synthetic.csv"
+
+COLUMNS = (
+    "horario",
+    "tempo_viagem_min",
+    "distancia_km",
+    "imagem",
+    "emocao",
+    "tempo_sem_parada_min",
+    "decisao",
+    "origem",
+)
+
+EMOTION_WEIGHTS = {
+    "desconhecido": 40,
+    "neutro": 20,
+    "cansado": 12,
+    "animado": 12,
+    "tenso": 10,
+    "bravo": 6,
+}
+
+IMAGE_WEIGHTS = {
+    "desconhecida": 45,
+    "estrada": 30,
+    "posto": 9,
+    "restaurante": 8,
+    "ponto_turistico": 8,
+}
+
+# Para onde um rótulo "escorrega" quando uma pessoa decide diferente.
+NEIGHBORS = {
+    "descansar": ("fazer_parada",),
+    "fazer_parada": ("descansar", "continuar"),
+    "abastecer": ("fazer_parada",),
+    "alimentar": ("fazer_parada",),
+    "registrar_ponto_turistico": ("continuar",),
+    "continuar": ("fazer_parada", "registrar_ponto_turistico"),
+}
+
+
+def _weighted(rng: random.Random, weights: dict[str, int]) -> str:
+    return rng.choices(list(weights), weights=list(weights.values()))[0]
+
+
+def sample_context(rng: random.Random) -> TripContext:
+    # Viagens curtas são mais comuns que longas, mas as longas são onde as
+    # decisões interessantes acontecem — por isso uma mistura.
+    trip_minutes = rng.uniform(5, 240) if rng.random() < 0.6 else rng.uniform(240, 600)
+
+    average_speed_kmh = rng.uniform(35, 95)
+    distance_km = trip_minutes / 60 * average_speed_kmh
+
+    # Um terço das viagens ainda não parou nenhuma vez.
+    minutes_since_stop = trip_minutes if rng.random() < 0.35 else rng.uniform(0, trip_minutes)
+
+    # Mais viagens de dia que de madrugada.
+    hour = rng.uniform(6, 23) if rng.random() < 0.8 else rng.uniform(0, 24)
+
+    return TripContext(
+        hour=hour,
+        trip_minutes=trip_minutes,
+        distance_km=distance_km,
+        image=_weighted(rng, IMAGE_WEIGHTS),
+        emotion=_weighted(rng, EMOTION_WEIGHTS),
+        minutes_since_stop=minutes_since_stop,
+    )
+
+
+def _meal_hour(rng: random.Random) -> float:
+    return rng.uniform(11.5, 14.0) if rng.random() < 0.5 else rng.uniform(18.5, 21.0)
+
+
+def _night_hour(rng: random.Random) -> float:
+    return rng.uniform(22, 24) if rng.random() < 0.4 else rng.uniform(0, 5)
+
+
+# Cada foco ajusta uma situação comum para uma combinação rara.
+FOCUSES = {
+    "restaurante_refeicao": lambda c, rng: replace(c, image="restaurante", hour=_meal_hour(rng)),
+    "refeicao": lambda c, rng: replace(c, hour=_meal_hour(rng)),
+    "posto": lambda c, rng: replace(c, image="posto"),
+    "ponto_turistico": lambda c, rng: replace(
+        c, image="ponto_turistico", emotion=rng.choice(list(EMOTION_WEIGHTS))
+    ),
+    "madrugada": lambda c, rng: replace(c, hour=_night_hour(rng)),
+    "tensao": lambda c, rng: replace(c, emotion=rng.choice(("tenso", "bravo"))),
+    "cansaco": lambda c, rng: replace(c, emotion="cansado"),
+}
+
+
+def generate(rows: int = ROWS, seed: int = SEED) -> list[dict[str, str]]:
+    rng = random.Random(seed)
+    dataset = []
+
+    for _ in range(rows):
+        context = sample_context(rng)
+
+        if rng.random() < FOCUS_SHARE:
+            context = rng.choice(list(FOCUSES.values()))(context, rng)
+
+        decision = label(context, DEFAULT_THRESHOLDS.jittered(rng))
+
+        if rng.random() < LABEL_NOISE:
+            decision = rng.choice(NEIGHBORS[decision])
+
+        values = context.as_dict()
+        dataset.append(
+            {
+                **{key: str(value) for key, value in values.items()},
+                "decisao": decision,
+                "origem": "sintetico",
+            }
+        )
+
+    return dataset
+
+
+def main() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    dataset = generate()
+
+    with OUTPUT.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(dataset)
+
+    print(f"{len(dataset)} linhas em {OUTPUT}")
+
+
+if __name__ == "__main__":
+    main()

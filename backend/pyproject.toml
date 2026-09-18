@@ -10,6 +10,11 @@ dependencies = [
     "httpx>=0.28",
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
+    # Random Forest de recomendação (backend/ml/ treina, app/ml/ serve).
+    "scikit-learn>=1.5",
+    "numpy>=2.0",
+    # Fuso horário de Brasília no Windows, onde o sistema não traz a base IANA.
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]

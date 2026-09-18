@@ -66,6 +66,13 @@ export type AtlasMapProps = {
    * mapa, e sem esse ajuste o trajeto seria enquadrado atrás deles.
    */
   edgePadding?: Partial<EdgePadding>;
+  /** Paradas registradas, desenhadas como marcadores numerados na ordem. */
+  stops?: Coordinate[];
+  /**
+   * `false` congela o mapa (sem arrastar nem zoom). Para o mapa que vive
+   * dentro de uma tela que rola, onde o gesto do mapa roubaria a rolagem.
+   */
+  interactive?: boolean;
 };
 
 /**
@@ -127,6 +134,8 @@ export function AtlasMap({
   focus = 'route',
   shape = 'card',
   edgePadding,
+  stops,
+  interactive = true,
 }: AtlasMapProps) {
   const mapRef = useRef<MapView>(null);
   const [isMapReady, setIsMapReady] = useState(false);
@@ -216,6 +225,10 @@ export function AtlasMap({
         showsMyLocationButton={false}
         showsCompass={false}
         toolbarEnabled={false}
+        scrollEnabled={interactive}
+        zoomEnabled={interactive}
+        rotateEnabled={interactive}
+        pitchEnabled={interactive}
         loadingEnabled
         loadingBackgroundColor={colors.surfaceMuted}
         loadingIndicatorColor={colors.primary}>
@@ -246,6 +259,15 @@ export function AtlasMap({
             pinColor={colors.danger}
           />
         ) : null}
+
+        {stops?.map((stop, index) => (
+          <Marker
+            key={`${stop.latitude},${stop.longitude},${index}`}
+            coordinate={stop}
+            title={`Parada ${index + 1}`}
+            pinColor={colors.categoryFood}
+          />
+        ))}
 
         {/*
           Com permissão concedida, `showsUserLocation` já desenha o ponto azul

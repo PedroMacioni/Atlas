@@ -1,0 +1,92 @@
+import { useRouter } from 'expo-router';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppHeader } from '@/components/ui/app-header';
+import { SectionHeader } from '@/components/ui/section-header';
+import { StatusMessage } from '@/components/ui/status-message';
+import { Text } from '@/components/ui/text';
+import { TripHistoryCard } from '@/features/trip-session/components/trip-history-card';
+import { useTripHistory } from '@/features/trip-session/hooks/use-trip-history';
+import { colors } from '@/theme/colors';
+import { spacing } from '@/theme/spacing';
+
+/**
+ * Histórico de viagens (RF-27, RF-28).
+ *
+ * Sem login: as viagens são as deste aparelho, pelo identificador anônimo.
+ * Não há exclusão — o histórico é mantido enquanto o projeto existir (RF-30).
+ */
+export default function HistoryScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const history = useTripHistory();
+  const trips = history.data ?? [];
+
+  return (
+    <View style={styles.screen}>
+      <AppHeader />
+
+      <FlatList
+        data={trips}
+        keyExtractor={(trip) => trip.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <SectionHeader
+              title="Suas viagens"
+              hint={trips.length > 0 ? String(trips.length) : undefined}
+            />
+            {history.error ? (
+              <StatusMessage tone="error" message={history.error} onRetry={history.reload} />
+            ) : null}
+          </View>
+        }
+        renderItem={({ item }) => (
+          <TripHistoryCard
+            trip={item}
+            onPress={() => router.push({ pathname: '/history/[id]', params: { id: item.id } })}
+          />
+        )}
+        ListEmptyComponent={
+          !history.isAvailable ? (
+            <Text variant="bodySoft" color="textSecondary" align="center" style={styles.empty}>
+              O histórico fica na API do Atlas. Defina EXPO_PUBLIC_ATLAS_API_URL e suba o backend
+              para registrar viagens.
+            </Text>
+          ) : history.isLoading ? (
+            <StatusMessage tone="info" message="Carregando viagens…" busy />
+          ) : history.error ? null : (
+            <Text variant="bodySoft" color="textSecondary" align="center" style={styles.empty}>
+              Nenhuma viagem ainda. Inicie uma na aba Início.
+            </Text>
+          )
+        }
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+  },
+  header: {
+    gap: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  separator: {
+    height: spacing.sm,
+  },
+  empty: {
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+});

@@ -117,13 +117,18 @@ function parseSteps(steps: RouteStep[] | undefined): RouteStep[] {
 export const atlasRouteProvider: RouteProvider = {
   id: 'atlas-api',
 
-  async getRoute({ origin, destination, signal }: GetRouteParams): Promise<RouteResult> {
+  async getRoute({
+    origin,
+    destination,
+    waypoints = [],
+    signal,
+  }: GetRouteParams): Promise<RouteResult> {
     let payload: AtlasRouteResponse;
 
     try {
       payload = await fetchJson<AtlasRouteResponse>(atlasApiUrl(ROUTES_PATH), {
         method: 'POST',
-        body: { origin, destination },
+        body: { origin, destination, waypoints },
         signal,
       });
     } catch (error) {

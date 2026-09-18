@@ -60,6 +60,44 @@ class PlaceNotFound(AtlasError):
     status_code = status.HTTP_404_NOT_FOUND
 
 
+class TripNotFound(AtlasError):
+    """A viagem não existe — ou não pertence ao aparelho que perguntou."""
+
+    code = "trip_not_found"
+    status_code = status.HTTP_404_NOT_FOUND
+
+
+class TripAlreadyFinished(AtlasError):
+    """A viagem já foi encerrada e não aceita novos eventos."""
+
+    code = "trip_already_finished"
+    status_code = status.HTTP_409_CONFLICT
+
+
+class ModelUnavailable(AtlasError):
+    """O modelo de recomendação não foi treinado ou não carregou."""
+
+    code = "model_unavailable"
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+class RecommendationNotFound(AtlasError):
+    code = "recommendation_not_found"
+    status_code = status.HTTP_404_NOT_FOUND
+
+
+class SimulationDisabled(AtlasError):
+    code = "simulation_disabled"
+    status_code = status.HTTP_403_FORBIDDEN
+
+
+class NearbyUnavailableError(AtlasError):
+    """Nem o Google Places nem o OpenStreetMap responderam."""
+
+    code = "nearby_unavailable"
+    status_code = status.HTTP_502_BAD_GATEWAY
+
+
 class DatabaseUnavailable(AtlasError):
     """O Supabase não respondeu ou respondeu com erro."""
 
@@ -91,7 +129,13 @@ def register_error_handlers(app: FastAPI) -> None:
                 "error": {
                     "code": "invalid_request",
                     "message": "O corpo ou os parâmetros da requisição são inválidos.",
-                    "details": error.errors(),
+                    # Sem `ctx`: ele pode carregar a exceção original de um
+                    # validador, que não é serializável — e o tratamento de erro
+                    # viraria um segundo erro, 500 no lugar de 422.
+                    "details": [
+                        {key: value for key, value in item.items() if key != "ctx"}
+                        for item in error.errors()
+                    ],
                 }
             },
         )

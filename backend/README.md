@@ -1,6 +1,8 @@
 # Atlas API
 
-Backend do Atlas — **FastAPI + Supabase**. Três responsabilidades nesta fase:
+Backend do Atlas — **FastAPI + Supabase**. É a "API local em Python" do
+escopo: roda no computador da equipe, na mesma rede do celular, e é onde os
+modelos de IA vão morar. Quatro responsabilidades nesta fase:
 
 1. **Guardar as chaves.** Nenhuma credencial precisa existir dentro do
    aplicativo. Uma variável `EXPO_PUBLIC_` é inlinada no bundle e fica legível
@@ -8,11 +10,14 @@ Backend do Atlas — **FastAPI + Supabase**. Três responsabilidades nesta fase:
 2. **Absorver o provider externo.** O app pede uma rota à API, e a API decide
    se responde do cache ou se chama o OSRM. Trocar de provider de rotas deixa
    de ser um release na loja.
-3. **Servir o catálogo de lugares.** Os oito lugares de demonstração saem do
+3. **Servir o catálogo de lugares.** Os lugares de demonstração saem do
    bundle e viram dado, com busca e filtro resolvidos no banco.
+4. **Registrar as viagens.** Início, diário de bordo, paradas, encerramento e
+   histórico, associados a um identificador anônimo do aparelho — **sem
+   login**, como o escopo define (§8).
 
-Autenticação, histórico de viagens e o modelo de previsão são as fases
-seguintes — o contrato de hoje foi desenhado para recebê-las.
+Voz, emoção, classificação de imagem e o Random Forest de recomendação são as
+fases seguintes. O diário já tem os campos que eles vão preencher.
 
 ---
 
@@ -23,7 +28,16 @@ seguintes — o contrato de hoje foi desenhado para recebê-las.
 | `GET` | `/health` | Diagnóstico: versão, ambiente, provider ativo e estado do banco. |
 | `GET` | `/v1/places` | Lista lugares. Busca por texto e filtro por categoria. |
 | `GET` | `/v1/places/{id}` | Um lugar pelo identificador. |
-| `POST` | `/v1/routes` | Calcula a rota entre dois pontos. |
+| `POST` | `/v1/routes` | Calcula a rota entre dois pontos, com paradas opcionais (`waypoints`). |
+| `GET` | `/v1/nearby` | As 3 opções mais próximas **de carro**, com distância, tempo e nota. |
+| `POST` | `/v1/trips` | Abre uma viagem e registra o início no diário. |
+| `GET` | `/v1/trips` | Histórico do aparelho, mais recente primeiro. |
+| `GET` | `/v1/trips/{id}` | Resumo/detalhe: trajeto, paradas, diário e indicadores. |
+| `POST` | `/v1/trips/{id}/events` | Evento no diário: comando, emergência, recomendação. |
+| `POST` | `/v1/trips/{id}/stops` | "Registrar parada". |
+| `POST` | `/v1/trips/{id}/finish` | Encerra (`arrival`, `button` ou `voice`) e devolve o resumo. |
+| `POST` | `/v1/trips/{id}/recommendations` | Random Forest: avalia (`check`, `manual` ou `simulation`) e recomenda, com justificativa. |
+| `POST` | `/v1/trips/{id}/recommendations/{rid}/answer` | Aceita ou recusa a recomendação (CA-10). |
 
 Documentação interativa em `/docs` (Swagger) e `/redoc` com o servidor de pé.
 
@@ -129,6 +143,100 @@ ficaria abaixo de um aeroporto só porque "Aeroporto" vem antes de
 mantém a ordem de quem não a usa. `priority` não entra na resposta da API — a
 ordem é responsabilidade do servidor, não da tela.
 
+### Viagens e diário de bordo
+
+Toda rota de `/v1/trips` exige o cabeçalho **`X-Atlas-Device`**: o UUID v4
+que o aplicativo gera na primeira execução e guarda no aparelho. O backend
+registra o aparelho em `devices` na primeira chamada, e toda leitura filtra por
+ele — uma viagem de outro aparelho responde `trip_not_found`.
+
+Não existe `DELETE`. O histórico é mantido por tempo indeterminado e não há
+exclusão pelo aplicativo (RF-30).
+
+O encerramento recebe a distância **percorrida** (somada pelo app sobre o GPS)
+e o trajeto percorrido; a duração, a emoção predominante e o "maior trecho sem
+parada" são calculados aqui. As regras do resumo são funções puras em
+`services/trip_service.py`, testadas sem banco.
+
+Emoção, classe de imagem e decisão são vocabulários fechados — os do escopo,
+em `schemas/trip.py` e nos `CHECK` do banco:
+
+| Campo | Valores |
+|---|---|
+| `emotion` | `cansado`, `neutro`, `animado`, `tenso`, `bravo` |
+| `imageClass` | `estrada`, `posto`, `restaurante`, `ponto_turistico` |
+| `decision` | `continuar`, `descansar`, `abastecer`, `alimentar`, `registrar_ponto_turistico`, `fazer_parada` |
+
+### Opções próximas (`GET /v1/nearby`)
+
+`category` é uma das 5 categorias do escopo — `posto`, `restaurante`, `hotel`,
+`ponto_turistico`, `hospital` — ou uma das duas das recomendações: `descanso`
+(posto ou hotel) e `parada` (local de pausa).
+
+1. **Google Places** (API New), se houver chave e ainda houver limite no dia;
+2. **OpenStreetMap** (Overpass), se não houver chave, o limite acabou ou o
+   Google falhou. `source` e `fallbackReason` dizem qual respondeu e por quê;
+3. **tempo de carro** pelo OSRM (`table`) para os candidatos, numa chamada;
+4. as **3 mais rápidas de alcançar**. O Google ordena em linha reta, e o posto
+   do outro lado da rodovia parece perto até precisar de um retorno.
+
+Nada é guardado: os termos do Google proíbem cachear o conteúdo do Places
+(nome, nota, endereço). O custo é controlado pelo limite diário e pela cota do
+console.
+
+> **O OpenStreetMap é reserva, não fonte de demonstração.** O servidor público
+> do Overpass é compartilhado pelo mundo todo: medido em 18/09/2026, levou
+> 23 s para responder, e às vezes responde 429. E não tem nota, que o escopo
+> exige (RF-08). A demo depende do Google configurado.
+
+### Configurar o Google Places
+
+A nota (`rating`) só vem no plano **Enterprise** da busca próxima, que tem
+**1.000 consultas grátis por mês**. Sem a nota seriam 5.000, mas o escopo
+exige a nota. Para ensaios e apresentação, 1.000 sobra — desde que haja
+limite.
+
+1. Em [console.cloud.google.com](https://console.cloud.google.com), crie um
+   projeto (ex.: `atlas`).
+2. **Faturamento** → vincule uma conta de faturamento. O Google exige cartão
+   mesmo para ficar na cota gratuita. Em *Orçamentos e alertas*, crie um
+   orçamento de R$ 1 com alerta por e-mail: se algo sair do previsto, vocês
+   sabem no mesmo dia.
+3. **APIs e serviços → Biblioteca** → ative **"Places API (New)"**. Não a
+   "Places API" antiga: o endpoint é outro e esta API não fala com ela.
+4. **APIs e serviços → Credenciais → Criar credenciais → Chave de API**.
+   Em *Restrições de API*, marque só a **Places API (New)**. Uma chave que só
+   abre o Places não serve para nada caro se vazar.
+5. **APIs e serviços → Places API (New) → Cotas** → limite as requisições de
+   *Nearby Search* por dia a **30**. É a barreira que vale mesmo se a API do
+   Atlas for reiniciada e o contador interno zerar.
+6. No `backend/.env`:
+
+   ```
+   ATLAS_GOOGLE_PLACES_API_KEY=a-chave-criada
+   ```
+
+7. Reinicie a API. O log de subida deve dizer `lugares=google+osm`. Teste:
+
+   ```bash
+   curl "http://localhost:8787/v1/nearby?category=posto&latitude=-22.8616&longitude=-47.0452"
+   ```
+
+   `"source": "google-places"` e as notas preenchidas confirmam. Se vier
+   `openstreetmap` com `fallbackReason: "Google Places indisponível"`, o log da
+   API mostra a resposta do Google — quase sempre a API não ativada (passo 3)
+   ou a restrição da chave (passo 4).
+
+### Recomendações (Random Forest)
+
+O modelo, o dataset, as regras da equipe, a política de quando avaliar e a
+evidência de teste estão documentados em **[`ml/README.md`](ml/README.md)**.
+
+O app chama `trigger: "check"` a cada 5 minutos e **o backend decide se é
+hora**: a cada 1 hora, ou quando o diário mostra uma mudança relevante. A
+resposta diz se vale interromper o motorista (`notify`) e, com tensão forte na
+voz, oferece a emergência antes de consultar o modelo (`assistance`).
+
 ### Erros
 
 Toda falha sai no mesmo envelope:
@@ -147,6 +255,12 @@ como já fazia com `HttpError.kind` em `utils/http.ts`.
 | `route_not_found` | 404 | Não há trajeto entre os pontos. Resposta legítima, não falha. |
 | `route_provider_unavailable` | 502 | O provider de rotas recusou, caiu ou respondeu mal. |
 | `route_provider_timeout` | 504 | O provider não respondeu no tempo limite. |
+| `trip_not_found` | 404 | Viagem inexistente ou de outro aparelho. |
+| `trip_already_finished` | 409 | Evento, parada ou encerramento numa viagem já encerrada. |
+| `model_unavailable` | 503 | O modelo não foi treinado ou não carregou — rode `ml/train.py`. |
+| `simulation_disabled` | 403 | Modo de demonstração desligado (`ATLAS_ML_SIMULATION_ENABLED=false`). |
+| `recommendation_not_found` | 404 | Recomendação que não é desta viagem. |
+| `nearby_unavailable` | 502 | Nem o Google Places nem o OpenStreetMap responderam. |
 | `database_unavailable` | 503 | O Supabase não respondeu. |
 | `internal_error` | 500 | Falha não prevista. O detalhe fica no log, nunca no corpo. |
 
@@ -225,6 +339,7 @@ da tela sem motivo visível.
 |---|---|---|
 | `places` | Catálogo de destinos. Dado público. | Leitura liberada para `anon`. |
 | `route_cache` | Rotas já calculadas, com validade e manobras. Dado interno. | **Sem policy**, de propósito. |
+| `devices`, `trips`, `trip_events`, `stops`, `photos`, `recommendations` | Viagens, diário e histórico (escopo §10). | **Sem policy** — só a chave de serviço. |
 
 `route_cache` não tem policy alguma para que só este processo, com a chave de
 serviço, o alcance. Um cliente com a chave `anon` não lê nem escreve — o
@@ -302,11 +417,11 @@ aplicativo não percebe.
 
 ## Próximos passos
 
-1. **Provider de produção** — Google Routes ou Mapbox, com a chave aqui e o
-   OSRM restrito a desenvolvimento.
-2. **Autenticação** — Supabase Auth, com o token vindo do app e o RLS passando
-   a distinguir usuários. `places` ganha lugares salvos por pessoa.
-3. **Histórico de viagens** — `POST /v1/trips`, que alimenta o modelo de
-   previsão de tempo de trajeto.
-4. **Limpeza do cache** — um `pg_cron` diário apagando linhas vencidas.
-5. **Google Places** — entra em `place_service`, sem o router nem o app mudarem.
+1. **Busca de endereço por texto** (RF-04) — hoje o texto busca só os lugares
+   salvos. O *Text Search* do Places resolve, em outro SKU.
+2. **Emoção na voz e classificação de imagem** — endpoints que recebem áudio e
+   foto do app e devolvem a classe e a confiança.
+3. **Limpeza do cache** — um `pg_cron` diário apagando linhas vencidas.
+
+Não há autenticação no plano: o escopo exclui login, e o aparelho é
+identificado pelo UUID anônimo.

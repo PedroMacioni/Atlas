@@ -25,17 +25,25 @@ TABLE = "route_cache"
 _COORDINATE_PRECISION = 4
 
 
-def build_cache_key(provider_id: str, origin: Coordinate, destination: Coordinate) -> str:
+def build_cache_key(
+    provider_id: str,
+    origin: Coordinate,
+    destination: Coordinate,
+    waypoints: list[Coordinate] | None = None,
+) -> str:
     """Identidade estável de um pedido de rota, independente do provider."""
-    raw = "|".join(
-        (
-            provider_id,
-            _quantize(origin.latitude),
-            _quantize(origin.longitude),
-            _quantize(destination.latitude),
-            _quantize(destination.longitude),
-        )
-    )
+    parts = [
+        provider_id,
+        _quantize(origin.latitude),
+        _quantize(origin.longitude),
+        _quantize(destination.latitude),
+        _quantize(destination.longitude),
+    ]
+    # Sem paradas, a chave é a mesma de antes — o cache existente continua
+    # valendo. Com paradas, cada uma entra na ordem.
+    for point in waypoints or []:
+        parts += ["via", _quantize(point.latitude), _quantize(point.longitude)]
+    raw = "|".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

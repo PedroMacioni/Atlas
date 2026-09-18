@@ -75,6 +75,21 @@ export default function RootLayout() {
             roubaria a faixa onde vive a instrução de manobra.
           */}
           <Stack.Screen name="trip" options={{ headerShown: false }} />
+          <Stack.Screen name="history/[id]" options={{ title: 'Resumo da viagem' }} />
+          {/*
+            Emergência sobe em folha, por cima de qualquer tela — inclusive da
+            viagem, que continua rodando por baixo.
+          */}
+          <Stack.Screen name="simulator" options={{ title: 'Simulador do Random Forest' }} />
+          <Stack.Screen
+            name="emergency"
+            options={{
+              title: 'Emergência',
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.62, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

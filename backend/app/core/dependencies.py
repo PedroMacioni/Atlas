@@ -8,16 +8,22 @@ conhece `httpx`, URL de serviço ou chave de API.
 """
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 
 from app.core.config import Settings, get_settings
 from app.core.database import SupabaseRest
+from app.ml.model import DecisionModel
 from app.providers.base import RouteProvider
 from app.repositories.place_repository import PlaceRepository
 from app.repositories.route_cache_repository import RouteCacheRepository
+from app.repositories.trip_repository import TripRepository
+from app.services.nearby_service import NearbyService
 from app.services.place_service import PlaceService
+from app.services.recommendation_service import RecommendationService
 from app.services.route_service import RouteService
+from app.services.trip_service import TripService
 
 
 def get_database(request: Request) -> SupabaseRest:
@@ -46,5 +52,43 @@ def get_route_service(
     return RouteService(provider, cache)
 
 
+def get_trip_repository(database: DatabaseDep) -> TripRepository:
+    return TripRepository(database)
+
+
+def get_trip_service(
+    repository: Annotated[TripRepository, Depends(get_trip_repository)],
+) -> TripService:
+    return TripService(repository)
+
+
+def get_decision_model(request: Request) -> DecisionModel | None:
+    return request.app.state.decision_model
+
+
+def get_recommendation_service(
+    repository: Annotated[TripRepository, Depends(get_trip_repository)],
+    model: Annotated[DecisionModel | None, Depends(get_decision_model)],
+    settings: SettingsDep,
+) -> RecommendationService:
+    return RecommendationService(
+        repository, model, simulation_enabled=settings.ml_simulation_enabled
+    )
+
+
+def get_nearby_service(request: Request) -> NearbyService:
+    return request.app.state.nearby_service
+
+
 PlaceServiceDep = Annotated[PlaceService, Depends(get_place_service)]
+NearbyServiceDep = Annotated[NearbyService, Depends(get_nearby_service)]
 RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]
+TripServiceDep = Annotated[TripService, Depends(get_trip_service)]
+RecommendationServiceDep = Annotated[
+    RecommendationService, Depends(get_recommendation_service)
+]
+
+# Identificador anônimo do aparelho (escopo §8). Sem login: o aplicativo gera
+# um UUID na primeira execução e o manda em toda chamada de viagem. Ausente ou
+# malformado, o pedido cai no envelope `invalid_request`.
+DeviceDep = Annotated[UUID, Header(alias="X-Atlas-Device")]

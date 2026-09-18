@@ -5,10 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/ui/app-header';
 import { PrimaryButton } from '@/components/ui/primary-button';
+import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { StatusPill } from '@/components/ui/status-pill';
 import { VoicePromptCard } from '@/components/ui/voice-prompt-card';
 import { useCurrentLocation } from '@/features/location/hooks/use-current-location';
+import { useHomeVoice } from '@/features/voice/hooks/use-home-voice';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
 import { DEMO_DESTINATION, DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
 import { colors } from '@/theme/colors';
@@ -31,6 +33,25 @@ export default function HomeScreen() {
   const router = useRouter();
   const location = useCurrentLocation();
   const mapRef = useRef<AtlasMapHandle>(null);
+
+  const openEmergency = () =>
+    router.push({
+      pathname: '/emergency',
+      params: location.coordinate
+        ? {
+            latitude: String(location.coordinate.latitude),
+            longitude: String(location.coordinate.longitude),
+          }
+        : {},
+    });
+
+  // "Atlas, quero ir para o posto mais próximo" (RF-03, RF-05, RF-06).
+  const voice = useHomeVoice({
+    goCategory: (category) =>
+      router.push({ pathname: '/destination', params: { category, voice: '1' } }),
+    goPlace: (query) => router.push({ pathname: '/destination', params: { query, voice: '1' } }),
+    openEmergency,
+  });
 
   return (
     <View style={styles.screen}>
@@ -68,7 +89,7 @@ export default function HomeScreen() {
               routeCoordinates={EMPTY_ROUTE}
               showsUserLocation={location.coordinate !== null}
               showsOriginMarker={false}
-            showsDestinationMarker={false}
+              showsDestinationMarker={false}
               focus="user"
               locateLabel="Centralizar na minha localização"
               onLocatePress={
@@ -96,8 +117,21 @@ export default function HomeScreen() {
           />
 
           <VoicePromptCard
-            title='Diga "Atlas" para começar'
-            subtitle="Seu copiloto de viagem sempre pronto"
+            title={
+              voice.state === 'listening'
+                ? voice.partial || 'Ouvindo…'
+                : 'Toque e diga "Atlas" para começar'
+            }
+            subtitle={voice.error ?? 'Ex.: "quero ir para o posto mais próximo"'}
+            listening={voice.state === 'listening'}
+            onPress={voice.available ? voice.onMicPress : undefined}
+          />
+
+          {/* Acesso rápido à emergência, também fora de viagem (§11). */}
+          <SecondaryButton
+            label="Emergência"
+            tone="danger"
+            onPress={openEmergency}
           />
         </View>
       </View>

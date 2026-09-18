@@ -78,6 +78,52 @@ class SupabaseRest:
             headers={"prefer": "resolution=merge-duplicates,return=minimal"},
         )
 
+    async def insert(self, table: str, row: dict[str, Any]) -> dict[str, Any]:
+        """Insere uma linha e devolve como o banco a gravou — com id e padrões."""
+        response = await self._request(
+            "POST",
+            f"/{table}",
+            json=[row],
+            headers={"prefer": "return=representation"},
+        )
+        return self._single_row(response, table)
+
+    async def upsert_returning(
+        self, table: str, row: dict[str, Any], *, on_conflict: str
+    ) -> dict[str, Any]:
+        """Como `upsert`, mas devolve a linha — nova ou a que já existia."""
+        response = await self._request(
+            "POST",
+            f"/{table}",
+            params={"on_conflict": on_conflict},
+            json=[row],
+            headers={"prefer": "resolution=merge-duplicates,return=representation"},
+        )
+        return self._single_row(response, table)
+
+    async def update(
+        self, table: str, values: dict[str, Any], *, filters: dict[str, str]
+    ) -> list[dict[str, Any]]:
+        """
+        Atualiza as linhas que casam com `filters` (sintaxe PostgREST, `eq.x`).
+
+        Devolve as linhas alteradas: uma lista vazia é como quem chama descobre
+        que o filtro não casou nada.
+        """
+        response = await self._request(
+            "PATCH",
+            f"/{table}",
+            params=filters,
+            json=values,
+            headers={"prefer": "return=representation"},
+        )
+        payload = self._json(response)
+
+        if not isinstance(payload, list):
+            raise DatabaseUnavailable(f"O banco devolveu um corpo inesperado ao alterar {table}.")
+
+        return payload
+
     async def ping(self) -> None:
         """Confirma que o banco responde. Usado pelo /health."""
         await self._request("GET", "/places", params={"select": "id", "limit": 1})
@@ -113,6 +159,15 @@ class SupabaseRest:
             )
 
         return response
+
+    @classmethod
+    def _single_row(cls, response: httpx.Response, table: str) -> dict[str, Any]:
+        payload = cls._json(response)
+
+        if not isinstance(payload, list) or len(payload) != 1 or not isinstance(payload[0], dict):
+            raise DatabaseUnavailable(f"O banco não devolveu a linha gravada em {table}.")
+
+        return payload[0]
 
     @staticmethod
     def _json(response: httpx.Response) -> Any:

@@ -27,8 +27,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.database import SupabaseRest
 from app.core.errors import register_error_handlers
+from app.ml.model import DecisionModel
+from app.providers.nearby import GooglePlacesProvider, OverpassProvider
 from app.providers.osrm import OsrmRouteProvider
-from app.routers import health, places, routes
+from app.routers import health, nearby, places, recommendations, routes, trips
+from app.services.nearby_service import DailyBudget, NearbyService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,11 +60,26 @@ async def lifespan(app: FastAPI):
     app.state.outbound = outbound
     app.state.database = database
     app.state.route_provider = OsrmRouteProvider(outbound, str(settings.osrm_base_url))
+    app.state.decision_model = DecisionModel.load(settings.ml_model_path)
+
+    google_key = settings.google_places_api_key
+    app.state.nearby_service = NearbyService(
+        google=(
+            GooglePlacesProvider(outbound, google_key.get_secret_value())
+            if google_key and google_key.get_secret_value()
+            else None
+        ),
+        fallback=OverpassProvider(outbound, str(settings.overpass_url)),
+        router=app.state.route_provider,
+        budget=DailyBudget(settings.google_places_daily_limit),
+    )
 
     logging.getLogger("atlas.api").info(
-        "Atlas API pronta — ambiente=%s provider=%s",
+        "Atlas API pronta — ambiente=%s provider=%s lugares=%s modelo=%s",
         settings.environment,
         app.state.route_provider.id,
+        "google+osm" if google_key else "osm",
+        app.state.decision_model.version if app.state.decision_model else "ausente",
     )
 
     try:
@@ -85,6 +103,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
         allow_methods=["GET", "POST"],
+        # Sem DELETE nem PATCH de propósito: o histórico não é apagado pelo
+        # aplicativo (RF-30), e encerrar uma viagem é um POST de ação.
         allow_headers=["*"],
     )
 
@@ -92,7 +112,10 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(places.router)
+    app.include_router(nearby.router)
     app.include_router(routes.router)
+    app.include_router(trips.router)
+    app.include_router(recommendations.router)
 
     return app
 

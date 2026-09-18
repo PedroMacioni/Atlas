@@ -22,12 +22,16 @@ const GENERIC_ERROR = 'Não foi possível calcular a rota.';
 function buildRequestKey(
   origin: Coordinate | null,
   destination: Coordinate,
+  waypoints: Coordinate[],
   attempt: number,
 ): string {
   const from = origin ? `${origin.latitude},${origin.longitude}` : 'aguardando-origem';
+  const via = waypoints.map((point) => `${point.latitude},${point.longitude}`).join(';');
 
-  return [attempt, from, destination.latitude, destination.longitude].join('|');
+  return [attempt, from, via, destination.latitude, destination.longitude].join('|');
 }
+
+const NO_WAYPOINTS: Coordinate[] = [];
 
 /**
  * Calcula a rota entre dois pontos e mantém o estado da consulta.
@@ -40,11 +44,16 @@ function buildRequestKey(
  * Cancela a requisição em andamento quando a tela é desmontada ou quando uma
  * nova tentativa é disparada, evitando atualização de estado fora da árvore.
  */
-export function useTripRoute(origin: Coordinate | null, destination: Coordinate): RouteState {
+export function useTripRoute(
+  origin: Coordinate | null,
+  destination: Coordinate,
+  /** Paradas no caminho — um desvio aceito. Precisa ser estável entre renders. */
+  waypoints: Coordinate[] = NO_WAYPOINTS,
+): RouteState {
   const [attempt, setAttempt] = useState(0);
   const [snapshot, setSnapshot] = useState<RouteSnapshot>(PENDING);
 
-  const requestKey = buildRequestKey(origin, destination, attempt);
+  const requestKey = buildRequestKey(origin, destination, waypoints, attempt);
   const [renderedKey, setRenderedKey] = useState(requestKey);
 
   // Quando origem, destino ou tentativa mudam, o resultado anterior deixa de
@@ -67,7 +76,7 @@ export function useTripRoute(origin: Coordinate | null, destination: Coordinate)
     const controller = new AbortController();
     let active = true;
 
-    getRoute({ origin, destination, signal: controller.signal })
+    getRoute({ origin, destination, waypoints, signal: controller.signal })
       .then((result) => {
         if (active) {
           setSnapshot({ isLoading: false, route: result, error: null });
@@ -87,7 +96,7 @@ export function useTripRoute(origin: Coordinate | null, destination: Coordinate)
       active = false;
       controller.abort();
     };
-  }, [requestKey, origin, destination]);
+  }, [requestKey, origin, destination, waypoints]);
 
   return { ...snapshot, retry };
 }

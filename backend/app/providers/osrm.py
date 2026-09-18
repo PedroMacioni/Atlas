@@ -49,16 +49,64 @@ class OsrmRouteProvider:
         self._client = client
         self._base_url = base_url.rstrip("/")
 
-    async def get_route(self, origin: Coordinate, destination: Coordinate) -> ProviderRoute:
-        payload = await self._fetch(origin, destination)
+    async def get_route(
+        self,
+        origin: Coordinate,
+        destination: Coordinate,
+        waypoints: list[Coordinate] | None = None,
+    ) -> ProviderRoute:
+        payload = await self._fetch([origin, *(waypoints or []), destination])
         return self._parse(payload)
 
-    async def _fetch(self, origin: Coordinate, destination: Coordinate) -> dict[str, Any]:
-        # A URL do OSRM leva os pontos no path, na ordem longitude,latitude.
-        pair = (
-            f"{origin.longitude},{origin.latitude};{destination.longitude},{destination.latitude}"
-        )
-        url = f"{self._base_url}/route/v1/{OSRM_PROFILE}/{pair}"
+    async def get_matrix(
+        self, origin: Coordinate, destinations: list[Coordinate]
+    ) -> list[tuple[float, float] | None]:
+        """
+        Distância e tempo de carro da origem até cada destino, numa chamada só.
+
+        É o serviço `table` do OSRM. Devolve `(metros, segundos)` por destino,
+        na mesma ordem, ou `None` para um destino sem trajeto. Uma falha do
+        serviço devolve tudo `None` em vez de levantar: quem chama cai na
+        distância em linha reta, e a lista de opções continua de pé.
+        """
+        if not destinations:
+            return []
+
+        points = ";".join(f"{p.longitude},{p.latitude}" for p in [origin, *destinations])
+        url = f"{self._base_url}/table/v1/{OSRM_PROFILE}/{points}"
+
+        try:
+            response = await self._client.get(
+                url, params={"sources": "0", "annotations": "duration,distance"}
+            )
+            payload = response.json()
+        except (httpx.HTTPError, ValueError):
+            return [None] * len(destinations)
+
+        if not isinstance(payload, dict) or payload.get("code") != "Ok":
+            return [None] * len(destinations)
+
+        durations = (payload.get("durations") or [[]])[0]
+        distances = (payload.get("distances") or [[]])[0]
+        result: list[tuple[float, float] | None] = []
+
+        # O índice 0 é a própria origem; os destinos começam em 1.
+        for index in range(1, len(destinations) + 1):
+            try:
+                distance, duration = distances[index], durations[index]
+            except (IndexError, TypeError):
+                result.append(None)
+                continue
+            valid = isinstance(distance, int | float) and isinstance(duration, int | float)
+            result.append((float(distance), float(duration)) if valid else None)
+
+        return result
+
+    async def _fetch(self, points: list[Coordinate]) -> dict[str, Any]:
+        # A URL do OSRM leva os pontos no path, na ordem longitude,latitude:
+        # origem, paradas intermediárias e destino.
+        path = ";".join(f"{p.longitude},{p.latitude}" for p in points)
+        url = f"{self._base_url}/route/v1/{OSRM_PROFILE}/{path}"
 
         try:
             response = await self._client.get(
@@ -73,7 +121,7 @@ class OsrmRouteProvider:
                     # chamada a mais.
                     "steps": "true",
                     # Um raio por ponto, na ordem em que eles aparecem na URL.
-                    "radiuses": f"{SNAP_RADIUS_METERS};{SNAP_RADIUS_METERS}",
+                    "radiuses": ";".join([str(SNAP_RADIUS_METERS)] * len(points)),
                 },
             )
         except httpx.TimeoutException as error:

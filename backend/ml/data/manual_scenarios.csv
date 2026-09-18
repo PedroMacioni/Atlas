@@ -1,0 +1,39 @@
+horario,tempo_viagem_min,distancia_km,imagem,emocao,tempo_sem_parada_min,decisao,nota
+15.0,160,190,estrada,cansado,130,descansar,Exemplo do escopo §4.5: cansado há 2h40 e mais de 2h sem parar
+10.0,100,95,desconhecida,cansado,100,descansar,Cansado de manhã depois de 1h40 sem parar
+2.5,150,160,estrada,desconhecido,140,descansar,Madrugada com mais de 2h sem parar mesmo sem leitura de voz
+23.5,200,210,desconhecida,neutro,135,descansar,Noite e 2h15 sem parar
+16.0,300,320,posto,cansado,180,descansar,Cansado vence o posto: segurança antes de abastecer
+13.0,240,250,restaurante,cansado,150,descansar,Cansado vence o almoço
+9.0,40,35,estrada,cansado,40,continuar,Cansado mas parou há pouco: ainda não é hora de descansar
+3.0,60,55,estrada,desconhecido,60,continuar,Madrugada mas só 1h de estrada
+17.0,90,80,estrada,tenso,75,fazer_parada,Tenso há 1h15 sem parar: pausa curta
+11.0,130,120,desconhecida,bravo,100,fazer_parada,Irritado no trânsito depois de 1h40
+16.5,200,180,estrada,tenso,90,fazer_parada,Tensão com viagem longa
+8.0,30,20,estrada,tenso,30,continuar,Tenso mas acabou de sair
+15.0,420,450,estrada,neutro,90,abastecer,450 km rodados e 1h30 sem parar
+10.0,330,300,posto,neutro,40,abastecer,Posto à vista depois de 300 km
+16.0,280,270,posto,animado,20,abastecer,Posto à vista com 270 km mesmo tendo parado há pouco
+9.5,500,480,desconhecida,desconhecido,120,abastecer,480 km: autonomia no limite
+15.0,120,110,posto,neutro,60,continuar,Posto à vista mas só 110 km rodados
+12.5,150,140,estrada,neutro,125,alimentar,Almoço e 2h sem parar
+19.5,180,170,desconhecida,animado,130,alimentar,Jantar e 2h10 sem parar
+12.0,100,90,restaurante,neutro,70,alimentar,Restaurante à vista no almoço
+20.0,160,150,restaurante,desconhecido,65,alimentar,Restaurante à vista no jantar
+16.0,150,140,restaurante,neutro,70,continuar,Restaurante fora do horário de refeição
+12.5,40,35,estrada,neutro,40,continuar,Almoço mas a viagem acabou de começar
+14.0,70,60,ponto_turistico,animado,30,registrar_ponto_turistico,Paisagem com o motorista animado
+10.0,50,45,ponto_turistico,neutro,50,registrar_ponto_turistico,Ponto turístico com o motorista tranquilo
+16.0,90,80,ponto_turistico,desconhecido,20,registrar_ponto_turistico,Ponto turístico sem leitura de voz
+14.0,120,110,ponto_turistico,cansado,100,descansar,Cansado: descansar vence o ponto turístico
+15.0,80,70,ponto_turistico,tenso,20,continuar,Tenso e parou há pouco: não é hora de passeio
+17.0,210,200,estrada,neutro,160,fazer_parada,2h40 sem parar em bom estado: pausa genérica
+10.0,280,240,desconhecida,animado,170,fazer_parada,Quase 3h sem parar mesmo animado
+15.5,60,55,estrada,neutro,30,continuar,Viagem normal
+9.0,20,12,desconhecida,desconhecido,20,continuar,Início de viagem sem leituras
+16.0,110,100,estrada,animado,50,continuar,Animado e parou há 50 min
+18.0,90,70,desconhecida,neutro,90,continuar,1h30 sem parar fora do horário de refeição
+11.0,200,190,estrada,neutro,40,continuar,Viagem longa mas parou há pouco
+14.5,45,40,estrada,animado,45,continuar,Tarde tranquila
+7.0,15,8,estrada,neutro,15,continuar,Saindo cedo
+21.5,100,95,estrada,neutro,60,continuar,Noite mas antes das 22h e parou há 1h

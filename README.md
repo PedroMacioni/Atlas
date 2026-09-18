@@ -1,6 +1,9 @@
 # Atlas
 
-Copiloto inteligente de viagem — **Fase 4: navegação**.
+Copiloto inteligente de viagem — navegação, diário de bordo, histórico e emergência.
+
+O escopo oficial do projeto (Faculdade Anhanguera — Taquaral) é a referência
+para o que entra e o que fica de fora.
 
 ---
 
@@ -66,14 +69,17 @@ mapa como card e botões em pílula com gradiente.
 > deliberada: nativo onde a plataforma tem opinião (navegação), custom onde o
 > design tem (ações).
 
-### As quatro telas
+### As telas
 
-Duas abas e duas telas empilhadas por cima delas:
+Três abas e três telas empilhadas por cima delas:
 
 | Tela | Onde vive | Papel |
 |---|---|---|
-| **Início** | aba | Boas-vindas. Mostra onde o usuário está e convida a começar. Não consulta rotas. |
+| **Início** | aba | Boas-vindas. Mostra onde o usuário está, convida a começar e dá acesso à emergência. |
+| **Histórico** | aba | Viagens deste aparelho, sem login. |
 | **Sobre** | aba | Contexto. Procedência dos números, acesso rápido e arquitetura. |
+| **Resumo da viagem** | empilhada | Indicadores, trajeto percorrido, paradas e diário de bordo. |
+| **Emergência** | folha | SAMU 192, Polícia 190 e Hospital. |
 | **Definir destino** | empilhada | Busca por texto, filtros por categoria e lista de lugares. |
 | **Viagem em andamento** | empilhada | Navegação. Mapa em tela cheia, instrução de manobra no topo e painel de chegada embaixo. |
 
@@ -486,9 +492,10 @@ Se a rede bloquear a descoberta local, use um túnel:
 npx expo start --tunnel
 ```
 
-Tudo nesta fase roda no Expo Go — `react-native-maps`, `expo-location`,
-`expo-font`, `expo-linear-gradient` e as fontes do Google já funcionam sem
-compilar nada. **Nenhum development build é necessário.**
+Quase tudo roda no Expo Go — mapa, localização, rotas, histórico, emergência e
+recomendações. **A exceção é a voz**: o reconhecimento de fala é um módulo
+nativo e exige o development build (ver a seção "Voz"). No Expo Go
+(`npm run start:go`) o app abre normalmente, só sem o microfone.
 
 > No Expo Go, o mapa usa a chave do Google Maps do próprio Expo Go. Ao gerar um
 > build próprio para Android será preciso configurar uma chave sua no plugin do
@@ -651,53 +658,128 @@ recente, e uma faixa de aviso quando o resultado exibido veio da cópia local.
 
 ---
 
-## 11. Próximos passos
+## 11. Sessão de viagem, histórico e emergência
 
-Em ordem sugerida:
+A viagem deixou de ser só navegação e passou a ser **registro** — o fio do
+fluxo macro do escopo (Iniciar → Definir destino → Navegar → Registrar →
+Encerrar).
 
-0. **Recálculo ao sair da rota** — é a dívida que as manobras criaram. Hoje o
-   desvio é avisado e o progresso congela, mas a instrução continua sendo a da
-   rota antiga: no primeiro desvio ela passa a mentir. O recálculo é o que
-   fecha a navegação de verdade.
-1. **Voz** — as instruções já existem como dado e como frase; falta falá-las.
-   `expo-speech` roda no Expo Go, então não exige development build.
-2. **As outras três telas do design** — Opções próximas, Recomendação e Resumo
-   da viagem. O design system já cobre os elementos que elas usam; falta o
-   conteúdo real de cada uma (Places, modelo de recomendação, histórico).
-3. **Provider de produção** — Google Routes ou Mapbox. Agora é uma troca no
-   backend, com a chave do lado do servidor, e não um release na loja.
-4. **Testes do aplicativo** — o backend tem 39; o app tem zero, e já acumulou
-   funções puras pedindo teste: `trip-progress`, `geo`, `maneuver-text`,
-   `next-maneuver`, `arrival`, `filter-places`, `distance`, `duration` e o
-   parsing dos dois providers. Falta só o runner.
-5. **Rotas alternativas** — o contrato `RouteResult` precisará virar uma lista.
-6. **Development build** — necessário assim que entrar um módulo nativo fora do
-   Expo Go (câmera avançada, mapas com chave própria).
+| O quê | Onde | Escopo |
+|---|---|---|
+| Identificador anônimo do aparelho (UUID v4 no `expo-secure-store`) | `features/device/` | §8, RF-27 |
+| A viagem abre no backend assim que a origem é conhecida | `features/trip-session/hooks/use-trip-session.ts` | fluxo §6 |
+| Trajeto e distância **percorridos**, somados sobre o GPS | `features/trip-session/utils/traveled-track.ts` | §7.2 |
+| "Registrar parada" (ícone sobre o mapa) | `trip.tsx` → `POST /v1/trips/{id}/stops` | RF-11 |
+| "Parar" pede confirmação; a chegada ao destino pergunta se deve encerrar | `trip.tsx` | RF-25 |
+| Resumo final e detalhe do histórico — a mesma tela | `app/history/[id].tsx` | RF-26, RF-29 |
+| Aba **Histórico**, com os cards do escopo | `app/(tabs)/history.tsx` | RF-28 |
+| Diário de bordo em linha do tempo | `features/trip-session/components/journal-timeline.tsx` | §7.1, RF-21 |
+| Emergência em folha: SAMU 192, Polícia 190 e Hospital | `app/emergency.tsx` | §11, RF-23 |
+| **Recomendação do Random Forest**: card com motivo e confiança, **Aceitar / Agora não**, falada em voz alta | `features/recommendation/` | RF-17 a RF-20, CA-08 a CA-10 |
+| Ícone de lâmpada: "Atlas, preciso abastecer ou descansar" (toque) e **simulador** do modelo (toque longo) | `trip.tsx`, `app/simulator.tsx` | §3.1, §19 Cenário 3, CA-16 |
+| **Opções próximas**: as 5 categorias do escopo em Definir destino, 3 opções com distância, tempo de carro e nota | `features/nearby/`, `app/destination.tsx` | RF-07, RF-08, CA-04 |
+| Recomendação aceita → **3 locais** → o escolhido vira **parada na rota**, sem trocar o destino; ao chegar, a parada vai para o diário | `features/trip/hooks/use-detour.ts` | RF-19, CA-10 |
+| Emergência lista os **3 hospitais mais próximos**; na viagem, o escolhido vira parada | `app/emergency.tsx` | RF-24 |
+
+Sem `EXPO_PUBLIC_ATLAS_API_URL` a viagem continua navegável, mas não é
+registrada: o histórico mora no banco, não no aparelho.
+
+As opções próximas vêm do **Google Places** pelo backend — a chave nunca entra
+no app —, com o OpenStreetMap de reserva. Configuração em
+[`backend/README.md`](backend/README.md#configurar-o-google-places).
 
 ---
 
-## Future architecture
+## 12. Voz
+
+O Atlas ouve comandos e responde falando (§3.1, RF-11 a RF-14, RF-20). O
+reconhecimento de fala é o **da Apple, no próprio iPhone** — nada roda no
+notebook para transformar fala em texto.
+
+| Onde | O que se diz | O que acontece |
+|---|---|---|
+| Início (toque no card de voz) | "Atlas" → *"Para onde você quer ir?"* → "o posto mais próximo" | Abre Definir destino, lê as 3 opções e ouve a escolha ("o segundo", "o Taquaral") |
+| Início | "Atlas, quero ir para a Faculdade Anhanguera" | Busca nos lugares salvos e confirma por voz |
+| Viagem (microfone no mapa) | "registrar parada" · "registrar ponto turístico" | Grava no diário e confirma falando |
+| Viagem | "preciso abastecer ou descansar" | Pede uma avaliação ao Random Forest |
+| Viagem | "quero um posto" · "adicionar parada num restaurante" | Lê 3 opções, ouve a escolha, desvia a rota |
+| Viagem | "emergência" · "não estou me sentindo bem" | Abre a emergência com os hospitais |
+| Viagem | "encerrar viagem" → *"Quer encerrar?"* → "sim" | Encerra com `endReason: voice` (RF-25) |
+| Recomendação na tela | *"…Quer que eu busque um lugar?"* → "sim" / "não" | Aceita ou recusa sem tirar a mão do volante (CA-10) |
+
+Todo comando ouvido vai para o diário de bordo. As frases são interpretadas
+por regras em `features/voice/utils/command-parser.ts` — função pura,
+testada com 25 frases.
+
+**O botão é o gatilho, por enquanto.** Tocar no microfone e dizer "Atlas…"
+funciona; a escuta contínua da palavra "Atlas", sem toque, vem depois de o
+fluxo ser validado no aparelho.
+
+### Development build (obrigatório para a voz)
+
+O reconhecimento de fala é um módulo nativo e **não existe no Expo Go**. No
+Expo Go o app continua abrindo — o microfone só não aparece. Para ter voz:
+
+```bash
+npm install -g eas-cli
+eas login                                   # conta Expo
+eas device:create                           # registra o iPhone (abre um link no aparelho)
+eas build --profile development --platform ios
+```
+
+O build roda na nuvem do Expo, assinado com a conta Apple Developer — não
+precisa de Mac. Ao terminar, o link do build instala o app no iPhone
+registrado. Depois, no dia a dia:
+
+```bash
+npm start          # abre no development build
+npm run start:go   # ou no Expo Go, sem voz
+```
+
+Um build novo só é preciso quando entra outro módulo nativo; mudança de
+código JavaScript chega pelo `npm start`, como antes.
+
+O identificador do app é `com.atlascopiloto.app` (`app.json`). A Apple exige
+que seja único: se o EAS recusar, troque por outro.
+
+---
+
+## 13. Próximos passos
+
+Em ordem, guiados pelos critérios de aceite do escopo. A navegação curva a
+curva está **fora do escopo** (§15) — o que existe fica como extra, sem novo
+investimento (sem recálculo de rota, sem rotas alternativas).
+
+1. **Busca de endereço por texto** (RF-04) — o texto ainda busca só os
+   lugares salvos; o *Text Search* do Google Places resolve.
+2. **Emoção na voz** (CA-07) — o áudio de cada comando já é gravado no
+   aparelho; falta enviá-lo ao Python e classificar nos 5 estados.
+3. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
+4. **Câmera + classificação de imagem** (CA-06) — `expo-camera`, foto salva
+   em "Registrar ponto turístico", classe gravada no diário.
+5. **Testes do aplicativo** — as funções puras (`trip-progress`, `geo`,
+   `traveled-track`, `maneuver-text`, `filter-places`...) ainda não têm runner.
+6. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
+
+---
+
+## Arquitetura prevista
 
 | Camada | Tecnologia | Papel | Estado |
 |---|---|---|---|
-| Backend | **FastAPI / Python** | Orquestração, cache de rotas, chaves de API fora do app. | **Implementado** |
-| Dados | **Supabase** | Catálogo de lugares e cache de rotas hoje; autenticação e perfis depois. | **Parcial** — banco sim, auth não |
-| Inteligência | **Random Forest** | Previsão de tempo de trajeto a partir de histórico e contexto. | Previsto |
-| Visão | **Classificação de imagem** | Reconhecimento de pontos de interesse e placas. | Previsto |
-| Áudio | **Análise de voz** | Comandos e interação em viagem, sem uso das mãos. | Previsto |
-| Lugares | **Google Places** | Busca de endereços, autocomplete e metadados de destinos. | Previsto |
-| Histórico | Supabase + FastAPI | Viagens anteriores alimentando o modelo de previsão. | Previsto |
+| Backend | **FastAPI / Python** | API local: rotas, lugares, viagens e, a seguir, os modelos de IA. | **Implementado** |
+| Dados | **Supabase / PostgreSQL** | Lugares, cache de rotas, viagens, diário e histórico. Sem login. | **Implementado** |
+| Decisão | **Random Forest** | 6 variáveis → 6 decisões (CONTINUAR, DESCANSAR, ABASTECER, ALIMENTAR-SE, REGISTRAR PONTO TURÍSTICO, FAZER UMA PARADA), sempre com justificativa. Ver [`backend/ml/`](backend/ml/README.md). | **Implementado** |
+| Visão | **Classificação de imagem** | Estrada, Posto, Restaurante, Ponto turístico. | Previsto |
+| Áudio | **Voz e emoção** | Palavra "Atlas", comandos, resposta falada; emoção em Cansado, Neutro, Animado, Tenso, Bravo. | **Parcial** — comandos e resposta falada sim; escuta contínua e emoção não |
+| Lugares | **Google Places** + OpenStreetMap | Busca por proximidade nas 5 categorias, com nota; OSM de reserva. | **Implementado** (falta a chave) |
 
 O que já está pronto para receber o resto:
 
-- `RouteProvider` isola o serviço de rotas, no app **e** no backend — o mesmo
-  contrato nas duas pontas. A previsão do Random Forest pode entrar como um
-  ajuste sobre `durationSeconds`, dentro do `route_service` do backend, sem
-  que o aplicativo perceba.
-- `utils/http.ts` centraliza timeout, erro e agora o envelope da API;
-  autenticação entra em um lugar só, tanto no app quanto no `core/database.py`.
-- A organização por feature — nas duas pontas — permite adicionar
-  `features/auth`, `features/voice` ou `features/history` sem tocar no que
-  existe.
-- O prefixo `/v1` nas rotas deixa espaço para evoluir o contrato sem romper
-  aplicativos já instalados.
+- O diário de bordo já tem os campos que os modelos vão preencher —
+  `emotion`, `imageClass`, `decision`, `justification` — com os vocabulários
+  do escopo fechados no banco e no tipo. O resumo e a linha do tempo já os
+  exibem.
+- `recommendations` e `photos` já existem no banco, esperando os modelos e a
+  câmera.
+- O prefixo `/v1` nas rotas deixa espaço para evoluir o contrato.

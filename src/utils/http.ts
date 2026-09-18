@@ -70,6 +70,8 @@ export type FetchJsonOptions = {
   method?: 'GET' | 'POST';
   /** Corpo da requisição, serializado como JSON. */
   body?: unknown;
+  /** Cabeçalhos extras — o identificador do aparelho, por exemplo. */
+  headers?: Record<string, string>;
 };
 
 /**
@@ -79,7 +81,7 @@ export type FetchJsonOptions = {
  * acima possam decidir a mensagem de interface a partir de `error.kind`.
  */
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, method = 'GET', body } = options;
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, method = 'GET', body, headers } = options;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -94,10 +96,11 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
     response = await fetch(url, {
       method,
       signal: controller.signal,
-      headers:
-        body === undefined
-          ? { accept: 'application/json' }
-          : { accept: 'application/json', 'content-type': 'application/json' },
+      headers: {
+        accept: 'application/json',
+        ...(body === undefined ? null : { 'content-type': 'application/json' }),
+        ...headers,
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

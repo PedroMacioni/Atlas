@@ -32,4 +32,4 @@ async def create_route(payload: RouteRequest, service: RouteServiceDep) -> Route
     `cached` conta a procedência: `true` significa que nenhuma chamada externa
     foi feita para atender este pedido.
     """
-    return await service.get_route(payload.origin, payload.destination)
+    return await service.get_route(payload.origin, payload.destination, payload.waypoints)

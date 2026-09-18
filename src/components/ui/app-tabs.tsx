@@ -19,6 +19,11 @@ export function AppTabs() {
         <NativeTabs.Trigger.Icon sf="house.fill" md="home" selectedColor={colors.primary} />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="history">
+        <NativeTabs.Trigger.Label>Histórico</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="clock.fill" md="history" selectedColor={colors.primary} />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="about">
         <NativeTabs.Trigger.Label>Sobre</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="info.circle.fill" md="info" selectedColor={colors.primary} />

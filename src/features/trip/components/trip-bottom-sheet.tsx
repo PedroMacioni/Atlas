@@ -1,9 +1,9 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { SecondaryButton } from '@/components/ui/secondary-button';
 import { Text } from '@/components/ui/text';
 import { useDraggableSheet } from '@/features/trip/hooks/use-draggable-sheet';
 import { colors } from '@/theme/colors';
@@ -22,6 +22,14 @@ export type TripBottomSheetProps = {
   bottomInset: number;
   /** Encerra a viagem e sai da tela. */
   onEndTrip: () => void;
+  /**
+   * Conteúdo que flutua acima do painel, alinhado à esquerda — o velocímetro.
+   *
+   * Entra aqui, e não solto na tela, porque precisa **acompanhar o arraste**:
+   * ancorado à tela, ficaria parado enquanto o painel desce, e o vão entre os
+   * dois mudaria de tamanho conforme o estado.
+   */
+  leading?: ReactNode;
 };
 
 /**
@@ -48,60 +56,76 @@ export function TripBottomSheet({
   remainingMeters,
   bottomInset,
   onEndTrip,
+  leading,
 }: TripBottomSheetProps) {
   const sheet = useDraggableSheet();
 
   return (
-    <Animated.View style={[styles.sheet, shadows.raised, sheet.sheetStyle]}>
-      {/*
-        O gesto cobre só a alça e os números, e não o painel inteiro: com os
-        botões dentro do detector, um toque em "Parar" competiria com o toque
-        que fecha o painel — e a ação errada venceria de vez em quando.
-      */}
-      <GestureDetector gesture={sheet.gesture}>
+    /*
+      O container externo é transparente e carrega o movimento; o cartão branco
+      é o painel em si. Separá-los é o que permite o velocímetro flutuar acima
+      do painel e ainda assim se mover com ele.
+    */
+    <Animated.View style={sheet.sheetStyle}>
+      {leading ? <View style={styles.leading}>{leading}</View> : null}
+
+      <View style={[styles.sheet, shadows.raised]}>
         {/*
-          O respiro do aparelho vive aqui, e não no painel: com o painel
-          fechado é esta a última coisa visível, e os números não podem
-          encostar na borda inferior nem ficar sobre o indicador de gesto.
+          O gesto cobre só a alça e os números, e não o painel inteiro: com os
+          botões dentro do detector, um toque em "Parar" competiria com o toque
+          que fecha o painel — e a ação errada venceria de vez em quando.
         */}
-        <View style={[styles.grabArea, { paddingBottom: bottomInset + spacing.sm }]}>
-          <View style={styles.handle} />
+        <GestureDetector gesture={sheet.gesture}>
+          {/*
+            O respiro do aparelho vive aqui, e não no painel: com o painel
+            fechado é esta a última coisa visível, e os números não podem
+            encostar na borda inferior nem ficar sobre o indicador de gesto.
+          */}
+          <View style={[styles.grabArea, { paddingBottom: bottomInset + spacing.sm }]}>
+            <View style={styles.handle} />
 
-          <Text variant="display" align="center" numberOfLines={1} adjustsFontSizeToFit>
-            {formatArrivalTime(remainingSeconds)}
-          </Text>
-
-          <View style={styles.metrics}>
-            <Text variant="metric" numberOfLines={1} align="right" style={styles.metric}>
-              {formatShortDuration(remainingSeconds)}
+            <Text variant="display" align="center" numberOfLines={1} adjustsFontSizeToFit>
+              {formatArrivalTime(remainingSeconds)}
             </Text>
 
-            <View style={styles.dot} />
+            <View style={styles.metrics}>
+              <Text variant="metric" numberOfLines={1} align="right" style={styles.metric}>
+                {formatShortDuration(remainingSeconds)}
+              </Text>
 
-            <Text variant="metric" numberOfLines={1} align="left" style={styles.metric}>
-              {formatDistance(remainingMeters)}
-            </Text>
+              <View style={styles.dot} />
+
+              <Text variant="metric" numberOfLines={1} align="left" style={styles.metric}>
+                {formatDistance(remainingMeters)}
+              </Text>
+            </View>
           </View>
-        </View>
-      </GestureDetector>
+        </GestureDetector>
 
-      {/*
-        As ações existem no layout desde o início — é a altura delas que diz
-        quanto o painel precisa descer. Ficam fora da tela enquanto ele está
-        fechado, e não escondidas por opacidade: um botão invisível mas tocável
-        é uma armadilha.
+        {/*
+          As ações existem no layout desde o início — é a altura delas que diz
+          quanto o painel precisa descer. Ficam fora da tela enquanto ele está
+          fechado, e não escondidas por opacidade: um botão invisível mas
+          tocável é uma armadilha.
 
-        O respiro inferior é medido junto, de propósito: é o que garante que
-        descer a altura deste bloco esconda os botões por completo.
-      */}
-      <View
-        style={[styles.actions, { paddingBottom: bottomInset + spacing.lg }]}
-        onLayout={(event) => sheet.onHiddenAreaLayout(event.nativeEvent.layout.height)}>
-        <View style={styles.action}>
-          <SecondaryButton label="Parar" tone="danger" onPress={onEndTrip} />
-        </View>
-        <View style={styles.action}>
-          <PrimaryButton label="Continuar" showChevron={false} onPress={sheet.close} />
+          O respiro inferior é medido junto, de propósito: é o que garante que
+          descer a altura deste bloco esconda os botões por completo.
+        */}
+        <View
+          style={[styles.actions, { paddingBottom: bottomInset + spacing.lg }]}
+          onLayout={(event) => sheet.onHiddenAreaLayout(event.nativeEvent.layout.height)}>
+          {/*
+            Os dois são o mesmo botão, com gradientes diferentes: é o que
+            garante altura, raio e sombra idênticos. Nenhum leva seta — uma
+            seta sugere "avançar para a próxima tela", e aqui as duas ações
+            terminam na própria tela.
+          */}
+          <View style={styles.action}>
+            <PrimaryButton label="Parar" tone="danger" showChevron={false} onPress={onEndTrip} />
+          </View>
+          <View style={styles.action}>
+            <PrimaryButton label="Continuar" showChevron={false} onPress={sheet.close} />
+          </View>
         </View>
       </View>
     </Animated.View>
@@ -109,6 +133,12 @@ export function TripBottomSheet({
 }
 
 const styles = StyleSheet.create({
+  /** Faixa do velocímetro: à esquerda, com respiro antes do painel. */
+  leading: {
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,

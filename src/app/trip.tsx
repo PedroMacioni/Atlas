@@ -1,22 +1,40 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
+import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import { useLocationTracking } from '@/features/location/hooks/use-location-tracking';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
 import { ManeuverBanner } from '@/features/trip/components/maneuver-banner';
+import { SpeedBadge } from '@/features/trip/components/speed-badge';
 import { TripBottomSheet } from '@/features/trip/components/trip-bottom-sheet';
+import { useDetour } from '@/features/trip/hooks/use-detour';
 import { DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
 import { useTripDestination } from '@/features/trip/hooks/use-trip-destination';
 import { useTripOrigin } from '@/features/trip/hooks/use-trip-origin';
 import { useTripProgress } from '@/features/trip/hooks/use-trip-progress';
 import { useTripRoute } from '@/features/trip/hooks/use-trip-route';
+import { NearbyOptions } from '@/features/nearby/components/nearby-options';
+import { useNearbySearch } from '@/features/nearby/hooks/use-nearby-search';
+import { DECISION_CATEGORY } from '@/features/nearby/services/nearby-service';
+import type { NearbyPlace } from '@/features/nearby/types/nearby';
+import { RecommendationCard } from '@/features/recommendation/components/recommendation-card';
+import { useRecommendations } from '@/features/recommendation/hooks/use-recommendations';
+import { useTripSession } from '@/features/trip-session/hooks/use-trip-session';
+import {
+  describeTripError,
+  recordEvent,
+} from '@/features/trip-session/services/trip-session-service';
+import type { EndReason } from '@/features/trip-session/types/trip';
 import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
+import { VoiceIndicator } from '@/features/voice/components/voice-indicator';
+import { useTripVoice } from '@/features/voice/hooks/use-trip-voice';
+import { chooseOptionByVoice, confirmByVoice } from '@/features/voice/utils/voice-dialogs';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -41,6 +59,9 @@ const OVERVIEW_HOLD_MS = 2_200;
  * trajeto seria enquadrado atrás deles.
  */
 const MAP_EDGE_PADDING = { top: 150, bottom: 210, left: 56, right: 56 };
+
+/** Quanto tempo a confirmação "Parada registrada" fica na tela. */
+const NOTICE_MS = 2_500;
 
 /**
  * Viagem em andamento.
@@ -69,10 +90,42 @@ export default function TripScreen() {
   const tracking = useLocationTracking();
   const origin = useTripOrigin(tracking.position?.coordinate ?? null, tracking.isStarting);
 
-  const trip = useTripRoute(origin, destination);
+  const session = useTripSession({ origin, destination, position: tracking.position });
+
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /** Mostra um aviso curto sob a faixa de instrução. */
+  const flash = (message: string) => {
+    setNotice(message);
+    setTimeout(() => setNotice(null), NOTICE_MS);
+  };
+
+  /*
+    Parada no caminho — de uma recomendação aceita ou de um hospital escolhido
+    na emergência. Ao alcançá-la, vira parada no diário com o nome do lugar.
+  */
+  const detour = useDetour(tracking.position?.coordinate ?? null, (reached) => {
+    session
+      .registerStop({ name: reached.name, category: reached.category, reason: reached.reason })
+      .then(() => flash(`Parada registrada: ${reached.name}.`))
+      .catch(() => flash(`Você chegou a ${reached.name}.`));
+  });
+
+  const trip = useTripRoute(detour.routeOrigin ?? origin, destination, detour.waypoints);
   const progress = useTripProgress(trip.route, tracking.position?.coordinate ?? null);
 
+  // Os 3 locais para uma recomendação aceita (RF-19).
+  const stopOptions = useNearbySearch();
+  const [stopReason, setStopReason] = useState('');
+
+  const recommendations = useRecommendations({
+    tripId: session.tripId,
+    traveledMeters: session.traveledMeters,
+    location: tracking.position?.coordinate ?? null,
+  });
+
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
 
   useEffect(() => {
     if (!trip.route) {
@@ -87,16 +140,17 @@ export default function TripScreen() {
   /**
    * Próxima manobra à frente.
    *
-   * Depende do quanto já foi percorrido, e por isso só existe depois da
-   * primeira posição — antes dela a instrução seria a de partida, que não
-   * orienta ninguém.
+   * Sem progresso — antes da primeira leitura do GPS, ou com o sinal ainda
+   * ruim — a manobra que interessa é a **primeira do trajeto**, e não nenhuma:
+   * a faixa precisa aparecer assim que a rota chega, senão quem abre a tela
+   * parado conclui que a instrução não funciona.
    */
   const nextManeuver = useMemo(() => {
-    if (!trip.route || !progress) {
+    if (!trip.route) {
       return null;
     }
 
-    return findNextManeuver(trip.route.steps, progress.traveledMeters);
+    return findNextManeuver(trip.route.steps, progress?.traveledMeters ?? 0);
   }, [trip.route, progress]);
 
   const hasPosition = tracking.position !== null;
@@ -105,6 +159,264 @@ export default function TripScreen() {
   // Sem posição, os totais do trajeto são a melhor verdade disponível.
   const remainingMeters = progress?.remainingMeters ?? trip.route?.distanceMeters ?? 0;
   const remainingSeconds = progress?.remainingSeconds ?? trip.route?.durationSeconds ?? 0;
+
+  /**
+   * Encerra a viagem e abre o resumo.
+   *
+   * Sem API a viagem não foi registrada, e sair é tudo o que há a fazer. Com
+   * API, uma falha ao salvar não prende ninguém na tela: oferece tentar de
+   * novo ou sair sem o resumo.
+   */
+  const endTrip = async (reason: EndReason) => {
+    if (isEnding) {
+      return;
+    }
+
+    setIsEnding(true);
+
+    try {
+      const tripId = await session.finish(reason);
+
+      if (tripId) {
+        router.replace({ pathname: '/history/[id]', params: { id: tripId } });
+      } else {
+        router.back();
+      }
+    } catch (cause) {
+      setIsEnding(false);
+      Alert.alert('Não foi possível salvar a viagem', describeTripError(cause), [
+        { text: 'Sair sem salvar', style: 'destructive', onPress: () => router.back() },
+        { text: 'Tentar de novo', onPress: () => endTrip(reason) },
+      ]);
+    }
+  };
+
+  /** "Parar" pede confirmação: encerrar é definitivo e gera o resumo (RF-25). */
+  const confirmEnd = () => {
+    Alert.alert('Encerrar viagem?', 'O Atlas salva o trajeto e mostra o resumo.', [
+      { text: 'Continuar viagem', style: 'cancel' },
+      { text: 'Encerrar', style: 'destructive', onPress: () => endTrip('button') },
+    ]);
+  };
+
+  /**
+   * Chegada ao destino: o Atlas pergunta uma vez se deve encerrar (RF-25).
+   * Encerrar sozinho seria arriscado — o GPS reconhece a chegada a 40 m, e
+   * ainda pode faltar achar a vaga. O ref garante uma pergunta por viagem.
+   */
+  const arrivalAsked = useRef(false);
+
+  useEffect(() => {
+    if (!hasArrived || arrivalAsked.current) {
+      return;
+    }
+
+    arrivalAsked.current = true;
+
+    Alert.alert('Você chegou ao destino', 'Encerrar a viagem e ver o resumo?', [
+      { text: 'Ainda não', style: 'cancel' },
+      { text: 'Encerrar', onPress: () => endTrip('arrival') },
+    ]);
+    // Só a transição para "chegou" importa; `endTrip` é lido no toque.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasArrived]);
+
+  const registerStop = () => {
+    session
+      .registerStop()
+      .then(() => flash('Parada registrada no diário.'))
+      .catch((cause: unknown) =>
+        flash(cause instanceof Error ? cause.message : describeTripError(cause)),
+      );
+  };
+
+  const openEmergency = () => {
+    const here = tracking.position?.coordinate;
+
+    router.push({
+      pathname: '/emergency',
+      params: {
+        ...(session.tripId ? { tripId: session.tripId } : null),
+        ...(here ? { latitude: String(here.latitude), longitude: String(here.longitude) } : null),
+      },
+    });
+  };
+
+  /**
+   * Resposta à recomendação (§4.7, CA-10).
+   *
+   * - DESCANSAR, ABASTECER, ALIMENTAR-SE e FAZER UMA PARADA buscam as 3 opções
+   *   próximas; a rota só muda quando o usuário escolhe uma delas.
+   * - REGISTRAR PONTO TURÍSTICO grava o local no diário na hora.
+   * - CONTINUAR não mexe em nada.
+   */
+  const answerRecommendation = (accepted: boolean) => {
+    const current = recommendations.current;
+    const decision = current?.decision;
+    const here = tracking.position?.coordinate ?? null;
+
+    recommendations.answer(accepted).catch(() => {});
+
+    const category = decision ? DECISION_CATEGORY[decision] : undefined;
+    if (accepted && category && here) {
+      setStopReason(`Recomendação do Atlas: ${current?.label}`);
+      stopOptions.search(category, here);
+    }
+
+    if (accepted && decision === 'registrar_ponto_turistico') {
+      registerTouristSpot().catch(() => {});
+    }
+  };
+
+  /** "Registrar ponto turístico": o local vai para o diário (RF-11). */
+  const registerTouristSpot = async () => {
+    if (!session.tripId) {
+      throw new Error('A viagem não está sendo registrada.');
+    }
+    await recordEvent(session.tripId, {
+      kind: 'tourist_spot',
+      command: 'Ponto turístico registrado',
+      location: tracking.position?.coordinate ?? null,
+    });
+    flash('Ponto turístico registrado no diário.');
+  };
+
+  /** O local escolhido vira parada no caminho; o destino continua o mesmo. */
+  const chooseStop = (place: NearbyPlace) => {
+    detour.start({
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      category: stopOptions.category ?? 'parada',
+      reason: stopReason,
+    });
+    stopOptions.clear();
+  };
+
+  /*
+    Voz (RF-11, RF-12, RF-20). Um toque no microfone, uma frase, uma ação. As
+    buscas de parada pedidas por voz têm as 3 opções lidas em voz alta e
+    escolhidas por voz (RF-13, RF-14) — o ref marca que a próxima lista de
+    opções nasceu de um pedido falado.
+  */
+  const readOptionsByVoice = useRef(false);
+
+  const tripVoice = useTripVoice({
+    registerStop: () => session.registerStop(),
+    askRecommendation: recommendations.ask,
+    registerTouristSpot,
+    findStop: (category) => {
+      const here = tracking.position?.coordinate;
+      if (!here) {
+        flash('Sem localização para buscar lugares por perto.');
+        return;
+      }
+      readOptionsByVoice.current = true;
+      setStopReason('Pedido por voz');
+      stopOptions.search(category, here);
+    },
+    openEmergency: () => openEmergency(),
+    endTrip: () => endTrip('voice'),
+    recordCommand: (transcript) => {
+      if (session.tripId) {
+        recordEvent(session.tripId, {
+          kind: 'command',
+          command: transcript,
+          location: tracking.position?.coordinate ?? null,
+        }).catch(() => {});
+      }
+    },
+  });
+
+  // As 3 opções de uma parada pedida por voz: lidas e escolhidas por voz.
+  useEffect(() => {
+    const places = stopOptions.result?.places;
+    if (!places || !readOptionsByVoice.current) {
+      return;
+    }
+    readOptionsByVoice.current = false;
+
+    const intro = `Encontrei ${places.length} ${places.length === 1 ? 'opção' : 'opções'}.`;
+    chooseOptionByVoice(tripVoice, places, intro)
+      .then((index) => {
+        if (index !== null) {
+          chooseStop(places[index]);
+        }
+      })
+      .catch(() => {});
+    // Só a chegada da lista importa; as ações são lidas no momento.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopOptions.result]);
+
+  /*
+    Toda recomendação é falada (RF-20). Se pede confirmação e há microfone, o
+    Atlas pergunta e ouve a resposta — o motorista não precisa tirar a mão do
+    volante. Sem resposta clara, o card continua na tela para o toque.
+  */
+  const spokenRecommendation = useRef<string | null>(null);
+
+  useEffect(() => {
+    const current = recommendations.current;
+    if (!current || spokenRecommendation.current === current.id) {
+      return;
+    }
+    spokenRecommendation.current = current.id;
+
+    (async () => {
+      await tripVoice.say(current.justification);
+
+      if (!tripVoice.available || !current.requiresConfirmation) {
+        return;
+      }
+
+      const searches = DECISION_CATEGORY[current.decision] !== undefined;
+      const accepted = await confirmByVoice(
+        tripVoice,
+        searches ? 'Quer que eu busque um lugar?' : 'Quer registrar este ponto?',
+      );
+
+      if (accepted === null) {
+        return;
+      }
+      if (accepted && searches) {
+        readOptionsByVoice.current = true;
+      }
+      answerRecommendation(accepted);
+    })().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recommendations.current]);
+
+  // Tensão forte: o Atlas oferece a emergência antes de qualquer recomendação.
+  useEffect(() => {
+    if (!recommendations.assistance) {
+      return;
+    }
+
+    tripVoice.say('Percebi tensão forte na sua voz. Quer ajuda?').catch(() => {});
+
+    Alert.alert('Está tudo bem?', 'Percebi tensão forte na sua voz. Quer abrir a emergência?', [
+      { text: 'Estou bem', style: 'cancel', onPress: recommendations.dismissAssistance },
+      {
+        text: 'Abrir emergência',
+        onPress: () => {
+          recommendations.dismissAssistance();
+          openEmergency();
+        },
+      },
+    ]);
+    // Só a chegada do aviso importa; as ações são lidas no toque.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recommendations.assistance]);
+
+  const openSimulator = () => {
+    router.push({
+      pathname: '/simulator',
+      params: {
+        ...(session.tripId ? { tripId: session.tripId } : null),
+        distanceMeters: String(Math.round(session.traveledMeters)),
+      },
+    });
+  };
 
   const toggleFocus = () => {
     setIsFollowing((following) => {
@@ -125,6 +437,7 @@ export default function TripScreen() {
         origin={origin ?? DEMO_ORIGIN}
         destination={destination}
         routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
+        stops={detour.waypoints}
         showsUserLocation={hasPosition}
         showsOriginMarker={!hasPosition}
         focus={isFollowing ? 'user' : 'route'}
@@ -182,6 +495,62 @@ export default function TripScreen() {
             />
           ) : null}
 
+          {session.status === 'error' && session.error ? (
+            <StatusMessage
+              tone="error"
+              message={`A viagem não está sendo registrada. ${session.error}`}
+              onRetry={session.retry}
+              floating
+            />
+          ) : null}
+
+          <VoiceIndicator voice={tripVoice} />
+
+          {notice ? <StatusMessage tone="info" message={notice} floating /> : null}
+
+          {recommendations.current ? (
+            <RecommendationCard
+              recommendation={recommendations.current}
+              onAccept={() => answerRecommendation(true)}
+              onDecline={() => answerRecommendation(false)}
+            />
+          ) : null}
+
+          {stopOptions.category ? (
+            <View style={[styles.panel, shadows.raised]}>
+              <Text variant="heading">Onde parar?</Text>
+              <NearbyOptions
+                result={stopOptions.result}
+                isLoading={stopOptions.isLoading}
+                error={stopOptions.error}
+                onRetry={stopOptions.retry}
+                onSelect={chooseStop}
+                actionLabel="Parar em"
+              />
+              <SecondaryButton label="Agora não" onPress={stopOptions.clear} />
+            </View>
+          ) : null}
+
+          {detour.detour ? (
+            <StatusMessage
+              tone="info"
+              message={`Parada no caminho: ${detour.detour.name}`}
+              onRetry={detour.cancel}
+              retryLabel="Cancelar parada"
+              floating
+            />
+          ) : null}
+
+          {recommendations.isAsking ? (
+            <StatusMessage tone="info" message="Consultando o Atlas..." busy floating />
+          ) : recommendations.error ? (
+            <StatusMessage tone="error" message={recommendations.error} floating />
+          ) : null}
+
+          {isEnding ? (
+            <StatusMessage tone="info" message="Salvando a viagem..." busy floating />
+          ) : null}
+
           {progress?.isOffRoute ? (
             <StatusMessage tone="info" message="Você saiu da rota." floating />
           ) : null}
@@ -193,6 +562,19 @@ export default function TripScreen() {
             instrução, que é o elemento mais importante da tela.
           */}
           <View style={styles.mapActions} pointerEvents="box-none">
+            {/* Só num development build: no Expo Go não há reconhecimento de fala. */}
+            {tripVoice.available ? (
+              <FloatingIconButton
+                size="lg"
+                icon={tripVoice.state === 'listening' ? 'microphone' : 'microphone-outline'}
+                iconColor={tripVoice.state === 'listening' ? 'danger' : 'primary'}
+                accessibilityLabel={
+                  tripVoice.state === 'listening' ? 'Parar de ouvir' : 'Falar com o Atlas'
+                }
+                onPress={tripVoice.onMicPress}
+              />
+            ) : null}
+
             <FloatingIconButton
               size="lg"
               icon={isFollowing ? 'map-outline' : 'crosshairs-gps'}
@@ -203,6 +585,32 @@ export default function TripScreen() {
               }
               onPress={toggleFocus}
             />
+
+            {session.status === 'active' ? (
+              <FloatingIconButton
+                icon="lightbulb-on-outline"
+                accessibilityLabel="Atlas, preciso abastecer ou descansar"
+                accessibilityHint="Toque longo abre o simulador do Random Forest"
+                onPress={recommendations.ask}
+                onLongPress={openSimulator}
+              />
+            ) : null}
+
+            {session.status === 'active' ? (
+              <FloatingIconButton
+                icon="map-marker-plus"
+                accessibilityLabel="Registrar parada no diário de bordo"
+                onPress={registerStop}
+              />
+            ) : null}
+
+            {/* Emergência sempre à mão, com ou sem viagem registrada (§11). */}
+            <FloatingIconButton
+              icon="alarm-light"
+              iconColor="danger"
+              accessibilityLabel="Emergência: Hospital, SAMU 192 e Polícia 190"
+              onPress={openEmergency}
+            />
           </View>
         </View>
 
@@ -210,7 +618,11 @@ export default function TripScreen() {
           remainingSeconds={remainingSeconds}
           remainingMeters={remainingMeters}
           bottomInset={insets.bottom}
-          onEndTrip={() => router.back()}
+          onEndTrip={confirmEnd}
+          // O velocímetro entra como conteúdo do painel para acompanhar o
+          // arraste. A velocidade vem crua do GPS, em m/s; a conversão e a
+          // decisão de esconder o mostrador vivem no componente.
+          leading={<SpeedBadge metersPerSecond={tracking.position?.speed ?? null} />}
         />
       </View>
     </View>
@@ -259,6 +671,14 @@ const styles = StyleSheet.create({
   mapActions: {
     alignItems: 'flex-end',
     paddingTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  /** Painel de escolha dos 3 locais, sobre o mapa. */
+  panel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
   },
   /** Faixa de contexto quando não há manobra para anunciar. */
   plainBanner: {

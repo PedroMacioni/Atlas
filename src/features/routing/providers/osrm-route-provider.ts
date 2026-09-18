@@ -35,6 +35,16 @@ const OSRM_BASE_URL = 'https://router.project-osrm.org';
 /** Perfil de deslocamento. O servidor público expõe apenas `driving`. */
 const OSRM_PROFILE = 'driving';
 
+/**
+ * Distância máxima entre o ponto pedido e a via onde o OSRM vai encaixá-lo.
+ *
+ * Sem o limite o encaixe é ilimitado: um ponto no mar aberto recebe a estrada
+ * mais próxima do continente, e a resposta vem com `code: Ok` e uma rota que
+ * começa a mais de mil quilômetros de onde se apontou. É o mesmo valor que o
+ * backend usa.
+ */
+const SNAP_RADIUS_METERS = 10_000;
+
 /** Formato da resposta do endpoint `/route/v1`, na parte que consumimos. */
 type OsrmRouteResponse = {
   code: string;
@@ -99,19 +109,23 @@ const MANEUVER_MODIFIERS: Record<string, ManeuverModifier> = {
   uturn: 'uturn',
 };
 
-function buildRouteUrl(origin: Coordinate, destination: Coordinate): string {
-  const from = `${origin.longitude},${origin.latitude}`;
-  const to = `${destination.longitude},${destination.latitude}`;
+function buildRouteUrl(points: Coordinate[]): string {
+  const path = points.map((point) => `${point.longitude},${point.latitude}`).join(';');
 
   // `geometries=geojson` evita ter que decodificar polyline codificada nesta fase.
   const query = new URLSearchParams({
     overview: 'full',
     geometries: 'geojson',
     alternatives: 'false',
-    steps: 'false',
+    // As manobras alimentam a faixa de instrução da viagem. Sem isto o OSRM
+    // devolve a geometria sem `legs[].steps`, e `parseSteps` — que existe e
+    // funciona — não tem o que ler: a faixa some sem nenhum erro aparecer.
+    steps: 'true',
+    // Um raio por ponto, na ordem em que aparecem na URL.
+    radiuses: points.map(() => SNAP_RADIUS_METERS).join(';'),
   });
 
-  return `${OSRM_BASE_URL}/route/v1/${OSRM_PROFILE}/${from};${to}?${query.toString()}`;
+  return `${OSRM_BASE_URL}/route/v1/${OSRM_PROFILE}/${path}?${query.toString()}`;
 }
 
 function toHumanMessage(error: unknown): string {
@@ -217,11 +231,16 @@ function parseSteps(route: NonNullable<OsrmRouteResponse['routes']>[number]): Ro
 export const osrmRouteProvider: RouteProvider = {
   id: 'osrm-public-demo',
 
-  async getRoute({ origin, destination, signal }: GetRouteParams): Promise<RouteResult> {
+  async getRoute({
+    origin,
+    destination,
+    waypoints = [],
+    signal,
+  }: GetRouteParams): Promise<RouteResult> {
     let payload: OsrmRouteResponse;
 
     try {
-      payload = await fetchJson<OsrmRouteResponse>(buildRouteUrl(origin, destination), {
+      payload = await fetchJson<OsrmRouteResponse>(buildRouteUrl([origin, ...waypoints, destination]), {
         timeoutMs: 12_000,
         signal,
       });

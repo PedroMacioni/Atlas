@@ -4,6 +4,12 @@ import type { RouteResult } from '@/features/routing/types/route-result';
 export type GetRouteParams = {
   origin: Coordinate;
   destination: Coordinate;
+  /**
+   * Paradas no meio do caminho, em ordem. É como um desvio aceito pelo
+   * usuário — um posto sugerido pelo Atlas — entra na rota sem trocar o
+   * destino da viagem.
+   */
+  waypoints?: Coordinate[];
   /** Permite cancelar a consulta quando a tela é desmontada. */
   signal?: AbortSignal;
 };

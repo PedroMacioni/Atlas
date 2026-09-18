@@ -34,8 +34,13 @@ class RouteService:
     def provider_id(self) -> str:
         return self._provider.id
 
-    async def get_route(self, origin: Coordinate, destination: Coordinate) -> RouteResponse:
-        cache_key = build_cache_key(self._provider.id, origin, destination)
+    async def get_route(
+        self,
+        origin: Coordinate,
+        destination: Coordinate,
+        waypoints: list[Coordinate] | None = None,
+    ) -> RouteResponse:
+        cache_key = build_cache_key(self._provider.id, origin, destination, waypoints)
 
         cached = await self._read_cache(cache_key)
 
@@ -49,7 +54,7 @@ class RouteService:
                 cached=True,
             )
 
-        route = await self._provider.get_route(origin, destination)
+        route = await self._provider.get_route(origin, destination, waypoints or None)
 
         await self._write_cache(cache_key, origin=origin, destination=destination, route=route)
 

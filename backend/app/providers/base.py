@@ -40,6 +40,16 @@ class RouteProvider(Protocol):
 
     id: str
 
-    async def get_route(self, origin: Coordinate, destination: Coordinate) -> ProviderRoute:
-        """Calcula o trajeto ou levanta um erro de `core.errors`."""
+    async def get_route(
+        self,
+        origin: Coordinate,
+        destination: Coordinate,
+        waypoints: list[Coordinate] | None = None,
+    ) -> ProviderRoute:
+        """
+        Calcula o trajeto ou levanta um erro de `core.errors`.
+
+        `waypoints` são paradas no meio do caminho, em ordem — é assim que um
+        desvio aceito pelo usuário (RF-19) entra na rota sem trocar o destino.
+        """
         ...
