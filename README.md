@@ -131,9 +131,42 @@ cabeçalho nativo sai daqui, e a tela traz o próprio botão de voltar.
 ```
 
 O painel inferior responde à pergunta que de fato se faz numa viagem — **a que
-horas eu chego?**. Por isso o horário vem primeiro e centralizado; tempo e
-distância ficam abaixo, menores, porque respondem a mesma coisa de forma
-indireta. Quem quer saber "dá tempo?" lê o relógio, não faz a conta.
+horas eu chego?**. Por isso o horário é o maior número da tela; tempo e
+distância ficam abaixo, também grandes, porque respondem a mesma coisa de
+forma indireta. Quem quer saber "dá tempo?" lê o relógio, não faz a conta.
+Nenhum dos três leva rótulo: um relógio não precisa ser apresentado como
+relógio, e cada palavra a menos é espaço que volta para o mapa.
+
+#### O painel arrasta
+
+São dois estados, e a divisão entre eles é sobre atenção:
+
+| Estado | Para quem | Mostra |
+|---|---|---|
+| **Fechado** | quem está dirigindo | Os três números. Nenhum botão — nada aqui pede decisão. |
+| **Aberto** | quem parou para decidir | Revela **Parar** e **Continuar**, dois alvos grandes. |
+
+Puxar para cima abre; puxar para baixo, tocar na área dos números ou apertar
+**Continuar** fecha. Um arrasto rápido decide pela velocidade (acima de
+500 pt/s), e um arrasto lento pela posição — um terço do caminho basta, porque
+exigir o percurso inteiro faz o gesto parecer travado.
+
+A mecânica é uma **translação**, e não uma mudança de altura: o painel é
+montado inteiro e desce o tamanho exato do bloco de ações, medido no layout.
+`translateY` roda na thread de UI e acompanha o dedo sem depender de o
+JavaScript dar conta; animar altura reflui o conteúdo a cada quadro. A altura é
+medida em vez de fixada porque os botões crescem com o corpo de texto do
+sistema, e um valor cravado deixaria uma faixa de botão à mostra em quem usa
+fonte grande.
+
+Duas decisões que valem registro:
+
+**O gesto cobre só a alça e os números.** Com os botões dentro do detector, um
+toque em "Parar" competiria com o toque que fecha o painel — e a ação errada
+venceria de vez em quando.
+
+**Os botões existem no layout desde o início**, fora da tela, e não escondidos
+por opacidade. Um botão invisível mas tocável é uma armadilha.
 
 #### O acompanhamento
 
@@ -309,6 +342,7 @@ atlas/
 │   │       ├── components/maneuver-banner.tsx      # faixa de instrução
 │   │       ├── components/trip-bottom-sheet.tsx    # painel de chegada
 │   │       ├── constants/demo-route.ts
+│   │       ├── hooks/use-draggable-sheet.ts        # arraste do painel
 │   │       ├── hooks/use-trip-destination.ts
 │   │       ├── hooks/use-trip-origin.ts            # origem congelada
 │   │       ├── hooks/use-trip-progress.ts
@@ -410,6 +444,8 @@ Nenhuma versão foi fixada manualmente — todas foram resolvidas por
 | `expo-linear-gradient` | Gradiente do botão primário. |
 | `expo-haptics` | Retorno tátil leve nos botões. |
 | `react-native-safe-area-context` | Recortes de tela (Dynamic Island, barra de status). |
+| `react-native-gesture-handler` | Gesto de arraste do painel da viagem. Exige `GestureHandlerRootView` na raiz. |
+| `react-native-reanimated` + `react-native-worklets` | Animação do painel na thread de UI. O plugin de Babel entra sozinho pelo `babel-preset-expo` quando o pacote está instalado — não há `babel.config.js` no projeto. |
 | `expo-image` | Reservado para as próximas fases; ainda não utilizado. |
 
 Sobre os ícones: o design pede a mesma cor de categoria no iOS e no Android

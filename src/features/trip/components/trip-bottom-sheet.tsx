@@ -1,7 +1,11 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 
+import { PrimaryButton } from '@/components/ui/primary-button';
+import { SecondaryButton } from '@/components/ui/secondary-button';
 import { Text } from '@/components/ui/text';
+import { useDraggableSheet } from '@/features/trip/hooks/use-draggable-sheet';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -16,26 +20,28 @@ export type TripBottomSheetProps = {
   remainingMeters: number;
   /** Respiro inferior do aparelho, já resolvido pela tela. */
   bottomInset: number;
+  /** Encerra a viagem e sai da tela. */
   onEndTrip: () => void;
 };
 
 /**
- * Painel inferior da viagem.
+ * Painel inferior da viagem, arrastável.
  *
- * A hierarquia é deliberada e tem uma pergunta no topo: **a que horas eu
- * chego?** É ela que o passageiro faz e que o motorista responde, e por isso o
- * horário vem centralizado e grande. Tempo e distância ficam abaixo, menores,
- * porque respondem a mesma coisa de forma indireta — quem quer saber "dá
- * tempo?" lê o relógio, não faz a conta.
+ * Dois estados, e a divisão entre eles é sobre atenção:
  *
- * O ponto entre os dois números é separador, não decoração: mantém a linha
- * legível sem desenhar uma divisória que competiria com a sombra do painel.
+ * - **Fechado** é o estado de quem está dirigindo. Três números, grandes e sem
+ *   rótulo: o horário de chegada, o tempo e a distância que faltam. Um relógio
+ *   não precisa ser apresentado como relógio, e cada palavra a menos é espaço
+ *   que volta para o mapa. Nenhum botão — nada aqui pede decisão.
+ * - **Aberto** é o estado de quem parou para decidir. Revela **Parar** e
+ *   **Continuar**, dois alvos grandes, longe de toque acidental.
  *
- * Só as bordas de cima são arredondadas — o painel nasce da borda inferior da
- * tela, e arredondar embaixo deixaria um vão contra o mapa.
+ * O horário vem primeiro e maior porque é a pergunta que de fato se faz numa
+ * viagem: *a que horas eu chego?*. Tempo e distância respondem a mesma coisa de
+ * forma indireta — quem quer saber "dá tempo?" lê o relógio, não faz a conta.
  *
- * O controle de câmera não vive aqui: é um ícone que flutua sobre o mapa, como
- * nos aplicativos de navegação. Este painel é para ler, não para operar.
+ * O componente é apresentação: a mecânica do arraste vive em
+ * `use-draggable-sheet`.
  */
 export function TripBottomSheet({
   remainingSeconds,
@@ -43,48 +49,62 @@ export function TripBottomSheet({
   bottomInset,
   onEndTrip,
 }: TripBottomSheetProps) {
+  const sheet = useDraggableSheet();
+
   return (
-    <View style={[styles.sheet, shadows.raised, { paddingBottom: bottomInset + spacing.lg }]}>
-      <View style={styles.arrival}>
-        <Text variant="label" color="textSecondary">
-          CHEGADA PREVISTA
-        </Text>
-        <Text variant="title" numberOfLines={1}>
-          {formatArrivalTime(remainingSeconds)}
-        </Text>
-      </View>
+    <Animated.View style={[styles.sheet, shadows.raised, sheet.sheetStyle]}>
+      {/*
+        O gesto cobre só a alça e os números, e não o painel inteiro: com os
+        botões dentro do detector, um toque em "Parar" competiria com o toque
+        que fecha o painel — e a ação errada venceria de vez em quando.
+      */}
+      <GestureDetector gesture={sheet.gesture}>
+        {/*
+          O respiro do aparelho vive aqui, e não no painel: com o painel
+          fechado é esta a última coisa visível, e os números não podem
+          encostar na borda inferior nem ficar sobre o indicador de gesto.
+        */}
+        <View style={[styles.grabArea, { paddingBottom: bottomInset + spacing.sm }]}>
+          <View style={styles.handle} />
 
-      <View style={styles.metrics}>
-        <Text variant="body" color="textSecondary" numberOfLines={1} style={styles.metricLeft}>
-          {formatShortDuration(remainingSeconds)}
-        </Text>
+          <Text variant="display" align="center" numberOfLines={1} adjustsFontSizeToFit>
+            {formatArrivalTime(remainingSeconds)}
+          </Text>
 
-        <View style={styles.dot} />
+          <View style={styles.metrics}>
+            <Text variant="metric" numberOfLines={1} align="right" style={styles.metric}>
+              {formatShortDuration(remainingSeconds)}
+            </Text>
 
-        <Text variant="body" color="textSecondary" numberOfLines={1} style={styles.metricRight}>
-          {formatDistance(remainingMeters)}
-        </Text>
-      </View>
+            <View style={styles.dot} />
+
+            <Text variant="metric" numberOfLines={1} align="left" style={styles.metric}>
+              {formatDistance(remainingMeters)}
+            </Text>
+          </View>
+        </View>
+      </GestureDetector>
 
       {/*
-        Encerrar fica abaixo dos números, e não entre eles: a linha de métricas
-        é para ser lida de relance, e um botão ali roubaria o lugar do que
-        importa. O controle de câmera saiu daqui e virou ícone flutuante sobre
-        o mapa, onde o padrão de navegação o coloca.
+        As ações existem no layout desde o início — é a altura delas que diz
+        quanto o painel precisa descer. Ficam fora da tela enquanto ele está
+        fechado, e não escondidas por opacidade: um botão invisível mas tocável
+        é uma armadilha.
+
+        O respiro inferior é medido junto, de propósito: é o que garante que
+        descer a altura deste bloco esconda os botões por completo.
       */}
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Encerrar a viagem"
-          onPress={onEndTrip}
-          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
-          <MaterialCommunityIcons name="close-circle-outline" size={18} color={colors.danger} />
-          <Text variant="action" color="danger">
-            Encerrar viagem
-          </Text>
-        </Pressable>
+      <View
+        style={[styles.actions, { paddingBottom: bottomInset + spacing.lg }]}
+        onLayout={(event) => sheet.onHiddenAreaLayout(event.nativeEvent.layout.height)}>
+        <View style={styles.action}>
+          <SecondaryButton label="Parar" tone="danger" onPress={onEndTrip} />
+        </View>
+        <View style={styles.action}>
+          <PrimaryButton label="Continuar" showChevron={false} onPress={sheet.close} />
+        </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -93,13 +113,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.sm,
     paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
   },
-  arrival: {
-    alignItems: 'center',
-    gap: 2,
+  /** Área que responde ao arrasto: alça e números. */
+  grabArea: {
+    gap: spacing.xs,
+  },
+  /** Traço que anuncia que o painel se move. */
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+    marginBottom: spacing.xs,
   },
   metrics: {
     flexDirection: 'row',
@@ -112,36 +140,20 @@ const styles = StyleSheet.create({
    * o que mantém o ponto exatamente no centro — independente de "7,9 km" ser
    * mais curto que "1h05".
    */
-  metricLeft: {
+  metric: {
     flex: 1,
-    textAlign: 'right',
-  },
-  metricRight: {
-    flex: 1,
-    textAlign: 'left',
   },
   dot: {
-    width: 6,
-    height: 6,
+    width: 7,
+    height: 7,
     borderRadius: radius.pill,
     backgroundColor: colors.textSecondary,
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    paddingTop: spacing.xs,
+    gap: spacing.md,
   },
   action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-  },
-  actionPressed: {
-    opacity: 0.6,
-    backgroundColor: colors.surfaceMuted,
+    flex: 1,
   },
 });

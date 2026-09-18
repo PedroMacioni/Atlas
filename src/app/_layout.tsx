@@ -3,6 +3,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { colors } from '@/theme/colors';
@@ -55,18 +57,32 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <Stack screenOptions={STACK_OPTIONS}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="destination" options={{ title: 'Definir destino' }} />
-        {/*
-          A viagem esconde o cabeçalho: o mapa encosta nas quatro bordas e a
-          tela traz o próprio botão de voltar, sobre o mapa. Um cabeçalho ali
-          roubaria a faixa onde vive a instrução de manobra.
-        */}
-        <Stack.Screen name="trip" options={{ headerShown: false }} />
-      </Stack>
-    </SafeAreaProvider>
+    /*
+      `GestureHandlerRootView` precisa envolver a árvore para que os gestos
+      declarados com `Gesture.*` cheguem aos componentes — é o que o painel
+      arrastável da viagem usa. Sem ela, o gesto simplesmente não dispara, e
+      sem erro nenhum.
+    */
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={STACK_OPTIONS}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="destination" options={{ title: 'Definir destino' }} />
+          {/*
+            A viagem esconde o cabeçalho: o mapa encosta nas quatro bordas e a
+            tela traz o próprio botão de voltar, sobre o mapa. Um cabeçalho ali
+            roubaria a faixa onde vive a instrução de manobra.
+          */}
+          <Stack.Screen name="trip" options={{ headerShown: false }} />
+        </Stack>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});
