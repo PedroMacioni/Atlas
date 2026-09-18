@@ -33,6 +33,20 @@ export const DEMO_PLACES: Place[] = [
     longitude: -47.0451977,
   },
   {
+    /**
+     * Avenida, e não rua: o CEP 13070-173 é da Av. Marechal Rondon. A
+     * coordenada é o ponto de endereço da Esri, conferido por geocodificação
+     * reversa no OpenStreetMap — o OSM não tem o número 700 marcado.
+     */
+    id: 'marechal-rondon-700',
+    name: 'Marechal Rondon, 700',
+    address: 'Av. Mal. Rondon, 700 — Jardim Chapadão, Campinas, SP',
+    category: 'saved',
+    saved: true,
+    latitude: -22.893743,
+    longitude: -47.088332,
+  },
+  {
     id: 'viracopos',
     name: 'Aeroporto de Viracopos',
     address: 'Campinas, SP',
