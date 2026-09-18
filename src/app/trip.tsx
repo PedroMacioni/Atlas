@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { FloatingIconButton } from '@/components/ui/floating-icon-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import { useLocationTracking } from '@/features/location/hooks/use-location-tracking';
@@ -184,6 +185,25 @@ export default function TripScreen() {
           {progress?.isOffRoute ? (
             <StatusMessage tone="info" message="Você saiu da rota." floating />
           ) : null}
+
+          {/*
+            O controle de câmera é um ícone sobre o mapa, e não um botão no
+            painel: é onde os aplicativos de navegação o colocam. Fica no alto,
+            à direita, logo abaixo dos avisos — assim nunca cobre a faixa de
+            instrução, que é o elemento mais importante da tela.
+          */}
+          <View style={styles.mapActions} pointerEvents="box-none">
+            <FloatingIconButton
+              size="lg"
+              icon={isFollowing ? 'map-outline' : 'crosshairs-gps'}
+              accessibilityLabel={
+                isFollowing
+                  ? 'Ver o trajeto inteiro no mapa'
+                  : 'Voltar a acompanhar minha posição'
+              }
+              onPress={toggleFocus}
+            />
+          </View>
         </View>
 
         <TripBottomSheet
@@ -191,8 +211,6 @@ export default function TripScreen() {
           remainingMeters={remainingMeters}
           bottomInset={insets.bottom}
           onEndTrip={() => router.back()}
-          onToggleFocus={toggleFocus}
-          isFollowing={isFollowing}
         />
       </View>
     </View>
@@ -236,6 +254,11 @@ const styles = StyleSheet.create({
   },
   bannerSlot: {
     flex: 1,
+  },
+  /** Alinha o controle de câmera à direita, sob a faixa de instrução. */
+  mapActions: {
+    alignItems: 'flex-end',
+    paddingTop: spacing.xs,
   },
   /** Faixa de contexto quando não há manobra para anunciar. */
   plainBanner: {

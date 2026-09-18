@@ -143,7 +143,12 @@ indireta. Quem quer saber "dá tempo?" lê o relógio, não faz a conta.
 - **Tempo e distância restantes** são recalculados a cada leitura, projetando a
   posição sobre a geometria da rota.
 - **A câmera acompanha** o aparelho, num zoom mais fechado que o de
-  centralizar. O painel alterna entre acompanhar e ver o trajeto todo.
+  centralizar. Um **ícone flutuante** no alto, à direita, alterna entre
+  acompanhar e ver o trajeto todo — sem rótulo de texto, como nos aplicativos
+  de navegação: cada palavra na tela disputa espaço com o trajeto. É o maior
+  alvo de toque do aplicativo (56 pt contra os 44 pt mínimos), porque é o
+  único controle que se aciona dirigindo. O painel inferior é para ler, não
+  para operar.
 - **Abre enquadrando a rota inteira** por 2,2 s antes de descer para o
   acompanhamento: primeiro "para onde eu vou", depois "onde estou agora".
 - **Avisa o desvio** acima de 60 m da rota, e congela o progresso enquanto ele
@@ -366,7 +371,7 @@ cor, fonte ou sombra diretamente.
 Os componentes são combináveis e não conhecem domínio: `Card`, `Text`,
 `IconBadge`, `PrimaryButton`, `SecondaryButton`, `StatusPill`, `MetricTile`,
 `CategoryChip`, `StatusMessage`, `VoicePromptCard`, `SearchField`, `PlaceRow`,
-`SectionHeader`. As telas e as features compõem a partir deles.
+`SectionHeader`, `FloatingIconButton`. As telas e as features compõem a partir deles.
 
 ### Separação entre origem e localização
 

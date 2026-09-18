@@ -17,9 +17,6 @@ export type TripBottomSheetProps = {
   /** Respiro inferior do aparelho, já resolvido pela tela. */
   bottomInset: number;
   onEndTrip: () => void;
-  /** Alterna entre acompanhar a posição e ver o trajeto inteiro. */
-  onToggleFocus: () => void;
-  isFollowing: boolean;
 };
 
 /**
@@ -36,14 +33,15 @@ export type TripBottomSheetProps = {
  *
  * Só as bordas de cima são arredondadas — o painel nasce da borda inferior da
  * tela, e arredondar embaixo deixaria um vão contra o mapa.
+ *
+ * O controle de câmera não vive aqui: é um ícone que flutua sobre o mapa, como
+ * nos aplicativos de navegação. Este painel é para ler, não para operar.
  */
 export function TripBottomSheet({
   remainingSeconds,
   remainingMeters,
   bottomInset,
   onEndTrip,
-  onToggleFocus,
-  isFollowing,
 }: TripBottomSheetProps) {
   return (
     <View style={[styles.sheet, shadows.raised, { paddingBottom: bottomInset + spacing.lg }]}>
@@ -69,28 +67,12 @@ export function TripBottomSheet({
       </View>
 
       {/*
-        Os dois controles ficam abaixo dos números, e não entre eles: a linha
-        de métricas é para ser lida de relance, e um botão ali roubaria o
-        lugar do que importa.
+        Encerrar fica abaixo dos números, e não entre eles: a linha de métricas
+        é para ser lida de relance, e um botão ali roubaria o lugar do que
+        importa. O controle de câmera saiu daqui e virou ícone flutuante sobre
+        o mapa, onde o padrão de navegação o coloca.
       */}
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            isFollowing ? 'Ver o trajeto inteiro no mapa' : 'Voltar a acompanhar minha posição'
-          }
-          onPress={onToggleFocus}
-          style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
-          <MaterialCommunityIcons
-            name={isFollowing ? 'map-outline' : 'crosshairs-gps'}
-            size={18}
-            color={colors.primary}
-          />
-          <Text variant="action" color="primary">
-            {isFollowing ? 'Ver trajeto' : 'Me acompanhar'}
-          </Text>
-        </Pressable>
-
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Encerrar a viagem"
@@ -98,7 +80,7 @@ export function TripBottomSheet({
           style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
           <MaterialCommunityIcons name="close-circle-outline" size={18} color={colors.danger} />
           <Text variant="action" color="danger">
-            Encerrar
+            Encerrar viagem
           </Text>
         </Pressable>
       </View>

@@ -8,9 +8,10 @@ import {
   useState,
   type Ref,
 } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type EdgePadding, type Region } from 'react-native-maps';
 
+import { FloatingIconButton } from '@/components/ui/floating-icon-button';
 import { Text } from '@/components/ui/text';
 import { ATLAS_MAP_STYLE } from '@/features/map/constants/map-style';
 import type { Coordinate, NamedCoordinate } from '@/features/map/types/coordinate';
@@ -258,13 +259,13 @@ export function AtlasMap({
       </MapView>
 
       {onLocatePress ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={locateLabel}
-          onPress={onLocatePress}
-          style={({ pressed }) => [styles.locateButton, pressed && styles.locatePressed]}>
-          <MaterialCommunityIcons name="navigation-variant" size={22} color={colors.primary} />
-        </Pressable>
+        <View style={styles.locateSlot}>
+          <FloatingIconButton
+            icon="navigation-variant"
+            accessibilityLabel={locateLabel}
+            onPress={onLocatePress}
+          />
+        </View>
       ) : null}
 
       {badgeLabel ? (
@@ -295,20 +296,10 @@ const styles = StyleSheet.create({
   full: {
     borderRadius: 0,
   },
-  locateButton: {
+  locateSlot: {
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.raised,
-  },
-  locatePressed: {
-    opacity: 0.7,
   },
   badge: {
     position: 'absolute',
