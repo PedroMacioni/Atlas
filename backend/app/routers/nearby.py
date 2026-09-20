@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 from app.core.dependencies import NearbyServiceDep
 from app.schemas.coordinate import Coordinate
 from app.schemas.nearby import NearbyCategory, NearbyResponse
+from app.services.nearby_service import DEFAULT_RESULTS, MAX_RESULTS
 
 router = APIRouter(prefix="/v1/nearby", tags=["lugares próximos"])
 
@@ -20,11 +21,16 @@ async def nearby(
     category: NearbyCategory,
     latitude: Annotated[float, Query(ge=-90, le=90)],
     longitude: Annotated[float, Query(ge=-180, le=180)],
+    limit: Annotated[
+        int,
+        Query(ge=1, le=MAX_RESULTS, description="Quantas opções. O escopo pede 3 (RF-08)."),
+    ] = DEFAULT_RESULTS,
 ) -> NearbyResponse:
     """
-    As 3 opções mais próximas **de carro**, com distância, tempo e nota.
+    As `limit` opções mais próximas **de carro**, com distância, tempo e nota.
 
-    `source` diz de onde vieram: `google-places` (com nota) ou `openstreetmap`
-    (reserva, sem nota). `fallbackReason` explica por que caiu na reserva.
+    `source` diz de onde vieram: `google-places` (com nota), `tomtom` ou
+    `openstreetmap` (reserva), esses dois sem nota. `fallbackReason` explica
+    por que a fonte preferida não respondeu.
     """
-    return await service.search(category, Coordinate(latitude=latitude, longitude=longitude))
+    return await service.search(category, Coordinate(latitude=latitude, longitude=longitude), limit)

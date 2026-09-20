@@ -4,6 +4,7 @@ import { DEMO_PLACES } from '@/features/destination/constants/demo-places';
 import { searchPlaces } from '@/features/destination/services/place-service';
 import type { Place, PlaceCategory } from '@/features/destination/types/place';
 import { filterPlaces } from '@/features/destination/utils/filter-places';
+import type { Coordinate } from '@/features/map/types/coordinate';
 
 export type PlaceSearchState = {
   query: string;
@@ -44,8 +45,11 @@ const FALLBACK_MESSAGE = 'Sem conexão com a API — mostrando a lista local.';
  *   busca mais recente;
  * - **degradação**, porque uma busca sem rede deve mostrar o que existe
  *   localmente em vez de uma lista vazia.
+ *
+ * `near` é onde o usuário está. Vai junto de cada busca, mas mudar de lugar
+ * não dispara uma busca nova — só o texto e a categoria disparam.
  */
-export function usePlaceSearch(): PlaceSearchState {
+export function usePlaceSearch(near: Coordinate | null = null): PlaceSearchState {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<PlaceCategory | null>(null);
 
@@ -60,6 +64,11 @@ export function usePlaceSearch(): PlaceSearchState {
   // Conta as buscas para descartar respostas fora de ordem.
   const latestRequest = useRef(0);
 
+  const nearRef = useRef(near);
+  useEffect(() => {
+    nearRef.current = near;
+  }, [near]);
+
   const toggleCategory = useCallback((value: PlaceCategory) => {
     setCategory((current) => (current === value ? null : value));
   }, []);
@@ -72,7 +81,7 @@ export function usePlaceSearch(): PlaceSearchState {
     const timeoutId = setTimeout(() => {
       setIsLoading(true);
 
-      searchPlaces({ query, category, signal: controller.signal })
+      searchPlaces({ query, category, near: nearRef.current, signal: controller.signal })
         .then((places) => {
           if (latestRequest.current !== requestId) {
             return;

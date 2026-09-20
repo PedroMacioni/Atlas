@@ -92,7 +92,7 @@ class SimulationDisabled(AtlasError):
 
 
 class NearbyUnavailableError(AtlasError):
-    """Nem o Google Places nem o OpenStreetMap responderam."""
+    """Nenhuma fonte de lugares próximos respondeu, nem o OpenStreetMap."""
 
     code = "nearby_unavailable"
     status_code = status.HTTP_502_BAD_GATEWAY

@@ -30,6 +30,7 @@ const CATALOG_VISUALS = {
   food: { icon: 'silverware-fork-knife', color: 'categoryFood' },
   parking: { icon: 'car-brake-parking', color: 'categoryLodging' },
   saved: { icon: 'bookmark', color: 'categoryHealth' },
+  other: { icon: 'map-marker', color: 'primary' },
 } as const;
 
 const NO_PLACES: Place[] = [];
@@ -41,9 +42,10 @@ const NO_PLACES: Place[] = [];
  *
  * - **Categorias do escopo** — Posto, Restaurante, Hotel, Ponto turístico e
  *   Hospital. Tocar uma busca as **3 opções mais próximas**, com distância,
- *   tempo de carro e nota, pela API do Atlas (Google Places, com o
+ *   tempo de carro e nota, pela API do Atlas (Google Places ou TomTom, com o
  *   OpenStreetMap de reserva). Tocar de novo volta à lista.
- * - **Busca por texto** nos lugares salvos do catálogo.
+ * - **Busca por texto**: os lugares salvos primeiro e, atrás deles, qualquer
+ *   lugar ou endereço achado pela TomTom, os mais perto primeiro.
  *
  * Escolher qualquer lugar abre a viagem direto (RF-09).
  */
@@ -51,9 +53,9 @@ export default function DestinationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; query?: string; voice?: string }>();
-  const search = usePlaceSearch();
-  const nearby = useNearbySearch();
   const location = useCurrentLocation();
+  const search = usePlaceSearch(location.coordinate);
+  const nearby = useNearbySearch();
   const voice = useVoice();
 
   /*

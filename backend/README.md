@@ -109,7 +109,22 @@ API, pelo `route_cache`, com o TTL que ela controla.
 |---|---|
 | `query` | Termo de busca. Insensível a acento e a caixa: `sao paulo` encontra `São Paulo`. |
 | `category` | `fuel`, `food`, `parking` ou `saved`. |
-| `limit` | 1 a 100. Padrão 20. |
+| `limit` | 1 a 100. Padrão 20. Vale para a soma de salvos e TomTom. |
+| `latitude`, `longitude` | Onde o usuário está. Opcionais; com eles, a TomTom prefere o que é perto. |
+
+Duas fontes, nesta ordem:
+
+1. **Catálogo** (banco): os lugares salvos, sempre primeiro.
+2. **TomTom Search**, só quando há texto com 3 letras ou mais e nenhuma
+   `category`: qualquer estabelecimento ou endereço do Brasil, com
+   autocomplete (`typeahead`). Resultados a menos de 150 m de um salvo são o
+   mesmo lugar e não se repetem. Sem chave, com o limite do dia esgotado ou
+   com a TomTom fora, a resposta sai só com o catálogo.
+
+Os achados da TomTom têm `id` com prefixo `tomtom:`, `saved: false` e
+`category` deduzida do tipo do lugar — `fuel`, `food`, `parking` ou `other`
+(shopping, faculdade, um endereço). Não passam por `GET /v1/places/{id}`: o
+aplicativo abre a viagem direto pelas coordenadas.
 
 Resposta:
 
@@ -173,21 +188,60 @@ em `schemas/trip.py` e nos `CHECK` do banco:
 `ponto_turistico`, `hospital` — ou uma das duas das recomendações: `descanso`
 (posto ou hotel) e `parada` (local de pausa).
 
-1. **Google Places** (API New), se houver chave e ainda houver limite no dia;
-2. **OpenStreetMap** (Overpass), se não houver chave, o limite acabou ou o
-   Google falhou. `source` e `fallbackReason` dizem qual respondeu e por quê;
-3. **tempo de carro** pelo OSRM (`table`) para os candidatos, numa chamada;
-4. as **3 mais rápidas de alcançar**. O Google ordena em linha reta, e o posto
+1. **Google Places** (API New), se houver chave e ainda houver limite no dia
+   — é a única fonte com nota, mas exige cartão;
+2. **TomTom**, se houver chave e limite: grátis, rápida, sem nota;
+3. **OpenStreetMap** (Overpass), se nenhuma das anteriores respondeu.
+   `source` (`google-places`, `tomtom`, `openstreetmap`) e `fallbackReason`
+   dizem qual respondeu e por que a preferida não;
+4. **tempo de carro** pelo OSRM (`table`) para os candidatos, numa chamada;
+5. as **3 mais rápidas de alcançar**. As fontes ordenam em linha reta, e o posto
    do outro lado da rodovia parece perto até precisar de um retorno.
 
 Nada é guardado: os termos do Google proíbem cachear o conteúdo do Places
 (nome, nota, endereço). O custo é controlado pelo limite diário e pela cota do
-console.
+console. A TomTom tem um limite só, somando a busca de destino e os próximos.
 
 > **O OpenStreetMap é reserva, não fonte de demonstração.** O servidor público
 > do Overpass é compartilhado pelo mundo todo: medido em 18/09/2026, levou
-> 23 s para responder, e às vezes responde 429. E não tem nota, que o escopo
-> exige (RF-08). A demo depende do Google configurado.
+> 23 s para responder, e às vezes responde 429. A demo depende da TomTom (ou
+> do Google) configurada.
+>
+> **Nota (RF-08).** Só o Google tem. Com TomTom ou OpenStreetMap, `rating` e
+> `ratingCount` vêm `null` e a tela diz de onde vieram os lugares.
+
+### Configurar a TomTom
+
+Grátis e sem cartão. O plano Freemium dá **2.500 consultas por dia**, somando
+busca de destino e próximos.
+
+1. Crie a conta em [developer.tomtom.com](https://developer.tomtom.com) e
+   confirme o e-mail.
+2. No painel, em **Keys**, copie a chave criada (ou crie uma, marcando a
+   **Search API**).
+3. No `backend/.env`:
+
+   ```
+   ATLAS_TOMTOM_API_KEY=a-chave-criada
+   ```
+
+4. Reinicie a API. O log de subida deve dizer `próximos=tomtom+osm
+   busca=catálogo+tomtom`. Teste:
+
+   ```bash
+   curl "http://localhost:8787/v1/places?query=posto%20shell&latitude=-22.87&longitude=-47.05"
+   ```
+
+   Os postos de Campinas com `id` começando por `tomtom:` confirmam.
+
+A chave da TomTom vai na URL — é o único jeito que ela aceita. Por isso o log
+do `httpx` fica desligado abaixo de `WARNING` e nenhuma mensagem de erro repete
+a URL chamada.
+
+> **Termos de uso.** Os termos da TomTom restringem exibir o conteúdo dela
+> sobre mapas de outros fornecedores (o app usa Apple/Google Maps). Para
+> desenvolvimento e avaliação acadêmica não há problema; antes de publicar,
+> revise os termos do plano.
 
 ### Configurar o Google Places
 
@@ -216,14 +270,14 @@ limite.
    ATLAS_GOOGLE_PLACES_API_KEY=a-chave-criada
    ```
 
-7. Reinicie a API. O log de subida deve dizer `lugares=google+osm`. Teste:
+7. Reinicie a API. O log de subida deve dizer `próximos=google+…`. Teste:
 
    ```bash
    curl "http://localhost:8787/v1/nearby?category=posto&latitude=-22.8616&longitude=-47.0452"
    ```
 
    `"source": "google-places"` e as notas preenchidas confirmam. Se vier
-   `openstreetmap` com `fallbackReason: "Google Places indisponível"`, o log da
+   `tomtom` ou `openstreetmap` com `fallbackReason: "Google Places indisponível"`, o log da
    API mostra a resposta do Google — quase sempre a API não ativada (passo 3)
    ou a restrição da chave (passo 4).
 
@@ -260,7 +314,7 @@ como já fazia com `HttpError.kind` em `utils/http.ts`.
 | `model_unavailable` | 503 | O modelo não foi treinado ou não carregou — rode `ml/train.py`. |
 | `simulation_disabled` | 403 | Modo de demonstração desligado (`ATLAS_ML_SIMULATION_ENABLED=false`). |
 | `recommendation_not_found` | 404 | Recomendação que não é desta viagem. |
-| `nearby_unavailable` | 502 | Nem o Google Places nem o OpenStreetMap responderam. |
+| `nearby_unavailable` | 502 | Nenhuma fonte de lugares próximos respondeu, nem o OpenStreetMap. |
 | `database_unavailable` | 503 | O Supabase não respondeu. |
 | `internal_error` | 500 | Falha não prevista. O detalhe fica no log, nunca no corpo. |
 

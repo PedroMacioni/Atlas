@@ -8,8 +8,8 @@ Três responsabilidades, nesta fase:
   2. **Absorver o provider externo.** O app pede uma rota à API; a API decide
      se responde do cache ou se chama o OSRM. Trocar de provider deixa de ser
      um release na loja.
-  3. **Servir o catálogo de lugares.** A lista de demonstração sai do bundle e
-     vira dado, com busca e filtro no banco.
+  3. **Servir os lugares.** Os salvos vêm do banco; a busca livre e as
+     opções próximas, da TomTom, com o OpenStreetMap de reserva.
 
 Autenticação, histórico de viagens e o modelo de previsão são as fases
 seguintes. O contrato de hoje foi desenhado para recebê-los sem quebrar:
@@ -23,20 +23,26 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import SecretStr
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.database import SupabaseRest
 from app.core.errors import register_error_handlers
 from app.ml.model import DecisionModel
 from app.providers.nearby import GooglePlacesProvider, OverpassProvider
 from app.providers.osrm import OsrmRouteProvider
+from app.providers.tomtom import TomTomNearbyProvider, TomTomPlaceSearch
 from app.routers import health, nearby, places, recommendations, routes, trips
-from app.services.nearby_service import DailyBudget, NearbyService
+from app.services.daily_budget import DailyBudget
+from app.services.nearby_service import NearbyService, NearbySource
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
 )
+# Em INFO o `httpx` registra cada URL chamada, e a da TomTom leva a chave na
+# query string.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -61,24 +67,25 @@ async def lifespan(app: FastAPI):
     app.state.database = database
     app.state.route_provider = OsrmRouteProvider(outbound, str(settings.osrm_base_url))
     app.state.decision_model = DecisionModel.load(settings.ml_model_path)
+    google_key = _secret(settings.google_places_api_key)
+    tomtom_key = _secret(settings.tomtom_api_key)
 
-    google_key = settings.google_places_api_key
+    # Um limite só para a TomTom: a cota do plano soma as duas buscas.
+    app.state.tomtom_budget = DailyBudget(settings.tomtom_daily_limit)
+    app.state.place_search = TomTomPlaceSearch(outbound, tomtom_key) if tomtom_key else None
+
     app.state.nearby_service = NearbyService(
-        google=(
-            GooglePlacesProvider(outbound, google_key.get_secret_value())
-            if google_key and google_key.get_secret_value()
-            else None
-        ),
+        sources=_nearby_sources(settings, outbound, app.state.tomtom_budget),
         fallback=OverpassProvider(outbound, str(settings.overpass_url)),
         router=app.state.route_provider,
-        budget=DailyBudget(settings.google_places_daily_limit),
     )
 
     logging.getLogger("atlas.api").info(
-        "Atlas API pronta — ambiente=%s provider=%s lugares=%s modelo=%s",
+        "Atlas API pronta — ambiente=%s provider=%s próximos=%s busca=%s modelo=%s",
         settings.environment,
         app.state.route_provider.id,
-        "google+osm" if google_key else "osm",
+        "+".join([*(["google"] if google_key else []), *(["tomtom"] if tomtom_key else []), "osm"]),
+        "catálogo+tomtom" if tomtom_key else "catálogo",
         app.state.decision_model.version if app.state.decision_model else "ausente",
     )
 
@@ -87,6 +94,34 @@ async def lifespan(app: FastAPI):
     finally:
         await outbound.aclose()
         await database.aclose()
+
+
+def _secret(value: SecretStr | None) -> str | None:
+    """A chave em texto, ou `None` quando ausente ou vazia no `.env`."""
+    return value.get_secret_value() if value and value.get_secret_value() else None
+
+
+def _nearby_sources(
+    settings: Settings, outbound: httpx.AsyncClient, tomtom_budget: DailyBudget
+) -> list[NearbySource]:
+    """As fontes principais das opções próximas, na ordem de preferência."""
+    sources = []
+
+    if google_key := _secret(settings.google_places_api_key):
+        sources.append(
+            NearbySource(
+                GooglePlacesProvider(outbound, google_key),
+                "Google Places",
+                DailyBudget(settings.google_places_daily_limit),
+            )
+        )
+
+    if tomtom_key := _secret(settings.tomtom_api_key):
+        sources.append(
+            NearbySource(TomTomNearbyProvider(outbound, tomtom_key), "TomTom", tomtom_budget)
+        )
+
+    return sources
 
 
 def create_app() -> FastAPI:

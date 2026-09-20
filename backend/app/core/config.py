@@ -48,9 +48,18 @@ class Settings(BaseSettings):
     # Timeout de qualquer chamada de saída, espelhando os 12 s de `utils/http.ts`.
     outbound_timeout_seconds: float = Field(default=12.0, gt=0)
 
-    # --- Lugares próximos ------------------------------------------------
-    # Chave do Google Places (API New). Vazia, a busca usa só o
-    # OpenStreetMap — funciona, mas sem nota. Nunca vai para o aplicativo.
+    # --- Lugares -------------------------------------------------------
+    # Chave da TomTom Search (plano Freemium, sem cartão). Com ela, a busca
+    # de destino acha qualquer lugar ou endereço, e as opções próximas saem
+    # rápidas mesmo sem Google. Vazia, a busca fica só nos lugares salvos.
+    tomtom_api_key: SecretStr | None = Field(default=None, repr=False)
+    # Consultas à TomTom por dia, somando busca de destino e próximos. O
+    # Freemium dá 2.500 por dia; 2.000 deixa folga.
+    tomtom_daily_limit: int = Field(default=2_000, ge=0)
+
+    # Chave do Google Places (API New). Opcional: com ela, as opções próximas
+    # vêm com nota; sem ela, da TomTom ou do OpenStreetMap, sem nota. Nunca
+    # vai para o aplicativo.
     google_places_api_key: SecretStr | None = Field(default=None, repr=False)
     # Consultas ao Google por dia, contadas por esta API. A cota gratuita do
     # plano com nota é de 1.000 por mês (~33 por dia); 30 deixa folga.

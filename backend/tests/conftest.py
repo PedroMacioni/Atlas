@@ -15,6 +15,10 @@ import pytest
 os.environ.setdefault("ATLAS_SUPABASE_URL", "https://projeto-de-teste.supabase.co")
 os.environ.setdefault("ATLAS_SUPABASE_SERVICE_KEY", "chave-de-teste-suficientemente-longa")
 os.environ.setdefault("ATLAS_OSRM_BASE_URL", "https://osrm.test")
+# Vazias à força, e não por `setdefault`: a variável de ambiente vence o
+# `.env`, e o `.env` de quem desenvolve tem chaves de verdade.
+os.environ["ATLAS_TOMTOM_API_KEY"] = ""
+os.environ["ATLAS_GOOGLE_PLACES_API_KEY"] = ""
 
 
 class FakeDatabase:

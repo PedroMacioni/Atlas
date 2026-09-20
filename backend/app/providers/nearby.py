@@ -1,12 +1,15 @@
 """
-Busca de lugares próximos — o contrato e as duas implementações.
+Busca de lugares próximos — o contrato e duas das implementações (a terceira,
+TomTom, está em `tomtom.py`, junto da busca por texto).
 
-- **Google Places (API New)**, fonte principal: é a única com nota e boa
-  cobertura no Brasil, e é o que o escopo define (§9.1).
-- **OpenStreetMap (Overpass)**, reserva: gratuito e sem chave, entra quando o
-  Google não está configurado, esgotou o limite do dia ou falhou. Não tem nota.
+- **Google Places (API New)**, opcional: é a única com nota, e é o que o
+  escopo define (§9.1) — mas exige cartão para liberar a chave.
+- **TomTom**, grátis e sem cartão, sem nota.
+- **OpenStreetMap (Overpass)**, reserva: gratuito e sem chave, entra quando
+  nenhuma das outras está configurada, esgotou o limite do dia ou falhou.
+  Não tem nota.
 
-Nenhuma das duas guarda resultado. Os termos do Google proíbem cachear o
+Nenhuma delas guarda resultado. Os termos do Google proíbem cachear o
 conteúdo do Places (nome, nota, endereço) — só o identificador pode ser
 guardado. O controle de custo é o limite diário em `nearby_service.py` e a
 cota configurada no console do Google.
@@ -188,8 +191,7 @@ class OverpassProvider:
         # desenhado como polígono, por exemplo). Pede mais que o necessário
         # porque o Overpass não ordena por distância; quem ordena é o serviço.
         query = (
-            f"[out:json][timeout:{OVERPASS_TIMEOUT_SECONDS}];"
-            f"({selectors});out center {limit * 4};"
+            f"[out:json][timeout:{OVERPASS_TIMEOUT_SECONDS}];({selectors});out center {limit * 4};"
         )
 
         try:

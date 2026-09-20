@@ -39,8 +39,12 @@ DatabaseDep = Annotated[SupabaseRest, Depends(get_database)]
 ProviderDep = Annotated[RouteProvider, Depends(get_route_provider)]
 
 
-def get_place_service(database: DatabaseDep) -> PlaceService:
-    return PlaceService(PlaceRepository(database))
+def get_place_service(request: Request, database: DatabaseDep) -> PlaceService:
+    return PlaceService(
+        PlaceRepository(database),
+        external=request.app.state.place_search,
+        budget=request.app.state.tomtom_budget,
+    )
 
 
 def get_route_service(
@@ -84,9 +88,7 @@ PlaceServiceDep = Annotated[PlaceService, Depends(get_place_service)]
 NearbyServiceDep = Annotated[NearbyService, Depends(get_nearby_service)]
 RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]
 TripServiceDep = Annotated[TripService, Depends(get_trip_service)]
-RecommendationServiceDep = Annotated[
-    RecommendationService, Depends(get_recommendation_service)
-]
+RecommendationServiceDep = Annotated[RecommendationService, Depends(get_recommendation_service)]
 
 # Identificador anônimo do aparelho (escopo §8). Sem login: o aplicativo gera
 # um UUID na primeira execução e o manda em toda chamada de viagem. Ausente ou

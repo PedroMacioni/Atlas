@@ -1,33 +1,38 @@
 """
-As 3 opções próximas: quem são, a que distância de carro, em quanto tempo e
-com que nota (RF-08).
+As opções próximas — 3 pelo escopo, até 10 na tela de destino: quem são, a
+que distância de carro, em quanto tempo e com que nota (RF-08).
 
-1. Google Places, se houver chave e ainda houver limite no dia;
-2. senão, ou se o Google falhar, OpenStreetMap;
+1. as fontes principais, na ordem — Google Places (com nota), depois TomTom
+   (sem nota, grátis) —, cada uma só se tiver chave e limite no dia;
+2. se nenhuma responder, o OpenStreetMap, que não tem chave nem limite;
 3. distância e tempo **de carro** para os candidatos, numa chamada ao OSRM;
-4. as 3 mais rápidas de alcançar.
+4. as `limit` mais rápidas de alcançar.
 
-O Google ordena por distância em linha reta, e em cidade isso engana: o posto
+As fontes ordenam por distância em linha reta, e em cidade isso engana: o posto
 do outro lado da rodovia está "perto" e a 8 minutos de retorno. Por isso o
 serviço pede alguns candidatos a mais e decide pelo tempo de carro.
 """
 
 import logging
-from collections.abc import Callable
-from datetime import date
+from dataclasses import dataclass
 
 from app.core.errors import NearbyUnavailableError
 from app.providers.nearby import Candidate, NearbyProvider, NearbyUnavailable
 from app.providers.osrm import OsrmRouteProvider
 from app.schemas.coordinate import Coordinate
 from app.schemas.nearby import NearbyCategory, NearbyPlace, NearbyResponse
+from app.services.daily_budget import DailyBudget
 from app.utils.geo import distance_meters
 
 logger = logging.getLogger("atlas.api")
 
-RESULTS = 3
-# Candidatos pedidos à fonte antes de ordenar pelo tempo de carro.
-CANDIDATES = 6
+# 3 é o que o escopo pede (RF-08) e o que a voz lê; a lista da tela de
+# destino pede até 10.
+DEFAULT_RESULTS = 3
+MAX_RESULTS = 10
+# Candidatos pedidos à fonte antes de ordenar pelo tempo de carro: o dobro do
+# que se vai mostrar, com piso para a lista curta ainda ter onde escolher.
+MIN_CANDIDATES = 6
 
 RADIUS_METERS: dict[NearbyCategory, float] = {
     NearbyCategory.POSTO: 10_000,
@@ -41,59 +46,40 @@ RADIUS_METERS: dict[NearbyCategory, float] = {
 }
 
 
-class DailyBudget:
-    """
-    Quantas consultas ao Google ainda cabem hoje.
+@dataclass(frozen=True)
+class NearbySource:
+    """Uma fonte principal, na ordem de preferência, com o seu limite do dia."""
 
-    A cota gratuita do plano com nota é de 1.000 por mês — cerca de 30 por
-    dia. Este contador é a primeira barreira, dentro da API; a segunda, que
-    vale mesmo com a API reiniciada, é a cota configurada no console do
-    Google (ver README).
-    """
-
-    def __init__(self, limit: int, today: Callable[[], date] = date.today) -> None:
-        self._limit = limit
-        self._today = today
-        self._day = today()
-        self._used = 0
-
-    def try_spend(self) -> bool:
-        if self._today() != self._day:
-            self._day, self._used = self._today(), 0
-
-        if self._used >= self._limit:
-            return False
-
-        self._used += 1
-        return True
-
-    @property
-    def remaining(self) -> int:
-        return max(0, self._limit - self._used)
+    provider: NearbyProvider
+    # Como aparece no `fallback_reason`: "Google Places", "TomTom".
+    label: str
+    budget: DailyBudget
 
 
 class NearbyService:
     def __init__(
         self,
         *,
-        google: NearbyProvider | None,
+        sources: list[NearbySource],
         fallback: NearbyProvider,
         router: OsrmRouteProvider,
-        budget: DailyBudget,
     ) -> None:
-        self._google = google
+        self._sources = sources
         self._fallback = fallback
         self._router = router
-        self._budget = budget
 
-    async def search(self, category: NearbyCategory, origin: Coordinate) -> NearbyResponse:
+    async def search(
+        self, category: NearbyCategory, origin: Coordinate, limit: int = DEFAULT_RESULTS
+    ) -> NearbyResponse:
+        limit = min(limit, MAX_RESULTS)
+        wanted = max(limit * 2, MIN_CANDIDATES)
         radius = RADIUS_METERS[category]
-        candidates, source, reason = await self._candidates(category, origin, radius)
+        candidates, source, reason = await self._candidates(category, origin, radius, wanted)
 
         # Os mais próximos em linha reta primeiro, para a matriz de tempos
         # olhar só os que têm chance.
         candidates.sort(key=lambda c: distance_meters(origin, c.location))
-        candidates = candidates[:CANDIDATES]
+        candidates = candidates[:wanted]
 
         matrix = await self._router.get_matrix(origin, [c.location for c in candidates])
         places = [_to_place(c, origin, road) for c, road in zip(candidates, matrix, strict=True)]
@@ -105,31 +91,30 @@ class NearbyService:
         )
 
         return NearbyResponse(
-            category=category, source=source, fallback_reason=reason, places=places[:RESULTS]
+            category=category, source=source, fallback_reason=reason, places=places[:limit]
         )
 
     async def _candidates(
-        self, category: NearbyCategory, origin: Coordinate, radius: float
+        self, category: NearbyCategory, origin: Coordinate, radius: float, wanted: int
     ) -> tuple[list[Candidate], str, str | None]:
-        reason = None
+        # O motivo de a preferida não ter respondido — o primeiro, que é o
+        # que explica a falta de nota.
+        reason = None if self._sources else "nenhuma fonte com chave configurada"
 
-        if self._google is None:
-            reason = "Google Places não configurado"
-        elif not self._budget.try_spend():
-            reason = "limite diário do Google Places atingido"
-        else:
+        for source in self._sources:
+            if not source.budget.try_spend():
+                reason = reason or f"limite diário do {source.label} atingido"
+                continue
             try:
-                return (
-                    await self._google.search(category, origin, radius, CANDIDATES),
-                    self._google.id,
-                    None,
-                )
+                found = await source.provider.search(category, origin, radius, wanted)
             except NearbyUnavailable as error:
-                logger.warning("Google Places falhou, usando OpenStreetMap: %s", error)
-                reason = "Google Places indisponível"
+                logger.warning("%s falhou: %s", source.label, error)
+                reason = reason or f"{source.label} indisponível"
+                continue
+            return found, source.provider.id, reason
 
         try:
-            found = await self._fallback.search(category, origin, radius, CANDIDATES)
+            found = await self._fallback.search(category, origin, radius, wanted)
         except NearbyUnavailable as error:
             logger.warning("OpenStreetMap também falhou: %s", error)
             raise NearbyUnavailableError(

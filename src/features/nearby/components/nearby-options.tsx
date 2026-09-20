@@ -51,7 +51,9 @@ export function NearbyOptions({
     );
   }
 
-  const fromFallback = result.source !== 'google-places';
+  // Só o Google tem nota; das outras fontes, a tela diz de onde vieram.
+  const sourceLabel = SOURCE_LABELS[result.source] ?? result.source;
+  const withoutRating = result.source !== 'google-places';
 
   return (
     <View style={styles.list}>
@@ -93,15 +95,20 @@ export function NearbyOptions({
         </Pressable>
       ))}
 
-      {fromFallback ? (
+      {withoutRating ? (
         <Text variant="label" color="textSecondary">
-          Fonte: OpenStreetMap, sem nota
+          Fonte: {sourceLabel}, sem nota
           {result.fallbackReason ? ` (${result.fallbackReason})` : ''}.
         </Text>
       ) : null}
     </View>
   );
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  tomtom: 'TomTom',
+  openstreetmap: 'OpenStreetMap',
+};
 
 function Rating({ value, count }: { value: number | null; count: number | null }) {
   if (value === null) {

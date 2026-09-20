@@ -5,16 +5,16 @@ import type { Decision } from '@/features/trip-session/types/trip';
 import { HttpError, fetchJson } from '@/utils/http';
 
 /**
- * Opções próximas pela API do Atlas: Google Places com nota, ou
- * OpenStreetMap de reserva quando o Google não responde.
+ * Opções próximas pela API do Atlas: Google Places com nota, TomTom sem nota,
+ * ou OpenStreetMap de reserva quando nenhuma das duas responde.
  *
- * A chave do Google fica no backend — nunca no aplicativo.
+ * As chaves ficam no backend — nunca no aplicativo.
  */
 const NEARBY_PATH = '/v1/nearby';
 
 /**
- * Longo de propósito. Pelo Google a resposta vem em 1 a 2 s; pela reserva do
- * OpenStreetMap, medida em 23 s num dia carregado. Desistir antes disso
+ * Longo de propósito. Pelo Google ou pela TomTom a resposta vem em 1 a 2 s;
+ * pela reserva do OpenStreetMap, medida em 23 s num dia carregado. Desistir antes disso
  * deixaria quem está na estrada sem lista nenhuma.
  */
 const TIMEOUT_MS = 35_000;
@@ -50,7 +50,7 @@ export const DECISION_CATEGORY: Partial<Record<Decision, NearbyCategory>> = {
 export function describeNearbyError(error: unknown): string {
   if (error instanceof HttpError) {
     if (error.code === 'nearby_unavailable') {
-      return 'Nem o Google nem o OpenStreetMap responderam agora.';
+      return 'Nenhuma fonte de lugares respondeu agora.';
     }
     if (error.kind === 'timeout') {
       return 'A busca de lugares demorou demais.';

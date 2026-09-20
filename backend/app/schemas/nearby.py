@@ -34,15 +34,15 @@ class NearbyPlace(ApiModel):
     duration_seconds: float | None = None
     by_road: bool
     # Nota de 1 a 5 e quantas avaliações a sustentam. `null` quando a fonte
-    # não tem nota — o OpenStreetMap, por exemplo.
+    # não tem nota — TomTom e OpenStreetMap.
     rating: float | None = None
     rating_count: int | None = None
 
 
 class NearbyResponse(ApiModel):
     category: NearbyCategory
-    # `google-places` ou `openstreetmap`: de onde vieram os lugares.
+    # `google-places`, `tomtom` ou `openstreetmap`: de onde vieram os lugares.
     source: str
-    # Preenchido quando o Google não respondeu e a lista veio da reserva.
+    # Preenchido quando a fonte preferida não respondeu e a lista veio de outra.
     fallback_reason: str | None = None
     places: list[NearbyPlace]

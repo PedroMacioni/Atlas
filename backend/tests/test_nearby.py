@@ -13,9 +13,11 @@ import respx
 from app.core.errors import NearbyUnavailableError
 from app.providers.nearby import GOOGLE_URL, GooglePlacesProvider, OverpassProvider
 from app.providers.osrm import OsrmRouteProvider
+from app.providers.tomtom import TomTomNearbyProvider
 from app.schemas.coordinate import Coordinate
 from app.schemas.nearby import NearbyCategory
-from app.services.nearby_service import DailyBudget, NearbyService
+from app.services.daily_budget import DailyBudget
+from app.services.nearby_service import NearbyService, NearbySource
 
 OVERPASS = "https://overpass.test/api/interpreter"
 OSRM_TABLE = {"url__startswith": "https://osrm.test/table/v1/driving/"}
@@ -83,12 +85,22 @@ async def client():
         yield http
 
 
-def build(client, *, google=True, limit=30):
+def build(client, *, google=True, tomtom=False, limit=30):
+    sources = []
+    if google:
+        sources.append(
+            NearbySource(
+                GooglePlacesProvider(client, "chave-de-teste"), "Google Places", DailyBudget(limit)
+            )
+        )
+    if tomtom:
+        sources.append(
+            NearbySource(TomTomNearbyProvider(client, "chave-tomtom"), "TomTom", DailyBudget(30))
+        )
     return NearbyService(
-        google=GooglePlacesProvider(client, "chave-de-teste") if google else None,
+        sources=sources,
         fallback=OverpassProvider(client, OVERPASS),
         router=OsrmRouteProvider(client, "https://osrm.test"),
-        budget=DailyBudget(limit),
     )
 
 
@@ -126,7 +138,7 @@ async def test_sem_chave_usa_openstreetmap_sem_nota(client):
     result = await build(client, google=False).search(NearbyCategory.HOSPITAL, ORIGIN)
 
     assert result.source == "openstreetmap"
-    assert result.fallback_reason == "Google Places não configurado"
+    assert result.fallback_reason == "nenhuma fonte com chave configurada"
     assert [p.name for p in result.places] == ["Hospital Municipal", "Hospital Regional"]
     assert result.places[0].rating is None
     assert result.places[1].address == "Rua A, 10"
@@ -208,3 +220,83 @@ def test_endpoint_valida_categoria():
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_request"
+
+
+TOMTOM_NEARBY = {"url__startswith": "https://api.tomtom.com/search/2/nearbySearch/"}
+
+TOMTOM_OK = {
+    "results": [
+        {
+            "type": "POI",
+            "id": "wQ4c",
+            "poi": {"name": "OVG Combustíveis", "categorySet": [{"id": 7311}]},
+            "address": {"streetName": "Rua Taquaral", "streetNumber": "235"},
+            "position": {"lat": -22.8734, "lon": -47.0541},
+            # A entrada é onde o carro chega — e é o ponto que vale.
+            "entryPoints": [{"type": "main", "position": {"lat": -22.8735, "lon": -47.0540}}],
+        },
+        {"type": "POI", "id": "sem-nome", "poi": {}, "position": {"lat": -22.87, "lon": -47.05}},
+    ]
+}
+
+
+@respx.mock
+async def test_sem_google_a_tomtom_responde_sem_nota(client):
+    tomtom = respx.get(**TOMTOM_NEARBY).mock(return_value=httpx.Response(200, json=TOMTOM_OK))
+    overpass = respx.post(OVERPASS)
+    respx.get(**OSRM_TABLE).mock(
+        return_value=httpx.Response(
+            200, json={"code": "Ok", "durations": [[0, 120]], "distances": [[0, 900]]}
+        )
+    )
+
+    result = await build(client, google=False, tomtom=True).search(NearbyCategory.POSTO, ORIGIN)
+
+    assert result.source == "tomtom"
+    assert result.fallback_reason is None
+    assert overpass.call_count == 0
+    [place] = result.places
+    assert place.name == "OVG Combustíveis"
+    assert place.address == "Rua Taquaral, 235"
+    assert (place.latitude, place.longitude) == (-22.8735, -47.0540)
+    assert place.rating is None
+
+    sent = tomtom.calls.last.request.url.params
+    assert sent["categorySet"] == "7311"
+    assert sent["key"] == "chave-tomtom"
+
+
+@respx.mock
+async def test_google_fora_cai_na_tomtom_e_diz_por_que(client):
+    respx.post(GOOGLE_URL).mock(return_value=httpx.Response(403, text="billing"))
+    respx.get(**TOMTOM_NEARBY).mock(return_value=httpx.Response(200, json=TOMTOM_OK))
+    respx.get(**OSRM_TABLE).mock(return_value=httpx.Response(500))
+
+    result = await build(client, tomtom=True).search(NearbyCategory.POSTO, ORIGIN)
+
+    assert result.source == "tomtom"
+    assert result.fallback_reason == "Google Places indisponível"
+
+
+@respx.mock
+async def test_tomtom_fora_cai_no_openstreetmap(client):
+    respx.get(**TOMTOM_NEARBY).mock(return_value=httpx.Response(403))
+    respx.post(OVERPASS).mock(return_value=httpx.Response(200, json=OVERPASS_OK))
+    respx.get(**OSRM_TABLE).mock(return_value=httpx.Response(500))
+
+    result = await build(client, google=False, tomtom=True).search(NearbyCategory.HOSPITAL, ORIGIN)
+
+    assert result.source == "openstreetmap"
+    assert result.fallback_reason == "TomTom indisponível"
+
+
+@respx.mock
+async def test_erro_da_tomtom_nao_vaza_a_chave(client, caplog):
+    respx.get(**TOMTOM_NEARBY).mock(side_effect=httpx.ConnectError("falhou em ?key=chave-tomtom"))
+    respx.post(OVERPASS).mock(return_value=httpx.Response(200, json=OVERPASS_OK))
+    respx.get(**OSRM_TABLE).mock(return_value=httpx.Response(500))
+
+    await build(client, google=False, tomtom=True).search(NearbyCategory.HOSPITAL, ORIGIN)
+
+    assert "chave-tomtom" not in caplog.text
+

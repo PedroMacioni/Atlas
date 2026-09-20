@@ -1,7 +1,10 @@
 import type { Coordinate } from '@/features/map/types/coordinate';
 
-/** Categorias de lugar oferecidas na busca de destino. */
-export type PlaceCategory = 'fuel' | 'food' | 'parking' | 'saved';
+/**
+ * Categorias de lugar da busca de destino. `other` só vem da busca externa
+ * (TomTom): um shopping, uma faculdade, um endereço.
+ */
+export type PlaceCategory = 'fuel' | 'food' | 'parking' | 'saved' | 'other';
 
 /** Um destino possível. */
 export type Place = Coordinate & {

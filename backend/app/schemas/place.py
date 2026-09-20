@@ -17,6 +17,9 @@ class PlaceCategory(StrEnum):
     FOOD = "food"
     PARKING = "parking"
     SAVED = "saved"
+    # Achado na busca externa sem ser posto, comida ou estacionamento: um
+    # shopping, uma faculdade, um endereço. Nunca vem do catálogo.
+    OTHER = "other"
 
 
 class Place(ApiModel):

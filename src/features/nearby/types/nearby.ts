@@ -27,14 +27,14 @@ export type NearbyPlace = {
   distanceMeters: number;
   durationSeconds: number | null;
   byRoad: boolean;
-  /** Nota de 1 a 5. `null` quando a fonte não tem nota (OpenStreetMap). */
+  /** Nota de 1 a 5. `null` quando a fonte não tem nota (TomTom, OpenStreetMap). */
   rating: number | null;
   ratingCount: number | null;
 };
 
 export type NearbyResponse = {
   category: NearbyCategory;
-  /** `google-places` ou `openstreetmap`. */
+  /** `google-places`, `tomtom` ou `openstreetmap`. */
   source: string;
   fallbackReason: string | null;
   places: NearbyPlace[];

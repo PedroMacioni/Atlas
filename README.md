@@ -91,8 +91,11 @@ alinhada ao tema.
 
 ### Definir destino
 
-Funciona de verdade, sem Google Places: a busca filtra uma lista local de oito
-lugares com **coordenadas reais**, e escolher um deles calcula a rota até ele.
+A busca por texto mostra os lugares salvos primeiro e, atrás deles, qualquer
+estabelecimento ou endereço do Brasil achado pela **TomTom Search** (grátis,
+sem cartão), os mais perto de quem busca primeiro — "posto shell", "marechal
+rondon 700". Sem a API, cai numa lista local de lugares com **coordenadas
+reais**. Escolher qualquer um calcula a rota até ele.
 
 - **Campo "Para onde?"** com lupa, microfone à direita (atenuado — voz é fase
   futura) e botão de limpar que ocupa o lugar do microfone quando há texto.
@@ -630,7 +633,7 @@ O que ele muda no lado do aplicativo:
 | Antes | Agora |
 |---|---|
 | `osrmRouteProvider` chamava o OSRM público do aparelho. | `atlasRouteProvider` chama `POST /v1/routes`; o backend decide o provider e guarda o resultado em cache. |
-| `DEMO_PLACES` vinha no bundle. | `place-service` consulta `GET /v1/places`, com busca e filtro no banco — e cai na lista local se a rede falhar. |
+| `DEMO_PLACES` vinha no bundle. | `place-service` consulta `GET /v1/places`: os salvos do banco e, com texto, qualquer lugar ou endereço pela TomTom, perto de quem busca — e cai na lista local se a rede falhar. |
 | A rota vinha sem instruções. | `RouteResult` ganhou `steps`: as manobras, posicionadas sobre o trajeto. Os dois providers as fornecem. |
 | Cada abertura da Viagem gastava uma chamada ao OSRM. | O trajeto repetido vem do `route_cache`: 1.767 ms na primeira vez, 98 ms depois. |
 | Uma chave de API precisaria ser embarcada. | As chaves ficam no servidor. Só a URL da API entra no bundle. |
@@ -750,16 +753,14 @@ Em ordem, guiados pelos critérios de aceite do escopo. A navegação curva a
 curva está **fora do escopo** (§15) — o que existe fica como extra, sem novo
 investimento (sem recálculo de rota, sem rotas alternativas).
 
-1. **Busca de endereço por texto** (RF-04) — o texto ainda busca só os
-   lugares salvos; o *Text Search* do Google Places resolve.
-2. **Emoção na voz** (CA-07) — o áudio de cada comando já é gravado no
+1. **Emoção na voz** (CA-07) — o áudio de cada comando já é gravado no
    aparelho; falta enviá-lo ao Python e classificar nos 5 estados.
-3. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
-4. **Câmera + classificação de imagem** (CA-06) — `expo-camera`, foto salva
+2. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
+3. **Câmera + classificação de imagem** (CA-06) — `expo-camera`, foto salva
    em "Registrar ponto turístico", classe gravada no diário.
-5. **Testes do aplicativo** — as funções puras (`trip-progress`, `geo`,
+4. **Testes do aplicativo** — as funções puras (`trip-progress`, `geo`,
    `traveled-track`, `maneuver-text`, `filter-places`...) ainda não têm runner.
-6. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
+5. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
 
 ---
 
