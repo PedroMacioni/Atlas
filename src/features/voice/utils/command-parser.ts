@@ -164,7 +164,26 @@ export function parseCommand(raw: string, expecting: Expectation = 'command'): V
     return { type: 'register_stop' };
   }
 
-  if (/\b(abastecer ou descansar|descansar ou abastecer)\b/.test(text)) {
+  /*
+    Cansaço é o pedido de avaliação dito do jeito que se fala.
+
+    Ninguém dirigindo diz "preciso abastecer ou descansar": diz "estou
+    cansado", "tô com sono", "não aguento mais". É exatamente o contexto para
+    o qual o Random Forest existe (§4.7), então entra pela mesma porta — e a
+    resposta continua sendo uma recomendação com justificativa, e não uma ação
+    tomada por conta própria.
+
+    Cansaço não é mal-estar: "não estou me sentindo bem" é tratado antes, e
+    abre a emergência.
+  */
+  if (
+    /\b(abastecer ou descansar|descansar ou abastecer)\b/.test(text) ||
+    /\b(estou|to|tou|fiquei|me sinto|sinto me)( muito| meio| bem)? (cansad[oa]|exaust[oa]|sonolent[oa]|acabad[oa])\b/.test(
+      text,
+    ) ||
+    /\b(com|de) sono\b/.test(text) ||
+    /\bnao (aguento|consigo) mais dirigir\b/.test(text)
+  ) {
     return { type: 'need_rest_or_fuel' };
   }
 

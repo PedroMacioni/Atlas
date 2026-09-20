@@ -31,6 +31,20 @@ describe('parseCommand', () => {
     expect(parseCommand('encerrar viagem').type).toBe('end_trip');
   });
 
+  it('cansaço pede uma avaliação ao Random Forest', () => {
+    // Ninguém dirigindo fala "preciso abastecer ou descansar".
+    expect(parseCommand('atlas estou cansado').type).toBe('need_rest_or_fuel');
+    expect(parseCommand('to muito cansado').type).toBe('need_rest_or_fuel');
+    expect(parseCommand('estou com sono').type).toBe('need_rest_or_fuel');
+    expect(parseCommand('nao aguento mais dirigir').type).toBe('need_rest_or_fuel');
+    expect(parseCommand('preciso descansar').type).toBe('need_rest_or_fuel');
+  });
+
+  it('cansaço não é mal-estar: um pede recomendação, o outro abre a emergência', () => {
+    expect(parseCommand('estou cansado').type).toBe('need_rest_or_fuel');
+    expect(parseCommand('nao estou me sentindo bem').type).toBe('unwell');
+  });
+
   it('trata mal-estar como emergência, e não como pedido de hospital', () => {
     expect(parseCommand('nao estou me sentindo bem').type).toBe('unwell');
     expect(parseCommand('socorro').type).toBe('unwell');
