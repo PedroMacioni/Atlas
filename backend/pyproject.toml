@@ -30,6 +30,11 @@ vision = [
     "torch>=2.6",
     "transformers>=4.50",
 ]
+audio = [
+    "soundfile>=0.13",
+    "torch>=2.6",
+    "transformers>=4.50",
+]
 
 [tool.ruff]
 line-length = 100

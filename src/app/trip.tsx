@@ -37,6 +37,10 @@ import { IMAGE_CLASS_LABELS } from '@/features/trip-session/constants/journal-la
 import type { EndReason } from '@/features/trip-session/types/trip';
 import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
 import { VoiceIndicator } from '@/features/voice/components/voice-indicator';
+import {
+  describeEmotion,
+  sendVoiceCommand,
+} from '@/features/voice/services/voice-command-service';
 import { useTripVoice } from '@/features/voice/hooks/use-trip-voice';
 import { chooseOptionByVoice, confirmByVoice } from '@/features/voice/utils/voice-dialogs';
 import { colors } from '@/theme/colors';
@@ -354,14 +358,35 @@ export default function TripScreen() {
     },
     openEmergency: () => openEmergency(),
     endTrip: () => endTrip('voice'),
-    recordCommand: (transcript) => {
-      if (session.tripId) {
-        recordEvent(session.tripId, {
-          kind: 'command',
-          command: transcript,
-          location: tracking.position?.coordinate ?? null,
-        }).catch(() => {});
+    recordCommand: (transcript, audioUri) => {
+      if (!session.tripId) {
+        return;
       }
+
+      /*
+        O comando vai para o diário com o áudio: a API lê a emoção da voz e
+        grava as duas coisas no mesmo evento (RF-15, CA-07). Sem áudio — ou
+        com a API fora — resta gravar a frase, que é o que importa primeiro.
+      */
+      sendVoiceCommand({
+        tripId: session.tripId,
+        transcript,
+        audioUri,
+        location: tracking.position?.coordinate ?? null,
+      })
+        .then((result) => {
+          const notice = describeEmotion(result);
+          if (notice) {
+            flash(notice);
+          }
+        })
+        .catch(() => {
+          recordEvent(session.tripId!, {
+            kind: 'command',
+            command: transcript,
+            location: tracking.position?.coordinate ?? null,
+          }).catch(() => {});
+        });
     },
   });
 

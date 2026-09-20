@@ -45,6 +45,7 @@ async def health(
         database=database_is_up,
         model=model.version if (model := request.app.state.decision_model) else None,
         vision=_loading_state(request.app.state.scene_classifier),
+        voice_emotion=_loading_state(request.app.state.emotion_classifier),
     )
 
 

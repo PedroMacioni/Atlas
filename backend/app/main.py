@@ -25,6 +25,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import SecretStr
 
+from app.audio.emotion_classifier import Wav2VecEmotionClassifier
 from app.core.config import Settings, get_settings
 from app.core.database import SupabaseRest
 from app.core.errors import register_error_handlers
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI):
     app.state.route_provider = OsrmRouteProvider(outbound, str(settings.osrm_base_url))
     app.state.decision_model = DecisionModel.load(settings.ml_model_path)
     app.state.scene_classifier = _scene_classifier(settings)
+    app.state.emotion_classifier = _emotion_classifier(settings)
 
     google_key = _secret(settings.google_places_api_key)
     tomtom_key = _secret(settings.tomtom_api_key)
@@ -84,13 +86,15 @@ async def lifespan(app: FastAPI):
     )
 
     logging.getLogger("atlas.api").info(
-        "Atlas API pronta — ambiente=%s provider=%s próximos=%s busca=%s modelo=%s câmera=%s",
+        "Atlas API pronta — ambiente=%s provider=%s próximos=%s busca=%s"
+        " modelo=%s câmera=%s voz=%s",
         settings.environment,
         app.state.route_provider.id,
         "+".join([*(["google"] if google_key else []), *(["tomtom"] if tomtom_key else []), "osm"]),
         "catálogo+tomtom" if tomtom_key else "catálogo",
         app.state.decision_model.version if app.state.decision_model else "ausente",
         settings.vision_model if app.state.scene_classifier else "desligada",
+        settings.voice_emotion_model if app.state.emotion_classifier else "desligada",
     )
 
     try:
@@ -112,6 +116,16 @@ def _scene_classifier(settings) -> ClipSceneClassifier | None:
         return None
 
     classifier = ClipSceneClassifier(settings.vision_model)
+    classifier.load_in_background()
+    return classifier
+
+
+def _emotion_classifier(settings) -> Wav2VecEmotionClassifier | None:
+    """O modelo de emoção na voz, carregando numa thread, como o da câmera."""
+    if not settings.voice_emotion_enabled:
+        return None
+
+    classifier = Wav2VecEmotionClassifier(settings.voice_emotion_model)
     classifier.load_in_background()
     return classifier
 

@@ -7,6 +7,7 @@ export type ApiHealth = {
   database: boolean;
   /** Versão do Random Forest, ou `null` se o modelo não foi treinado. */
   model: string | null;
-  /** Estado do classificador de imagem. */
+  /** Estado do classificador de imagem e do de emoção na voz. */
   vision: 'ready' | 'loading' | 'off';
+  voiceEmotion: 'ready' | 'loading' | 'off';
 };

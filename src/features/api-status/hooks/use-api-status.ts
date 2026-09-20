@@ -72,6 +72,11 @@ function describe(configured: boolean, isLoading: boolean, health: ApiHealth | n
   const parts = [
     health.model ? 'decisão' : null,
     health.vision === 'ready' ? 'imagem' : health.vision === 'loading' ? 'imagem (abrindo)' : null,
+    health.voiceEmotion === 'ready'
+      ? 'emoção'
+      : health.voiceEmotion === 'loading'
+        ? 'emoção (abrindo)'
+        : null,
   ].filter(Boolean);
 
   return parts.length > 0 ? `Modelos: ${parts.join(', ')}` : 'Sem modelos carregados';

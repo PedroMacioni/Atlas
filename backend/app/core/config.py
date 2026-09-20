@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     # percorrer o histórico sem deixar link vivo por aí.
     photo_url_ttl_seconds: int = Field(default=3_600, gt=0)
 
+    # --- Emoção na voz ----------------------------------------------------
+    # Ligada, a API carrega o modelo dimensional na subida e lê a emoção do
+    # áudio de cada comando (RF-15, CA-07). Desligada — ou sem o extra
+    # `audio` — o comando é gravado no diário sem emoção.
+    voice_emotion_enabled: bool = True
+    voice_emotion_model: str = "audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim"
+
     # --- Random Forest --------------------------------------------------
     # Modelo gerado por `ml/train.py`. Ausente, a API sobe mesmo assim e as
     # recomendações respondem `model_unavailable`.

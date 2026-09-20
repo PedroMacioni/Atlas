@@ -10,8 +10,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Query, UploadFile, status
 
-from app.core.dependencies import DeviceDep, SceneServiceDep, TripServiceDep
-from app.core.errors import InvalidImageError
+from app.core.dependencies import DeviceDep, SceneServiceDep, TripServiceDep, VoiceServiceDep
+from app.core.errors import InvalidAudioError, InvalidImageError
 from app.schemas.coordinate import Coordinate
 from app.schemas.scene import ScenePurpose, SceneResponse
 from app.schemas.trip import (
@@ -24,6 +24,7 @@ from app.schemas.trip import (
     TripFinishRequest,
     TripListResponse,
 )
+from app.schemas.voice import VoiceCommandResponse
 
 router = APIRouter(prefix="/v1/trips", tags=["viagens"])
 
@@ -131,4 +132,44 @@ async def classify_scene(
 
     return await service.classify(
         device, trip_id, image=content, purpose=purpose, location=location
+    )
+
+
+# Um comando falado tem segundos, não minutos: 16 kHz mono em WAV dá ~32 kB/s,
+# e 2 MB já cobrem um minuto inteiro de fala.
+MAX_AUDIO_BYTES = 2 * 1024 * 1024
+
+
+@router.post(
+    "/{trip_id}/voice", response_model=VoiceCommandResponse, responses=_NOT_FOUND | _FINISHED
+)
+async def record_voice_command(
+    trip_id: UUID,
+    device: DeviceDep,
+    service: VoiceServiceDep,
+    audio: Annotated[UploadFile | None, File(description="O áudio do comando.")] = None,
+    transcript: Annotated[str | None, Form(max_length=200)] = None,
+    latitude: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Query(ge=-180, le=180)] = None,
+) -> VoiceCommandResponse:
+    """
+    Grava o comando falado no diário, com a emoção da voz (RF-15, CA-07).
+
+    O áudio é o que o próprio reconhecimento de fala já gravou no aparelho.
+    Sem ele — ou com o modelo ainda carregando — o comando entra no diário
+    assim mesmo, e `reason` explica por que veio sem emoção.
+    """
+    content = await audio.read() if audio else None
+
+    if content is not None and len(content) > MAX_AUDIO_BYTES:
+        raise InvalidAudioError("O áudio passa de 2 MB.")
+
+    location = (
+        Coordinate(latitude=latitude, longitude=longitude)
+        if latitude is not None and longitude is not None
+        else None
+    )
+
+    return await service.record_command(
+        device, trip_id, audio=content, transcript=transcript, location=location
     )

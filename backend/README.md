@@ -330,6 +330,46 @@ resto da viagem funciona igual.
 O bucket `photos` é privado e só a chave de serviço o alcança; o aplicativo
 recebe URLs assinadas, válidas por `ATLAS_PHOTO_URL_TTL_SECONDS`.
 
+### Emoção na voz (`POST /v1/trips/{id}/voice`)
+
+O comando falado entra no diário com a emoção junto (RF-15, CA-07). O áudio
+sobe em `multipart/form-data` no campo `audio` (WAV no Android, CAF no iOS,
+até 2 MB), com `transcript` no corpo e a posição na query.
+
+A resposta traz `emotion` (uma das 5 do escopo), `confidence` e as três
+dimensões cruas — `arousal`, `valence`, `dominance`. Sem emoção legível o
+comando **é gravado assim mesmo**, e `reason` explica: `no_audio`,
+`model_off`, `model_loading` ou `invalid_audio`. Perder a frase falada seria
+pior que perder a emoção dela.
+
+A partir daí tudo que já existia funciona sozinho: a leitura alimenta a
+variável "emoção" do Random Forest, uma emoção relevante antecipa a próxima
+avaliação, e tensão forte e confiante faz o Atlas oferecer a emergência (§4.7).
+
+### Configurar a emoção na voz
+
+O modelo é o `audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim`, treinado
+no MSP-Podcast. Ele **não devolve rótulos**: devolve energia (arousal), tom
+positivo ou negativo (valência) e controle (dominância), de 0 a 1. A tradução
+para Cansado, Neutro, Animado, Tenso e Bravo é uma régua explícita em
+`app/audio/emotion_rules.py` — legível, testável sem `torch`, e discutível com
+argumento na apresentação.
+
+```bash
+uv sync --extra audio
+```
+
+A calibração atual é grossa: foi feita com duas falas reais e com a mesma fala
+acelerada e amplificada (arousal 0,18 → 0,33 → 0,43 → 0,52). Para ajustá-la
+com as vozes do grupo:
+
+```bash
+uv run python -m ml.check_emotion gravacoes/
+```
+
+Cada arquivo nomeado com a emoção esperada — `bravo_pedro_01.wav` — entra na
+contagem de acertos, e a tabela mostra onde os cortes estão apertados demais.
+
 ### Recomendações (Random Forest)
 
 O modelo, o dataset, as regras da equipe, a política de quando avaliar e a
@@ -363,6 +403,7 @@ como já fazia com `HttpError.kind` em `utils/http.ts`.
 | `model_unavailable` | 503 | O modelo não foi treinado ou não carregou — rode `ml/train.py`. |
 | `simulation_disabled` | 403 | Modo de demonstração desligado (`ATLAS_ML_SIMULATION_ENABLED=false`). |
 | `recommendation_not_found` | 404 | Recomendação que não é desta viagem. |
+| `invalid_audio` | 422 | O áudio não é legível, está mudo, é curto demais ou passa de 2 MB. |
 | `vision_unavailable` | 503 | O classificador de imagem está carregando, desligado ou sem o extra `vision`. |
 | `invalid_image` | 422 | O arquivo enviado não é uma imagem, está vazio ou passa de 5 MB. |
 | `nearby_unavailable` | 502 | Nenhuma fonte de lugares próximos respondeu, nem o OpenStreetMap. |
@@ -524,8 +565,8 @@ aplicativo não percebe.
 
 1. **Busca de endereço por texto** (RF-04) — hoje o texto busca só os lugares
    salvos. O *Text Search* do Places resolve, em outro SKU.
-2. **Emoção na voz** — o endpoint que recebe o áudio do app e devolve a
-   emoção e a confiança, como `scenes` já faz com a foto.
+2. **Calibrar a emoção** com as vozes do grupo (`ml/check_emotion.py`) e
+   registrar a tabela no relatório.
 3. **Limpeza do cache** — um `pg_cron` diário apagando linhas vencidas.
 
 Não há autenticação no plano: o escopo exclui login, e o aparelho é

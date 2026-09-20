@@ -105,6 +105,13 @@ class VisionUnavailableError(AtlasError):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
 
+class InvalidAudioError(AtlasError):
+    """O áudio enviado não é legível, é curto demais ou passa do limite."""
+
+    code = "invalid_audio"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
 class InvalidImageError(AtlasError):
     """O arquivo enviado não é uma imagem legível."""
 

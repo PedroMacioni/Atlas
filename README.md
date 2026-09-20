@@ -305,12 +305,16 @@ Sem permissão de câmera, ou com a IA de imagem fora do ar, a miniatura não
 aparece e "Registrar ponto turístico" grava só o local — o escopo pede a
 marcação do ponto, e a foto é o que a enriquece.
 
-### O que aparece mas não funciona
+#### A emoção na voz (RF-15, CA-07)
 
-Um elemento do design existe como casca visual, atenuado e marcado
-**"Em breve"**: **`Diga "Atlas" para começar`** — a escuta contínua da palavra
-"Atlas", sem toque, ainda não existe (o microfone com toque, sim). Ele não é
-tocável: um microfone que não ouve é pior que um microfone ausente.
+O áudio de cada comando — o mesmo que o reconhecimento de fala já grava — sobe
+para a API, que lê **energia, valência e dominância** da fala e traduz nos 5
+estados do escopo. A emoção entra no diário junto do comando e vira a variável
+"emoção" do Random Forest; uma tensão forte e confiante faz o Atlas oferecer a
+emergência. Quando a voz não é neutra, a tela avisa: *"Ouvi sua voz cansada."*
+
+A régua da tradução está em `backend/app/audio/emotion_rules.py`, em números
+que qualquer um lê e discute — e não escondida dentro do modelo.
 
 ---
 
@@ -780,11 +784,11 @@ Em ordem, guiados pelos critérios de aceite do escopo. A navegação curva a
 curva está **fora do escopo** (§15) — o que existe fica como extra, sem novo
 investimento (sem recálculo de rota, sem rotas alternativas).
 
-1. **Emoção na voz** (CA-07) — o áudio de cada comando já é gravado no
-   aparelho; falta enviá-lo ao Python e classificar nos 5 estados.
-2. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
-3. **Testes do aplicativo** — as funções puras (`trip-progress`, `geo`,
-   `traveled-track`, `maneuver-text`, `filter-places`...) ainda não têm runner.
+1. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
+2. **Calibrar a emoção** com as vozes do grupo — `uv run python -m
+   ml.check_emotion gravacoes/` mede os acertos e mostra onde os cortes de
+   arousal e valência estão apertados demais.
+3. **Testes do aplicativo** — as funções puras ainda não têm runner.
 4. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
 
 ---
@@ -797,7 +801,7 @@ investimento (sem recálculo de rota, sem rotas alternativas).
 | Dados | **Supabase / PostgreSQL** | Lugares, cache de rotas, viagens, diário e histórico. Sem login. | **Implementado** |
 | Decisão | **Random Forest** | 6 variáveis → 6 decisões (CONTINUAR, DESCANSAR, ABASTECER, ALIMENTAR-SE, REGISTRAR PONTO TURÍSTICO, FAZER UMA PARADA), sempre com justificativa. Ver [`backend/ml/`](backend/ml/README.md). | **Implementado** |
 | Visão | **Classificação de imagem (CLIP)** | Estrada, Posto, Restaurante, Ponto turístico, sem treino. A câmera lê a cena a cada 5 min e alimenta o Random Forest; a foto só é guardada em "Registrar ponto turístico". | **Implementado** |
-| Áudio | **Voz e emoção** | Palavra "Atlas", comandos, resposta falada; emoção em Cansado, Neutro, Animado, Tenso, Bravo. | **Parcial** — comandos e resposta falada sim; escuta contínua e emoção não |
+| Áudio | **Voz e emoção** | Palavra "Atlas", comandos, resposta falada; emoção em Cansado, Neutro, Animado, Tenso e Bravo, lida do áudio de cada comando por um modelo dimensional (arousal/valência). | **Implementado** |
 | Lugares | **Google Places** + OpenStreetMap | Busca por proximidade nas 5 categorias, com nota; OSM de reserva. | **Implementado** (falta a chave) |
 
 O que já está pronto para receber o resto:

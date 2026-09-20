@@ -25,6 +25,7 @@ from app.services.recommendation_service import RecommendationService
 from app.services.route_service import RouteService
 from app.services.scene_service import SceneService
 from app.services.trip_service import TripService
+from app.services.voice_service import VoiceService
 
 
 def get_database(request: Request) -> SupabaseRest:
@@ -80,6 +81,13 @@ def get_scene_service(
     )
 
 
+def get_voice_service(
+    request: Request,
+    repository: Annotated[TripRepository, Depends(get_trip_repository)],
+) -> VoiceService:
+    return VoiceService(repository, request.app.state.emotion_classifier)
+
+
 def get_decision_model(request: Request) -> DecisionModel | None:
     return request.app.state.decision_model
 
@@ -103,6 +111,7 @@ NearbyServiceDep = Annotated[NearbyService, Depends(get_nearby_service)]
 RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]
 TripServiceDep = Annotated[TripService, Depends(get_trip_service)]
 SceneServiceDep = Annotated[SceneService, Depends(get_scene_service)]
+VoiceServiceDep = Annotated[VoiceService, Depends(get_voice_service)]
 RecommendationServiceDep = Annotated[RecommendationService, Depends(get_recommendation_service)]
 
 # Identificador anônimo do aparelho (escopo §8). Sem login: o aplicativo gera
