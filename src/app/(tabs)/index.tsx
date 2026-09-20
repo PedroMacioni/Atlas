@@ -9,6 +9,7 @@ import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { StatusPill } from '@/components/ui/status-pill';
 import { VoicePromptCard } from '@/components/ui/voice-prompt-card';
+import { useApiStatus } from '@/features/api-status/hooks/use-api-status';
 import { useCurrentLocation } from '@/features/location/hooks/use-current-location';
 import { useHomeVoice } from '@/features/voice/hooks/use-home-voice';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const location = useCurrentLocation();
+  const api = useApiStatus();
   const mapRef = useRef<AtlasMapHandle>(null);
 
   const openEmergency = () =>
@@ -70,12 +72,15 @@ export default function HomeScreen() {
                   : 'O mapa segue utilizável'
             }
           />
+          {/* Conexão com a IA (CA-01): o que está de pé do outro lado. */}
           <StatusPill
-            dotColor={location.coordinate ? 'success' : 'danger'}
-            tone={location.coordinate ? 'positive' : 'neutral'}
-            titleColor={location.coordinate ? undefined : 'danger'}
-            title={location.coordinate ? 'Tudo certo' : 'Sem GPS'}
-            subtitle={location.coordinate ? 'Pronto para viajar' : 'Verifique a permissão'}
+            dotColor={api.online ? 'success' : 'danger'}
+            tone={api.online ? 'positive' : 'neutral'}
+            titleColor={api.online ? undefined : 'danger'}
+            title={
+              api.online ? 'IA conectada' : api.configured ? 'IA offline' : 'IA não configurada'
+            }
+            subtitle={api.summary}
           />
         </View>
 
@@ -128,11 +133,7 @@ export default function HomeScreen() {
           />
 
           {/* Acesso rápido à emergência, também fora de viagem (§11). */}
-          <SecondaryButton
-            label="Emergência"
-            tone="danger"
-            onPress={openEmergency}
-          />
+          <SecondaryButton label="Emergência" tone="danger" onPress={openEmergency} />
         </View>
       </View>
     </View>

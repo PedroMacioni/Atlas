@@ -54,3 +54,6 @@ backend/.ruff_cache/
 # Segredos do backend (o .env.example é versionado, o .env nunca)
 backend/.env
 backend/*.egg-info/
+
+# Cache do Visual Studio, que abre a pasta como solução.
+.vs/
