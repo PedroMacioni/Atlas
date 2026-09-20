@@ -1,0 +1,6 @@
+horario,tempo_viagem_min,distancia_km,imagem,emocao,tempo_sem_parada_min,decisao,origem
+8.4,0.2,0.0,desconhecida,desconhecido,0.1,continuar,real
+8.4,0.3,0.0,desconhecida,desconhecido,0.2,continuar,real
+15.8,0.3,0.01,desconhecida,desconhecido,0.3,continuar,real
+15.8,0.4,0.02,desconhecida,desconhecido,0.4,continuar,real
+15.8,0.4,0.02,desconhecida,desconhecido,0.4,continuar,real

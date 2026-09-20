@@ -12,9 +12,9 @@ import { spacing } from '@/theme/spacing';
 /**
  * Categorias do acesso rápido.
  *
- * Inertes nesta fase: a busca de lugares depende do Google Places, que ainda
- * não existe. Aparecem para firmar a identidade visual, atenuadas e sem toque,
- * em vez de oferecerem uma ação que não aconteceria.
+ * Vitrine, e não atalho: quem busca por categoria faz isso na tela de destino,
+ * onde a busca acontece de verdade. Aqui elas aparecem atenuadas, só para
+ * firmar a identidade visual das cinco categorias do escopo.
  */
 const QUICK_CATEGORIES = [
   { icon: 'gas-station', label: 'Posto', color: 'categoryFuel' },
@@ -34,6 +34,15 @@ const ARCHITECTURE = [
   },
   { title: 'features/emergency', description: 'Hospital, SAMU 192 e Polícia 190.' },
   { title: 'features/device', description: 'Identificador anônimo do aparelho, sem login.' },
+  {
+    title: 'features/camera',
+    description: 'Câmera da viagem: classe da cena e foto do ponto turístico.',
+  },
+  {
+    title: 'features/voice',
+    description: 'Palavra "Atlas", comandos, resposta falada e emoção na fala.',
+  },
+  { title: 'features/api-status', description: 'Estado da API e dos três modelos de IA.' },
 ] as const;
 
 /** Aba de contexto: o que já existe, o que vem depois e de onde vêm os números. */
@@ -48,10 +57,10 @@ export default function AboutScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
         <Text variant="bodySoft" color="textSecondary">
-          Copiloto de viagem multimodal — projeto acadêmico da Faculdade Anhanguera. Hoje: mapa,
-          rotas, acompanhamento da viagem, diário de bordo, resumo, histórico sem login e
-          emergência. A seguir: voz, análise de emoção, classificação de imagem e o Random
-          Forest que recomenda a próxima ação.
+          Copiloto de viagem multimodal — projeto acadêmico da Faculdade Anhanguera. Mapa e rotas,
+          busca por texto e por categoria, voz com palavra de ativação, emoção na fala,
+          classificação da cena pela câmera, Random Forest recomendando a próxima ação com
+          justificativa, diário de bordo, resumo, histórico sem login e emergência.
         </Text>
 
         <MetricTile
@@ -73,9 +82,9 @@ export default function AboutScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text variant="heading">Acesso rápido</Text>
+            <Text variant="heading">Categorias do escopo</Text>
             <Text variant="label" color="textSecondary">
-              Em breve
+              Buscar na aba Destino
             </Text>
           </View>
 

@@ -806,7 +806,10 @@ investimento (sem recálculo de rota, sem rotas alternativas).
 1. **Calibrar a emoção** com as vozes do grupo — `uv run python -m
    ml.check_emotion gravacoes/` mede os acertos e mostra onde os cortes de
    arousal e valência estão apertados demais.
-2. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
+2. **Ensaiar os 6 cenários** com o roteiro de [`docs/demonstracao.md`](docs/demonstracao.md),
+   no aparelho e na rede em que a apresentação vai acontecer.
+3. **Coletar mais dados reais** — cada recomendação aceita num teste vira
+   linha de dataset (`ml/export_real_data.py`); hoje são 5.
 
 ---
 
