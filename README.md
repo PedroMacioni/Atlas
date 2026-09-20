@@ -504,6 +504,12 @@ Sobre os ícones: o design pede a mesma cor de categoria no iOS e no Android
 Android, então `@expo/vector-icons` entrou no lugar. É a única biblioteca de
 interface do projeto.
 
+**Testes.** As funções puras do aplicativo têm testes no **Vitest**
+(`npm test`): progresso sobre a rota, geometria, análise dos comandos de voz,
+palavra de ativação, últimos destinos, filtro de lugares e as formatações da
+tela. Componentes ficam de fora de propósito — testá-los exigiria o runtime do
+React Native, e o retorno seria menor que o custo num projeto deste tamanho.
+
 **Sem Axios.** As chamadas HTTP usam o `fetch` nativo, encapsulado em
 `src/utils/http.ts` com `AbortController`, timeout de 12 s e classificação
 explícita de falhas (`timeout`, `network`, `status`, `invalid-response`).
@@ -569,7 +575,8 @@ requisito.
 | `npm run android` / `npm run ios` | Abre direto na plataforma escolhida. |
 | `npm run typecheck` | `tsc --noEmit`. |
 | `npm run lint` | ESLint com a configuração oficial do Expo. |
-| `npm run verify` | Typecheck + lint. |
+| `npm test` | Testes das funções puras, no Vitest. |
+| `npm run verify` | Typecheck + lint + testes. |
 
 ---
 
@@ -799,8 +806,7 @@ investimento (sem recálculo de rota, sem rotas alternativas).
 1. **Calibrar a emoção** com as vozes do grupo — `uv run python -m
    ml.check_emotion gravacoes/` mede os acertos e mostra onde os cortes de
    arousal e valência estão apertados demais.
-2. **Testes do aplicativo** — as funções puras ainda não têm runner.
-3. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
+2. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
 
 ---
 

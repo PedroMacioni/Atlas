@@ -91,7 +91,7 @@ export function stripWakeWord(text: string): { rest: string; hadWakeWord: boolea
 const CATEGORY_WORDS: [NearbyCategory, RegExp][] = [
   ['hospital', /\b(hospital|pronto socorro|upa|posto de saude)\b/],
   ['posto', /\b(posto|gasolina|combustivel|etanol|alcool|diesel)\b/],
-  ['restaurante', /\b(restaurante|comer|comida|almocar|almoco|jantar|lanche|lanchonete)\b/],
+  ['restaurante', /\b(restaurante|comer|comida|fome|almocar|almoco|jantar|lanche|lanchonete)\b/],
   ['hotel', /\b(hotel|pousada|motel|hospedagem|dormir)\b/],
   ['ponto_turistico', /\b(ponto turistico|turismo|turistico|passeio|mirante|museu|parque)\b/],
 ];

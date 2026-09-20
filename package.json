@@ -35,9 +35,11 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "@vitest/coverage-v8": "^5.0.1",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
   },
   "scripts": {
     "start": "expo start",
@@ -46,7 +48,9 @@
     "ios": "expo start --ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run lint"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "private": true
 }
