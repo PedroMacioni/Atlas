@@ -191,6 +191,8 @@ def test_fluxo_completo_parada_emergencia_encerramento_e_historico(api):
     assert history["count"] == 1
     assert history["trips"][0]["id"] == trip_id
     assert history["trips"][0]["stopCount"] == 1
+    # O card traz o destino: é dele que saem os "Últimos" da tela de destino.
+    assert history["trips"][0]["destination"] == {"latitude": -22.8616, "longitude": -47.0452}
 
 
 def test_viagem_encerrada_nao_aceita_evento_nem_segundo_encerramento(api):

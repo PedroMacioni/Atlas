@@ -245,6 +245,9 @@ def _card(row: dict[str, Any]) -> TripCard:
         id=row["id"],
         origin_name=row["origin_name"],
         destination_name=row["destination_name"],
+        destination=Coordinate(
+            latitude=row["destination_latitude"], longitude=row["destination_longitude"]
+        ),
         started_at=row["started_at"],
         ended_at=row.get("ended_at"),
         end_reason=row.get("end_reason"),
@@ -273,9 +276,6 @@ def _detail(row: dict[str, Any], *, stops: list[dict], events: list[dict]) -> Tr
     return TripDetail(
         **card.model_dump(),
         origin=Coordinate(latitude=row["origin_latitude"], longitude=row["origin_longitude"]),
-        destination=Coordinate(
-            latitude=row["destination_latitude"], longitude=row["destination_longitude"]
-        ),
         path=_path(row.get("path")),
         stops=[_stop(stop) for stop in stops],
         events=[_event(event) for event in events],

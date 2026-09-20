@@ -23,11 +23,19 @@ export function isNearbyAvailable(): boolean {
   return isAtlasApiConfigured();
 }
 
-export function fetchNearby(category: NearbyCategory, around: Coordinate, signal?: AbortSignal) {
+/** Quantas opções vêm por padrão: as 3 do escopo (RF-08), que a voz lê. */
+export const DEFAULT_NEARBY_LIMIT = 3;
+
+export function fetchNearby(
+  category: NearbyCategory,
+  around: Coordinate,
+  { limit = DEFAULT_NEARBY_LIMIT, signal }: { limit?: number; signal?: AbortSignal } = {},
+) {
   const params = new URLSearchParams({
     category,
     latitude: String(around.latitude),
     longitude: String(around.longitude),
+    limit: String(limit),
   });
 
   return fetchJson<NearbyResponse>(`${atlasApiUrl(NEARBY_PATH)}?${params.toString()}`, {

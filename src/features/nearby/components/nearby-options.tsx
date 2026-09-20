@@ -21,7 +21,8 @@ export type NearbyOptionsProps = {
 };
 
 /**
- * As 3 opções próximas (RF-08): nome, distância, tempo estimado e nota.
+ * As opções próximas (RF-08) — 3, ou 10 na tela de destino: nome, distância,
+ * tempo estimado e nota.
  *
  * Usada nas três portas que levam a um lugar: a categoria na tela de destino,
  * o hospital da emergência e o local de uma recomendação aceita.

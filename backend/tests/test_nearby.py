@@ -300,3 +300,42 @@ async def test_erro_da_tomtom_nao_vaza_a_chave(client, caplog):
 
     assert "chave-tomtom" not in caplog.text
 
+
+@respx.mock
+async def test_lista_da_tela_pede_mais_candidatos_e_devolve_ate_o_limite(client):
+    many = {
+        "results": [
+            {
+                "type": "POI",
+                "id": f"p{i}",
+                "poi": {"name": f"Posto {i}"},
+                "position": {"lat": -22.86 - i / 1000, "lon": -47.04},
+            }
+            for i in range(20)
+        ]
+    }
+    tomtom = respx.get(**TOMTOM_NEARBY).mock(return_value=httpx.Response(200, json=many))
+    respx.get(**OSRM_TABLE).mock(return_value=httpx.Response(500))
+
+    service = build(client, google=False, tomtom=True)
+    ten = await service.search(NearbyCategory.POSTO, ORIGIN, limit=10)
+    assert tomtom.calls.last.request.url.params["limit"] == "20"
+    assert len(ten.places) == 10
+
+    three = await service.search(NearbyCategory.POSTO, ORIGIN)
+    assert tomtom.calls.last.request.url.params["limit"] == "6"
+    assert len(three.places) == 3
+
+
+def test_endpoint_nao_passa_de_10():
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    with TestClient(create_app()) as api:
+        response = api.get(
+            "/v1/nearby",
+            params={"category": "posto", "latitude": -22.8, "longitude": -47.0, "limit": 11},
+        )
+
+    assert response.status_code == 422

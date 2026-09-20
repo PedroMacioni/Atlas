@@ -97,6 +97,11 @@ sem cartão), os mais perto de quem busca primeiro — "posto shell", "marechal
 rondon 700". Sem a API, cai numa lista local de lugares com **coordenadas
 reais**. Escolher qualquer um calcula a rota até ele.
 
+Com o campo vazio, a lista mostra os **últimos destinos** (até 10, sem
+repetir), tirados do histórico de viagens do aparelho. O filtro **Salvos**, ao
+lado do título, troca a lista pelos lugares salvos e, com texto, busca só
+entre eles.
+
 - **Campo "Para onde?"** com lupa, microfone à direita (atenuado — voz é fase
   futura) e botão de limpar que ocupa o lugar do microfone quando há texto.
 - **Filtros**: Posto, Comida, Estacionar, Salvos. Tocar de novo desmarca.

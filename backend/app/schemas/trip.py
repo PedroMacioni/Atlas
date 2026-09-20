@@ -139,6 +139,9 @@ class TripCard(ApiModel):
     id: UUID
     origin_name: str
     destination_name: str
+    # No card, e não só no detalhe, para a tela de destino oferecer os últimos
+    # destinos sem abrir viagem por viagem.
+    destination: Coordinate
     started_at: datetime
     ended_at: datetime | None = None
     end_reason: EndReason | None = None
@@ -152,7 +155,6 @@ class TripDetail(TripCard):
     """Resumo final e detalhe do histórico (RF-26, RF-29)."""
 
     origin: Coordinate
-    destination: Coordinate
     path: list[Coordinate] = Field(default_factory=list)
     stops: list[Stop] = Field(default_factory=list)
     events: list[TripEvent] = Field(default_factory=list)

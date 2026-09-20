@@ -4,12 +4,14 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CategoryChip } from '@/components/ui/category-chip';
+import { FilterPill } from '@/components/ui/filter-pill';
 import { PlaceRow } from '@/components/ui/place-row';
 import { SearchField } from '@/components/ui/search-field';
 import { SectionHeader } from '@/components/ui/section-header';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import { usePlaceSearch } from '@/features/destination/hooks/use-place-search';
+import { useRecentDestinations } from '@/features/destination/hooks/use-recent-destinations';
 import type { Place } from '@/features/destination/types/place';
 import { useCurrentLocation } from '@/features/location/hooks/use-current-location';
 import type { NamedCoordinate } from '@/features/map/types/coordinate';
@@ -31,9 +33,16 @@ const CATALOG_VISUALS = {
   parking: { icon: 'car-brake-parking', color: 'categoryLodging' },
   saved: { icon: 'bookmark', color: 'categoryHealth' },
   other: { icon: 'map-marker', color: 'primary' },
+  recent: { icon: 'history', color: 'textSecondary' },
 } as const;
 
 const NO_PLACES: Place[] = [];
+
+/**
+ * Quantas opções próximas a lista mostra. O escopo pede 3 (RF-08); aqui, com
+ * a tela inteira para rolar, vão 10. A voz continua lendo só as 3 primeiras.
+ */
+const NEARBY_LIST_LIMIT = 10;
 
 /**
  * Definir destino (RF-04, RF-07, RF-08).
@@ -41,11 +50,15 @@ const NO_PLACES: Place[] = [];
  * Duas portas:
  *
  * - **Categorias do escopo** — Posto, Restaurante, Hotel, Ponto turístico e
- *   Hospital. Tocar uma busca as **3 opções mais próximas**, com distância,
+ *   Hospital. Tocar uma busca as **10 opções mais próximas**, com distância,
  *   tempo de carro e nota, pela API do Atlas (Google Places ou TomTom, com o
  *   OpenStreetMap de reserva). Tocar de novo volta à lista.
  * - **Busca por texto**: os lugares salvos primeiro e, atrás deles, qualquer
  *   lugar ou endereço achado pela TomTom, os mais perto primeiro.
+ *
+ * Sem texto, a lista mostra os **últimos destinos**, do histórico de viagens.
+ * O filtro **Salvos** troca a lista pelos lugares salvos — e, com texto, busca
+ * só entre eles.
  *
  * Escolher qualquer lugar abre a viagem direto (RF-09).
  */
@@ -55,7 +68,8 @@ export default function DestinationScreen() {
   const params = useLocalSearchParams<{ category?: string; query?: string; voice?: string }>();
   const location = useCurrentLocation();
   const search = usePlaceSearch(location.coordinate);
-  const nearby = useNearbySearch();
+  const nearby = useNearbySearch(null, NEARBY_LIST_LIMIT);
+  const recent = useRecentDestinations();
   const voice = useVoice();
 
   /*
@@ -82,6 +96,10 @@ export default function DestinationScreen() {
 
   const searchPlaceByVoice = (text: string) => {
     nearby.clear();
+    // Um lugar pedido por voz pode estar em qualquer lugar, não só nos salvos.
+    if (search.category === 'saved') {
+      search.toggleCategory('saved');
+    }
     pendingQuery.current = { text, sawLoading: false };
     search.setQuery(text);
   };
@@ -104,7 +122,7 @@ export default function DestinationScreen() {
     }
   }
 
-  // 3 opções de uma busca falada: lidas e escolhidas por voz.
+  // Opções de uma busca falada: as 3 primeiras lidas e escolhidas por voz.
   useEffect(() => {
     const places = nearby.result?.places;
     if (!places || !readOptionsByVoice.current) {
@@ -112,7 +130,11 @@ export default function DestinationScreen() {
     }
     readOptionsByVoice.current = false;
 
-    const intro = `Encontrei ${places.length} ${places.length === 1 ? 'opção' : 'opções'}.`;
+    // A voz lê só as 3 primeiras; o resto fica na tela.
+    const intro =
+      places.length > 3
+        ? `Encontrei ${places.length} opções. As três mais perto:`
+        : `Encontrei ${places.length} ${places.length === 1 ? 'opção' : 'opções'}.`;
     chooseOptionByVoice(voice, places, intro)
       .then((index) => {
         if (index !== null) {
@@ -142,7 +164,7 @@ export default function DestinationScreen() {
     (async () => {
       if (!first) {
         await voice.say(
-          `Não encontrei ${pending.text} entre os lugares salvos. Para achar o que está perto, diga uma categoria, como posto ou restaurante.`,
+          `Não encontrei ${pending.text}. Para achar o que está perto, diga uma categoria, como posto ou restaurante.`,
         );
         return;
       }
@@ -206,13 +228,19 @@ export default function DestinationScreen() {
   };
 
   const showingNearby = nearby.category !== null;
+  const showingSaved = search.category === 'saved';
+  // Sem texto e sem filtro: os últimos destinos, e não o catálogo.
+  const showingRecent = !showingSaved && search.query.trim().length === 0;
+  const listData = showingNearby ? NO_PLACES : showingRecent ? recent.places : search.results;
+  const listTitle = showingSaved ? 'Salvos' : showingRecent ? 'Últimos' : 'Resultados';
+  const listLoading = showingRecent ? recent.isLoading : search.isLoading;
   const nearbyEnabled = isNearbyAvailable() && location.coordinate !== null;
   const categoryLabel = SCOPE_CATEGORIES.find((c) => c.id === nearby.category)?.label;
 
   return (
     <View style={styles.screen}>
       <FlatList
-        data={showingNearby ? NO_PLACES : search.results}
+        data={listData}
         keyExtractor={(place) => place.id}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -258,7 +286,10 @@ export default function DestinationScreen() {
 
             {showingNearby ? (
               <>
-                <SectionHeader title={`${categoryLabel} mais próximos`} hint="3 opções" />
+                <SectionHeader
+                  title={`${categoryLabel} mais próximos`}
+                  hint={nearby.result ? `${nearby.result.places.length} opções` : undefined}
+                />
                 <NearbyOptions
                   result={nearby.result}
                   isLoading={nearby.isLoading}
@@ -270,10 +301,20 @@ export default function DestinationScreen() {
             ) : (
               <>
                 <SectionHeader
-                  title={search.query.length > 0 ? 'Resultados' : 'Salvos'}
-                  hint={search.isEmpty ? undefined : `${search.results.length}`}
+                  title={listTitle}
+                  hint={listData.length > 0 ? `${listData.length}` : undefined}
+                  accessory={
+                    <FilterPill
+                      icon="bookmark"
+                      label="Salvos"
+                      selected={showingSaved}
+                      onPress={() => search.toggleCategory('saved')}
+                    />
+                  }
                 />
-                {search.error ? <StatusMessage tone="error" message={search.error} /> : null}
+                {search.error && !showingRecent ? (
+                  <StatusMessage tone="error" message={search.error} />
+                ) : null}
               </>
             )}
           </View>
@@ -293,17 +334,37 @@ export default function DestinationScreen() {
         }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
-          showingNearby ? null : search.isLoading ? (
+          showingNearby ? null : listLoading ? (
             <StatusMessage tone="info" message="Buscando lugares…" busy />
           ) : (
             <Text variant="bodySoft" color="textSecondary" align="center" style={styles.empty}>
-              Nenhum lugar salvo com esse nome. Para achar o que está perto, toque numa categoria.
+              {emptyMessage({ showingRecent, showingSaved, recentUnavailable: recent.unavailable })}
             </Text>
           )
         }
       />
     </View>
   );
+}
+
+function emptyMessage({
+  showingRecent,
+  showingSaved,
+  recentUnavailable,
+}: {
+  showingRecent: boolean;
+  showingSaved: boolean;
+  recentUnavailable: boolean;
+}): string {
+  if (showingRecent) {
+    return recentUnavailable
+      ? 'Não foi possível carregar os últimos destinos. Busque um lugar acima.'
+      : 'Nenhuma viagem ainda. Busque um lugar acima ou toque numa categoria.';
+  }
+  if (showingSaved) {
+    return 'Nenhum lugar salvo com esse nome.';
+  }
+  return 'Nenhum lugar encontrado com esse nome. Para achar o que está perto, toque numa categoria.';
 }
 
 const styles = StyleSheet.create({

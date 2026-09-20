@@ -60,6 +60,7 @@ export type TripCard = {
   id: string;
   originName: string;
   destinationName: string;
+  destination: Coordinate;
   startedAt: string;
   endedAt: string | null;
   endReason: EndReason | null;
@@ -72,7 +73,6 @@ export type TripCard = {
 /** Resumo final e detalhe do histórico (RF-26, RF-29). */
 export type TripDetail = TripCard & {
   origin: Coordinate;
-  destination: Coordinate;
   path: Coordinate[];
   stops: TripStop[];
   events: TripEvent[];

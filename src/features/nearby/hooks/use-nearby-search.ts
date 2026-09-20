@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { Coordinate } from '@/features/map/types/coordinate';
-import { describeNearbyError, fetchNearby } from '@/features/nearby/services/nearby-service';
+import {
+  DEFAULT_NEARBY_LIMIT,
+  describeNearbyError,
+  fetchNearby,
+} from '@/features/nearby/services/nearby-service';
 import type { NearbyCategory, NearbyResponse } from '@/features/nearby/types/nearby';
 
 type SearchKey = { category: NearbyCategory; around: Coordinate; attempt: number };
@@ -27,6 +31,8 @@ export type NearbySearchState = {
 export function useNearbySearch(
   /** Busca já na montagem — a emergência abre procurando hospitais. */
   initial?: { category: NearbyCategory; around: Coordinate } | null,
+  /** Quantas opções. 3 pelo escopo; a lista da tela de destino pede 10. */
+  limit: number = DEFAULT_NEARBY_LIMIT,
 ): NearbySearchState {
   const [key, setKey] = useState<SearchKey | null>(() =>
     initial ? { ...initial, attempt: 0 } : null,
@@ -58,7 +64,7 @@ export function useNearbySearch(
 
     const controller = new AbortController();
 
-    fetchNearby(key.category, key.around, controller.signal)
+    fetchNearby(key.category, key.around, { limit, signal: controller.signal })
       .then(setResult)
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -67,7 +73,7 @@ export function useNearbySearch(
       });
 
     return () => controller.abort();
-  }, [key]);
+  }, [key, limit]);
 
   return {
     category: key?.category ?? null,

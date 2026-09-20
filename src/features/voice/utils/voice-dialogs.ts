@@ -14,6 +14,12 @@ type Talk = Pick<Voice, 'say' | 'listen'>;
 
 const NUMBERS = ['Um', 'Dois', 'Três'];
 
+/**
+ * Quantas opções a voz lê. Uma lista de 10 falada não se guarda na cabeça de
+ * quem dirige; a tela mostra o resto.
+ */
+const SPOKEN_OPTIONS = NUMBERS.length;
+
 function spokenDistance(meters: number): string {
   if (meters < 1000) {
     return `${Math.round(meters / 50) * 50} metros`;
@@ -51,6 +57,8 @@ export async function chooseOptionByVoice(
   places: NearbyPlace[],
   intro: string,
 ): Promise<number | null> {
+  places = places.slice(0, SPOKEN_OPTIONS);
+
   if (places.length === 0) {
     await say('Não encontrei nenhuma opção por perto.');
     return null;
