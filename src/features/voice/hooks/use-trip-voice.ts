@@ -34,6 +34,11 @@ export type TripVoiceActions = {
 export type TripVoice = Voice & {
   /** Toque no microfone: começa a ouvir, ou encerra a escuta em curso. */
   onMicPress: () => void;
+  /**
+   * Continua a partir do que a escuta contínua já ouviu (CA-02): com um
+   * comando depois de "Atlas", ele é executado; sem nada, o Atlas escuta.
+   */
+  resume: (rest: string) => void;
 };
 
 const HELP =
@@ -153,5 +158,14 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
     }
   }, [state, finish, run]);
 
-  return { ...voice, onMicPress };
+  const resume = useCallback(
+    (rest: string) => {
+      if (state === 'idle') {
+        run(rest).catch(() => {});
+      }
+    },
+    [state, run],
+  );
+
+  return { ...voice, onMicPress, resume };
 }

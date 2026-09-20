@@ -5,6 +5,8 @@ import type {
   ExpoSpeechRecognitionNativeEventMap,
 } from 'expo-speech-recognition';
 
+import { findWakeWord } from '@/features/voice/utils/command-parser';
+
 type SpeechModule = typeof ExpoSpeechRecognitionModule;
 
 /**
@@ -28,6 +30,14 @@ const native = requireOptionalNativeModule<SpeechModule>(
 export function isVoiceAvailable(): boolean {
   return native !== null;
 }
+
+/**
+ * Folga entre uma sessão de vigília e a seguinte.
+ *
+ * Reabrir no mesmo instante em que o sistema fechou dá "busy" no Android e
+ * uma sessão morta no iOS.
+ */
+const RESTART_DELAY_MS = 400;
 
 export type Heard = {
   /** O que foi dito, já final. Vazio quando ninguém falou. */
@@ -94,6 +104,11 @@ export function listenOnce({ onPartial, hints = [] }: ListenOptions = {}): Promi
 
   const module = native;
 
+  // Só uma sessão de reconhecimento existe por vez: a vigília sai de cena
+  // enquanto o comando é ouvido, e volta sozinha no fim.
+  const watching = watcher !== null;
+  stopWakeWordWatch();
+
   active = (async () => {
     const permission = await module.requestPermissionsAsync();
     if (!permission.granted) {
@@ -156,9 +171,138 @@ export function listenOnce({ onPartial, hints = [] }: ListenOptions = {}): Promi
     });
   })().finally(() => {
     active = null;
+
+    if (watching) {
+      startWakeWordWatch(watchOptions);
+    }
   });
 
   return active;
+}
+
+/**
+ * Escuta contínua da palavra "Atlas" (RF-02, CA-02).
+ *
+ * Uma sessão de reconhecimento fica aberta ouvindo o carro; cada trecho
+ * reconhecido é lido de passagem e descartado — nada é gravado nem enviado
+ * enquanto a palavra não aparece. Quando aparece, a vigília para e quem
+ * chamou assume: o Atlas responde e escuta o comando.
+ *
+ * A sessão precisa ser reaberta sozinha. O reconhecedor do sistema encerra
+ * por conta própria — no iOS há um limite de cerca de um minuto por sessão,
+ * e em qualquer plataforma um silêncio longo termina a escuta.
+ */
+export type WakeWordOptions = {
+  /** Chamado com o que foi dito **depois** da palavra, que pode ser vazio. */
+  onWake: (rest: string) => void;
+  /** Texto ouvido de passagem, para a tela mostrar que está atenta. */
+  onHeard?: (text: string) => void;
+  onError?: (error: VoiceError) => void;
+};
+
+type Watcher = { stop: () => void };
+
+let watcher: Watcher | null = null;
+let watchOptions: WakeWordOptions | null = null;
+
+export function isWatchingForWakeWord(): boolean {
+  return watcher !== null;
+}
+
+export function startWakeWordWatch(options: WakeWordOptions | null): void {
+  if (!native || !options || watcher || active) {
+    return;
+  }
+
+  const module = native;
+  watchOptions = options;
+  let stopped = false;
+
+  const session = () => {
+    if (stopped) {
+      return;
+    }
+
+    const subscriptions = [
+      module.addListener('result', (event: ExpoSpeechRecognitionNativeEventMap['result']) => {
+        const text = event.results[0]?.transcript ?? '';
+
+        if (!text) {
+          return;
+        }
+
+        options.onHeard?.(text);
+        const { found, rest } = findWakeWord(text);
+
+        if (found) {
+          stopped = true;
+          module.abort();
+          options.onWake(rest);
+        }
+      }),
+      module.addListener('error', (event: ExpoSpeechRecognitionNativeEventMap['error']) => {
+        // "Ninguém falou" é o caso comum de um carro em silêncio: a sessão
+        // termina e a próxima começa. Um erro de permissão, não.
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          return;
+        }
+        stopped = true;
+        options.onError?.(new VoiceError(event.error, MESSAGES[event.error] ?? event.message));
+      }),
+      module.addListener('end', () => {
+        subscriptions.forEach((subscription) => subscription.remove());
+
+        if (!stopped) {
+          // Reabre em seguida, com uma folga para o áudio do sistema fechar.
+          setTimeout(session, RESTART_DELAY_MS);
+          return;
+        }
+
+        if (watcher?.stop === stop) {
+          watcher = null;
+        }
+      }),
+    ];
+
+    module.start({
+      lang: 'pt-BR',
+      interimResults: true,
+      continuous: true,
+      requiresOnDeviceRecognition: false,
+      addsPunctuation: false,
+      contextualStrings: COMMAND_HINTS.slice(0, 100),
+      iosTaskHint: 'unspecified',
+      iosCategory: {
+        category: 'playAndRecord',
+        categoryOptions: ['defaultToSpeaker', 'allowBluetooth'],
+        mode: 'measurement',
+      },
+      // A vigília não guarda áudio: o que se ouve de passagem não é comando
+      // e não deve virar arquivo no aparelho.
+      recordingOptions: { persist: false },
+    });
+  };
+
+  const stop = () => {
+    stopped = true;
+    module.abort();
+    watcher = null;
+  };
+
+  watcher = { stop };
+  module.requestPermissionsAsync().then((permission) => {
+    if (permission.granted) {
+      session();
+      return;
+    }
+    watcher = null;
+    options.onError?.(new VoiceError('not-allowed', MESSAGES['not-allowed']));
+  });
+}
+
+export function stopWakeWordWatch(): void {
+  watcher?.stop();
+  watcher = null;
 }
 
 /** Encerra a escuta agora, aproveitando o que já foi dito. */

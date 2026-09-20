@@ -12,7 +12,16 @@ export type HomeVoiceActions = {
   openEmergency: () => void;
 };
 
-export type HomeVoice = Voice & { onMicPress: () => void };
+export type HomeVoice = Voice & {
+  onMicPress: () => void;
+  /**
+   * Continua a conversa a partir do que a escuta contínua já ouviu (CA-02).
+   *
+   * `rest` é o que veio depois de "Atlas": com um comando dentro, ele é
+   * executado direto; vazio, o Atlas pergunta e ouve a resposta.
+   */
+  resume: (rest: string) => void;
+};
 
 /**
  * A conversa de abertura (RF-03, RF-05, RF-06, §3.1).
@@ -59,36 +68,44 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
     [say],
   );
 
-  const run = useCallback(async () => {
-    const first = await listen();
-    if (!first?.transcript) {
-      return;
-    }
+  const run = useCallback(
+    async (heardAlready?: string) => {
+      let spoken = heardAlready ?? '';
 
-    const command = parseCommand(first.transcript);
-    if (await act(command)) {
-      return;
-    }
+      if (!spoken) {
+        const first = await listen();
+        if (!first?.transcript) {
+          return;
+        }
+        spoken = first.transcript;
+      }
 
-    // "Atlas", "destino" ou algo que não deu para entender: o Atlas pergunta.
-    await say(
-      command.type === 'ask_destination'
-        ? 'Para onde você quer ir?'
-        : 'Não entendi. Para onde você quer ir? Diga, por exemplo: o posto mais próximo.',
-    );
+      const command = parseCommand(spoken);
+      if (await act(command)) {
+        return;
+      }
 
-    const second = await listen();
-    if (!second?.transcript) {
-      return;
-    }
+      // "Atlas", "destino" ou algo que não deu para entender: o Atlas pergunta.
+      await say(
+        command.type === 'ask_destination'
+          ? 'Para onde você quer ir?'
+          : 'Não entendi. Para onde você quer ir? Diga, por exemplo: o posto mais próximo.',
+      );
 
-    const answer = parseCommand(second.transcript);
-    if (!(await act(answer))) {
-      // Sem categoria nem comando: o que foi dito é o nome do lugar.
-      actions.goPlace(second.transcript);
-    }
+      const second = await listen();
+      if (!second?.transcript) {
+        return;
+      }
+
+      const answer = parseCommand(second.transcript);
+      if (!(await act(answer))) {
+        // Sem categoria nem comando: o que foi dito é o nome do lugar.
+        actions.goPlace(second.transcript);
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listen, say, act]);
+    [listen, say, act],
+  );
 
   const onMicPress = useCallback(() => {
     if (state === 'listening') {
@@ -100,5 +117,14 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
     }
   }, [state, finish, run]);
 
-  return { ...voice, onMicPress };
+  const resume = useCallback(
+    (rest: string) => {
+      if (state === 'idle') {
+        run(rest).catch(() => {});
+      }
+    },
+    [state, run],
+  );
+
+  return { ...voice, onMicPress, resume };
 }

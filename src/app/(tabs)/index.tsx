@@ -12,6 +12,7 @@ import { VoicePromptCard } from '@/components/ui/voice-prompt-card';
 import { useApiStatus } from '@/features/api-status/hooks/use-api-status';
 import { useCurrentLocation } from '@/features/location/hooks/use-current-location';
 import { useHomeVoice } from '@/features/voice/hooks/use-home-voice';
+import { useWakeWord } from '@/features/voice/hooks/use-wake-word';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
 import { DEMO_DESTINATION, DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
 import { colors } from '@/theme/colors';
@@ -53,6 +54,17 @@ export default function HomeScreen() {
       router.push({ pathname: '/destination', params: { category, voice: '1' } }),
     goPlace: (query) => router.push({ pathname: '/destination', params: { query, voice: '1' } }),
     openEmergency,
+  });
+
+  /*
+    "Diga Atlas para começar" (RF-02, CA-02). A vigília fica desligada até
+    alguém ligá-la no card: escuta contínua gasta bateria e ouve o carro
+    inteiro, e isso é escolha de quem dirige. Ao ouvir o nome, a conversa
+    continua de onde parou — com o comando já dito, ou perguntando.
+  */
+  const wake = useWakeWord({
+    onWake: (rest) => voice.resume(rest),
+    enabled: voice.state === 'idle',
   });
 
   return (
@@ -125,11 +137,15 @@ export default function HomeScreen() {
             title={
               voice.state === 'listening'
                 ? voice.partial || 'Ouvindo…'
-                : 'Toque e diga "Atlas" para começar'
+                : wake.watching
+                  ? wake.heard || 'Atento — é só dizer "Atlas"'
+                  : 'Toque e diga "Atlas" para começar'
             }
-            subtitle={voice.error ?? 'Ex.: "quero ir para o posto mais próximo"'}
-            listening={voice.state === 'listening'}
+            subtitle={wake.error ?? voice.error ?? 'Ex.: "quero ir para o posto mais próximo"'}
+            listening={voice.state === 'listening' || wake.watching}
             onPress={voice.available ? voice.onMicPress : undefined}
+            onToggleWatch={wake.available ? wake.toggle : undefined}
+            watching={wake.watching}
           />
 
           {/* Acesso rápido à emergência, também fora de viagem (§11). */}

@@ -305,6 +305,18 @@ Sem permissão de câmera, ou com a IA de imagem fora do ar, a miniatura não
 aparece e "Registrar ponto turístico" grava só o local — o escopo pede a
 marcação do ponto, e a foto é o que a enriquece.
 
+#### A voz que escuta sozinha (RF-02, CA-02)
+
+O card de voz da tela inicial tem um interruptor — **Ficar atento** — e a tela
+da viagem tem o mesmo controle num ícone de ouvido. Ligado, o Atlas mantém uma
+sessão de reconhecimento aberta e vigia a palavra "Atlas" no que se fala no
+carro; ao ouvi-la, responde e executa o comando que veio depois. O que passa
+pela vigília **não é gravado nem enviado**: só o trecho reconhecido é lido em
+memória à procura do nome.
+
+Fica desligado por padrão de propósito. Escuta contínua gasta bateria e ouve o
+carro inteiro, e isso é escolha de quem dirige, não padrão do aplicativo.
+
 #### A emoção na voz (RF-15, CA-07)
 
 O áudio de cada comando — o mesmo que o reconhecimento de fala já grava — sobe
@@ -784,12 +796,11 @@ Em ordem, guiados pelos critérios de aceite do escopo. A navegação curva a
 curva está **fora do escopo** (§15) — o que existe fica como extra, sem novo
 investimento (sem recálculo de rota, sem rotas alternativas).
 
-1. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
-2. **Calibrar a emoção** com as vozes do grupo — `uv run python -m
+1. **Calibrar a emoção** com as vozes do grupo — `uv run python -m
    ml.check_emotion gravacoes/` mede os acertos e mostra onde os cortes de
    arousal e valência estão apertados demais.
-3. **Testes do aplicativo** — as funções puras ainda não têm runner.
-4. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
+2. **Testes do aplicativo** — as funções puras ainda não têm runner.
+3. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
 
 ---
 
@@ -801,7 +812,7 @@ investimento (sem recálculo de rota, sem rotas alternativas).
 | Dados | **Supabase / PostgreSQL** | Lugares, cache de rotas, viagens, diário e histórico. Sem login. | **Implementado** |
 | Decisão | **Random Forest** | 6 variáveis → 6 decisões (CONTINUAR, DESCANSAR, ABASTECER, ALIMENTAR-SE, REGISTRAR PONTO TURÍSTICO, FAZER UMA PARADA), sempre com justificativa. Ver [`backend/ml/`](backend/ml/README.md). | **Implementado** |
 | Visão | **Classificação de imagem (CLIP)** | Estrada, Posto, Restaurante, Ponto turístico, sem treino. A câmera lê a cena a cada 5 min e alimenta o Random Forest; a foto só é guardada em "Registrar ponto turístico". | **Implementado** |
-| Áudio | **Voz e emoção** | Palavra "Atlas", comandos, resposta falada; emoção em Cansado, Neutro, Animado, Tenso e Bravo, lida do áudio de cada comando por um modelo dimensional (arousal/valência). | **Implementado** |
+| Áudio | **Voz e emoção** | Palavra "Atlas" com escuta contínua, comandos, resposta falada; emoção em Cansado, Neutro, Animado, Tenso e Bravo, lida do áudio de cada comando por um modelo dimensional (arousal/valência). | **Implementado** |
 | Lugares | **Google Places** + OpenStreetMap | Busca por proximidade nas 5 categorias, com nota; OSM de reserva. | **Implementado** (falta a chave) |
 
 O que já está pronto para receber o resto:

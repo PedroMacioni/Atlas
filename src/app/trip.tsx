@@ -42,6 +42,7 @@ import {
   sendVoiceCommand,
 } from '@/features/voice/services/voice-command-service';
 import { useTripVoice } from '@/features/voice/hooks/use-trip-voice';
+import { useWakeWord } from '@/features/voice/hooks/use-wake-word';
 import { chooseOptionByVoice, confirmByVoice } from '@/features/voice/utils/voice-dialogs';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -390,6 +391,17 @@ export default function TripScreen() {
     },
   });
 
+  /*
+    "Diga Atlas" sem tirar a mão do volante (RF-02, CA-02). Desligada por
+    padrão, como na tela inicial: é escolha de quem dirige. Enquanto o Atlas
+    fala ou ouve um comando, a vigília sai de cena — o reconhecedor do
+    sistema só aceita uma sessão por vez.
+  */
+  const wake = useWakeWord({
+    onWake: (rest) => tripVoice.resume(rest),
+    enabled: tripVoice.state === 'idle',
+  });
+
   // As 3 opções de uma parada pedida por voz: lidas e escolhidas por voz.
   useEffect(() => {
     const places = stopOptions.result?.places;
@@ -570,6 +582,16 @@ export default function TripScreen() {
 
           {notice ? <StatusMessage tone="info" message={notice} floating /> : null}
 
+          {wake.watching ? (
+            <StatusMessage
+              tone="info"
+              message={wake.heard || 'Atento — é só dizer "Atlas".'}
+              floating
+            />
+          ) : wake.error ? (
+            <StatusMessage tone="error" message={wake.error} floating />
+          ) : null}
+
           {recommendations.current ? (
             <RecommendationCard
               recommendation={recommendations.current}
@@ -650,6 +672,19 @@ export default function TripScreen() {
                   tripVoice.state === 'listening' ? 'Parar de ouvir' : 'Falar com o Atlas'
                 }
                 onPress={tripVoice.onMicPress}
+              />
+            ) : null}
+
+            {wake.available ? (
+              <FloatingIconButton
+                icon={wake.watching ? 'ear-hearing' : 'ear-hearing-off'}
+                iconColor={wake.watching ? 'primary' : 'textSecondary'}
+                accessibilityLabel={
+                  wake.watching
+                    ? 'Parar de ouvir a palavra Atlas'
+                    : 'Deixar o Atlas sempre atento à palavra Atlas'
+                }
+                onPress={wake.toggle}
               />
             ) : null}
 

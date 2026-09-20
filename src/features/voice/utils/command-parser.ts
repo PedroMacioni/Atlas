@@ -52,9 +52,37 @@ export function normalize(text: string): string {
     .trim();
 }
 
+/** A palavra de ativação no começo da frase: "ok atlas, registrar parada". */
+const WAKE_WORD_AT_START = /^(?:(?:ok|ei|oi|e ai)\s+)?atlas\b\s*/;
+
+/**
+ * A palavra de ativação em qualquer lugar da frase.
+ *
+ * A escuta contínua ouve tudo o que se fala no carro, e a palavra raramente
+ * cai no começo do trecho reconhecido: "...aí eu pedi pro Atlas achar um
+ * posto" chega inteiro. Por isso aqui ela é procurada no meio, e o que vem
+ * **depois** dela é o comando.
+ */
+const WAKE_WORD_ANYWHERE = /\batlas\b\s*/;
+
+/**
+ * Procura "Atlas" no que foi ouvido de passagem (RF-02, CA-02).
+ *
+ * `rest` é o que veio depois da palavra, e pode ser vazio: quem só chama pelo
+ * nome diz o comando em seguida.
+ */
+export function findWakeWord(raw: string): { found: boolean; rest: string } {
+  const text = normalize(raw);
+  const match = WAKE_WORD_ANYWHERE.exec(text);
+
+  return match
+    ? { found: true, rest: text.slice(match.index + match[0].length).trim() }
+    : { found: false, rest: '' };
+}
+
 /** Tira a palavra de ativação do começo: "ok atlas, registrar parada". */
 export function stripWakeWord(text: string): { rest: string; hadWakeWord: boolean } {
-  const match = /^(?:(?:ok|ei|oi|e ai)\s+)?atlas\b\s*/.exec(text);
+  const match = WAKE_WORD_AT_START.exec(text);
   return match
     ? { rest: text.slice(match[0].length).trim(), hadWakeWord: true }
     : { rest: text, hadWakeWord: false };
