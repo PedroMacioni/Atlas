@@ -74,9 +74,18 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
 
       if (!spoken) {
         const first = await listen();
-        if (!first?.transcript) {
+
+        if (!first) {
+          // Falha de microfone ou permissão: a mensagem já está na tela.
           return;
         }
+
+        if (!first.transcript) {
+          // Silêncio vira resposta falada, e não microfone fechando sozinho.
+          await say('Não ouvi nada. Toque de novo e diga para onde você quer ir.');
+          return;
+        }
+
         spoken = first.transcript;
       }
 
@@ -94,6 +103,7 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
 
       const second = await listen();
       if (!second?.transcript) {
+        await say('Não ouvi nada.');
         return;
       }
 

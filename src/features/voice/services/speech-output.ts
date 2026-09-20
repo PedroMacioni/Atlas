@@ -1,5 +1,7 @@
 import * as Speech from 'expo-speech';
 
+import { prepareAudioForSpeaking } from '@/features/voice/services/speech-recognition';
+
 /**
  * A voz do Atlas (RF-20): recomendações e confirmações faladas em voz alta.
  *
@@ -15,6 +17,21 @@ import * as Speech from 'expo-speech';
  */
 
 const LANGUAGE = 'pt-BR';
+
+/**
+ * Teto para a espera pelo fim da fala.
+ *
+ * `onDone` nem sempre chega: com o aparelho no silencioso, ou com a sessão de
+ * áudio ainda presa no modo do reconhecimento de fala, o `expo-speech` fica
+ * mudo e não avisa. Sem este teto a conversa inteira parava ali — o microfone
+ * fechava e nada mais acontecia.
+ *
+ * O valor acompanha o tamanho do texto: ~90 ms por caractere é mais lento que
+ * qualquer locução real, com um piso de 2 s e um teto de 15 s.
+ */
+const MS_PER_CHARACTER = 90;
+const MIN_TIMEOUT_MS = 2_000;
+const MAX_TIMEOUT_MS = 15_000;
 const MALE_HINTS = /\b(male|masculin[oa]?|felipe|ricardo|daniel|antonio|thiago|bruno)\b|-ptd-|#male/i;
 const FEMALE_HINTS = /female|feminin/i;
 
@@ -46,16 +63,33 @@ function pickVoice(): Promise<string | undefined> {
 export async function speak(text: string): Promise<void> {
   const identifier = await pickVoice();
 
+  // Depois de ouvir, a sessão de áudio do iOS fica no modo de reconhecimento,
+  // em que a fala sai baixa ou não sai.
+  prepareAudioForSpeaking();
   Speech.stop();
 
   await new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(timeoutId);
+        resolve();
+      }
+    };
+
+    const timeoutId = setTimeout(
+      finish,
+      Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, text.length * MS_PER_CHARACTER)),
+    );
+
     Speech.speak(text, {
       language: LANGUAGE,
       voice: identifier,
       rate: 1.0,
-      onDone: () => resolve(),
-      onStopped: () => resolve(),
-      onError: () => resolve(),
+      onDone: finish,
+      onStopped: finish,
+      onError: finish,
     });
   });
 }

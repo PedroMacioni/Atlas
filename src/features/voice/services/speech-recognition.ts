@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule } from 'expo';
+import { Platform } from 'react-native';
 // Só tipos: `import type` some no bundle, então não exige o módulo nativo.
 import type {
   ExpoSpeechRecognitionModule,
@@ -117,6 +118,15 @@ export function listenOnce({ onPartial, hints = [] }: ListenOptions = {}): Promi
 
     return new Promise<Heard>((resolve, reject) => {
       let transcript = '';
+      /*
+        O último texto parcial, guardado como rede de segurança.
+
+        Uma fala curta — "Atlas", "sim", "o primeiro" — às vezes encerra a
+        sessão sem que o resultado **final** chegue: o reconhecedor entrega só
+        parciais e fecha. Sem isto, o Atlas devolvia texto vazio e a conversa
+        morria em silêncio, com o microfone fechando sem explicação.
+      */
+      let lastPartial = '';
       let audioUri: string | null = null;
       let failure: VoiceError | null = null;
 
@@ -125,7 +135,8 @@ export function listenOnce({ onPartial, hints = [] }: ListenOptions = {}): Promi
           const text = event.results[0]?.transcript ?? '';
           if (event.isFinal) {
             transcript = text;
-          } else {
+          } else if (text) {
+            lastPartial = text;
             onPartial?.(text);
           }
         }),
@@ -143,7 +154,7 @@ export function listenOnce({ onPartial, hints = [] }: ListenOptions = {}): Promi
           if (failure) {
             reject(failure);
           } else {
-            resolve({ transcript: transcript.trim(), audioUri });
+            resolve({ transcript: (transcript || lastPartial).trim(), audioUri });
           }
         }),
       ];
@@ -303,6 +314,33 @@ export function startWakeWordWatch(options: WakeWordOptions | null): void {
 export function stopWakeWordWatch(): void {
   watcher?.stop();
   watcher = null;
+}
+
+/**
+ * Devolve a sessão de áudio do iOS ao estado de **falar**.
+ *
+ * A escuta abre a sessão em `playAndRecord` com o modo `measurement`, que é o
+ * certo para reconhecer fala e o errado para reproduzi-la: depois de ouvir, a
+ * voz do Atlas sai baixa ou não sai. Chamado antes de cada fala.
+ *
+ * Só existe no iOS. Em qualquer outro caso, não faz nada — e uma falha aqui
+ * nunca impede o Atlas de tentar falar.
+ */
+export function prepareAudioForSpeaking(): void {
+  if (Platform.OS !== 'ios' || !native) {
+    return;
+  }
+
+  try {
+    native.setCategoryIOS({
+      category: 'playback',
+      categoryOptions: ['duckOthers'],
+      mode: 'spokenAudio',
+    });
+  } catch {
+    // Sessão ocupada por uma ligação, por exemplo: falar baixo é melhor que
+    // não falar.
+  }
 }
 
 /** Encerra a escuta agora, aproveitando o que já foi dito. */
