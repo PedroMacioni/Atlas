@@ -677,6 +677,10 @@ dentro do provider — a tradução é responsabilidade dele, não da interface.
 O backend tem README próprio, com os endpoints, o envelope de erro e o esquema
 do banco: **[`backend/README.md`](backend/README.md)**.
 
+A visão completa do sistema — aplicativo, backend, os três modelos, os dados e
+a rastreabilidade dos critérios de aceite — está em
+**[`docs/documentacao-tecnica.md`](docs/documentacao-tecnica.md)**.
+
 O que ele muda no lado do aplicativo:
 
 | Antes | Agora |
