@@ -31,6 +31,8 @@ class FakeTripRepository:
         self.trips: dict[str, dict[str, Any]] = {}
         self.events: list[dict[str, Any]] = []
         self.stops: list[dict[str, Any]] = []
+        self.photos: list[dict[str, Any]] = []
+        self.uploads: list[tuple[str, bytes]] = []
 
     async def ensure_device(self, anonymous_uuid: UUID) -> UUID:
         return self.devices.setdefault(str(anonymous_uuid), uuid4())
@@ -77,6 +79,28 @@ class FakeTripRepository:
 
     async def list_stops(self, trip_id):
         return [s for s in self.stops if s["trip_id"] == str(trip_id)]
+
+    # --- fotos (RF-22) ---
+
+    async def upload_photo(self, path, content):
+        self.uploads.append((path, content))
+        return path
+
+    async def add_photo(self, row):
+        stored = {**row, "id": str(uuid4())}
+        self.photos.append(stored)
+        return stored
+
+    async def list_photos(self, trip_id):
+        events = {e["id"]: e for e in self.events if e["trip_id"] == str(trip_id)}
+        return [
+            {**p, "trip_events": events[p["trip_event_id"]]}
+            for p in self.photos
+            if p["trip_event_id"] in events
+        ]
+
+    async def sign_photos(self, paths, *, expires_in):
+        return {path: f"https://storage.test/{path}?token=assinado" for path in paths}
 
     # --- recomendações ---
 

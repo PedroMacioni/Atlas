@@ -5,11 +5,15 @@ Toda rota exige o cabeçalho `X-Atlas-Device` — o UUID anônimo do aparelho. N
 há DELETE: o histórico é mantido por tempo indeterminado (RF-30).
 """
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, File, Form, Query, UploadFile, status
 
-from app.core.dependencies import DeviceDep, TripServiceDep
+from app.core.dependencies import DeviceDep, SceneServiceDep, TripServiceDep
+from app.core.errors import InvalidImageError
+from app.schemas.coordinate import Coordinate
+from app.schemas.scene import ScenePurpose, SceneResponse
 from app.schemas.trip import (
     EventCreateRequest,
     Stop,
@@ -69,7 +73,7 @@ async def record_event(
 async def add_stop(
     trip_id: UUID, payload: StopCreateRequest, device: DeviceDep, service: TripServiceDep
 ) -> Stop:
-    """"Registrar parada": grava a parada e o evento correspondente no diário."""
+    """ "Registrar parada": grava a parada e o evento correspondente no diário."""
     return await service.add_stop(device, trip_id, payload)
 
 
@@ -83,3 +87,48 @@ async def finish_trip(
 ) -> TripDetail:
     """Encerra a viagem e devolve o resumo final."""
     return await service.finish(device, trip_id, payload)
+
+
+# Uma foto de celular a 1280 px e qualidade média fica em algumas centenas de
+# kB. 5 MB é o limite do bucket, e recusar antes de ler o arquivo inteiro
+# evita que um engano ocupe a memória da API.
+MAX_PHOTO_BYTES = 5 * 1024 * 1024
+
+
+@router.post("/{trip_id}/scenes", response_model=SceneResponse, responses=_NOT_FOUND | _FINISHED)
+async def classify_scene(
+    trip_id: UUID,
+    device: DeviceDep,
+    service: SceneServiceDep,
+    image: Annotated[UploadFile, File(description="A foto, em JPEG.")],
+    purpose: Annotated[ScenePurpose, Form()] = ScenePurpose.CONTEXT,
+    latitude: Annotated[float | None, Query(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Query(ge=-180, le=180)] = None,
+) -> SceneResponse:
+    """
+    Classifica a cena em Estrada, Posto, Restaurante ou Ponto turístico
+    (RF-16, CA-06).
+
+    `purpose=context` é a leitura automática da câmera: vira classe no diário,
+    e a foto não é guardada. `purpose=tourist_spot` é o "Registrar ponto
+    turístico": a foto fica, e volta na resposta com uma URL temporária.
+
+    `recorded=false` diz que a leitura não virou evento — a cena não mudou
+    desde a anterior, ou a confiança ficou baixa demais para valer um registro.
+    """
+    content = await image.read()
+
+    if not content:
+        raise InvalidImageError("Nenhuma imagem foi enviada.")
+    if len(content) > MAX_PHOTO_BYTES:
+        raise InvalidImageError("A imagem passa de 5 MB.")
+
+    location = (
+        Coordinate(latitude=latitude, longitude=longitude)
+        if latitude is not None and longitude is not None
+        else None
+    )
+
+    return await service.classify(
+        device, trip_id, image=content, purpose=purpose, location=location
+    )

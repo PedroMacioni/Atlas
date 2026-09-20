@@ -16,6 +16,7 @@ zero rodando estes arquivos na ordem do nome.
 | `20260918025647_create_trips_journal.sql` | `devices`, `trips`, `trip_events`, `stops`, `photos`, `recommendations` — viagens, diário de bordo e histórico sem login (escopo §8 e §10). |
 | `20260918040306_recommendation_features.sql` | `recommendations` guarda as 6 variáveis, as probabilidades, o gatilho, a versão do modelo e se foi simulação — os testes reais viram dataset. |
 | `20260918112314_seed_marechal_rondon_700.sql` | Av. Marechal Rondon, 700 (Jardim Chapadão, Campinas) nos salvos, logo abaixo da faculdade. |
+| `20260919191410_scene_readings_and_photo_bucket.sql` | Evento `scene` (a foto automática que só vira classe), `image_confidence` e o bucket privado `photos` para as fotos de ponto turístico. |
 
 ## Como aplicar
 

@@ -5,6 +5,9 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
+import { SceneCamera, type SceneCameraHandle } from '@/features/camera/components/scene-camera';
+import { useSceneReadings } from '@/features/camera/hooks/use-scene-readings';
+import { describeSceneError } from '@/features/camera/services/scene-service';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
@@ -30,6 +33,7 @@ import {
   describeTripError,
   recordEvent,
 } from '@/features/trip-session/services/trip-session-service';
+import { IMAGE_CLASS_LABELS } from '@/features/trip-session/constants/journal-labels';
 import type { EndReason } from '@/features/trip-session/types/trip';
 import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
 import { VoiceIndicator } from '@/features/voice/components/voice-indicator';
@@ -85,6 +89,7 @@ export default function TripScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<AtlasMapHandle>(null);
+  const cameraRef = useRef<SceneCameraHandle>(null);
 
   const destination = useTripDestination();
   const tracking = useLocationTracking();
@@ -121,6 +126,18 @@ export default function TripScreen() {
   const recommendations = useRecommendations({
     tripId: session.tripId,
     traveledMeters: session.traveledMeters,
+    location: tracking.position?.coordinate ?? null,
+  });
+
+  /*
+    A câmera lendo a estrada (RF-16, RF-22). A leitura automática vira só a
+    classe da cena no diário — é a variável "imagem" do Random Forest. A foto
+    guardada é a do ponto turístico, pedida por voz, pelo toque na miniatura
+    ou por uma recomendação aceita.
+  */
+  const scene = useSceneReadings({
+    tripId: session.tripId,
+    camera: cameraRef,
     location: tracking.position?.coordinate ?? null,
   });
 
@@ -268,11 +285,31 @@ export default function TripScreen() {
     }
   };
 
-  /** "Registrar ponto turístico": o local vai para o diário (RF-11). */
+  /**
+   * "Registrar ponto turístico": foto, classe e local no diário (RF-11,
+   * RF-22).
+   *
+   * Com a câmera pronta, a foto é tirada e classificada — é ela que aparece
+   * no resumo final. Sem câmera, sem permissão ou com a IA de imagem fora do
+   * ar, o registro acontece assim mesmo, só com o local: o escopo pede a
+   * marcação do ponto, e a foto é o que a enriquece.
+   */
   const registerTouristSpot = async () => {
     if (!session.tripId) {
       throw new Error('A viagem não está sendo registrada.');
     }
+
+    if (cameraRef.current?.isReady()) {
+      try {
+        const result = await scene.registerTouristSpot();
+        const label = IMAGE_CLASS_LABELS[result.imageClass];
+        flash(`Ponto turístico registrado — a IA viu ${label.toLowerCase()}.`);
+        return;
+      } catch (cause) {
+        flash(`${describeSceneError(cause)} Registrando só o local.`);
+      }
+    }
+
     await recordEvent(session.tripId, {
       kind: 'tourist_spot',
       command: 'Ponto turístico registrado',
@@ -562,6 +599,22 @@ export default function TripScreen() {
             instrução, que é o elemento mais importante da tela.
           */}
           <View style={styles.mapActions} pointerEvents="box-none">
+            {/*
+              O que a IA está vendo. Só aparece com a viagem sendo registrada
+              e com a permissão dada — sem isso, a câmera não se monta.
+            */}
+            {session.status === 'active' ? (
+              <SceneCamera
+                ref={cameraRef}
+                caption={scene.caption}
+                onPress={() => {
+                  registerTouristSpot().catch((cause: unknown) =>
+                    flash(describeSceneError(cause)),
+                  );
+                }}
+              />
+            ) : null}
+
             {/* Só num development build: no Expo Go não há reconhecimento de fala. */}
             {tripVoice.available ? (
               <FloatingIconButton

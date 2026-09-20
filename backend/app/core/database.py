@@ -24,6 +24,18 @@ class SupabaseRest:
     """Cliente fino do PostgREST, com o tempo limite e os erros já resolvidos."""
 
     def __init__(self, settings: Settings) -> None:
+        base = str(settings.supabase_url).rstrip("/")
+        credentials = {
+            "apikey": settings.supabase_service_key,
+            "authorization": f"Bearer {settings.supabase_service_key}",
+        }
+        # Storage é outra API do mesmo projeto, com a mesma chave: as fotos do
+        # diário de bordo ficam num bucket privado, e só este processo o alcança.
+        self._storage = httpx.AsyncClient(
+            base_url=f"{base}/storage/v1",
+            headers=credentials,
+            timeout=settings.outbound_timeout_seconds,
+        )
         self._client = httpx.AsyncClient(
             base_url=f"{str(settings.supabase_url).rstrip('/')}/rest/v1",
             headers={
@@ -37,6 +49,59 @@ class SupabaseRest:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+        await self._storage.aclose()
+
+    async def upload(self, bucket: str, path: str, content: bytes, *, content_type: str) -> str:
+        """Grava um arquivo no bucket e devolve o caminho onde ele ficou."""
+        try:
+            response = await self._storage.post(
+                f"/object/{bucket}/{path}",
+                content=content,
+                headers={"content-type": content_type},
+            )
+        except httpx.HTTPError as error:
+            raise DatabaseUnavailable("Não foi possível guardar o arquivo.", error) from error
+
+        if response.is_error:
+            raise DatabaseUnavailable(
+                f"O armazenamento respondeu com erro ({response.status_code}): "
+                f"{response.text[:200]}"
+            )
+
+        return path
+
+    async def sign(self, bucket: str, paths: list[str], *, expires_in: int) -> dict[str, str]:
+        """
+        URLs temporárias para arquivos de um bucket privado.
+
+        Uma chamada para a lista inteira, e o que falhar simplesmente não entra
+        no resultado — uma foto ilegível não pode derrubar o resumo da viagem.
+        """
+        if not paths:
+            return {}
+
+        try:
+            response = await self._storage.post(
+                f"/object/sign/{bucket}",
+                json={"paths": paths, "expiresIn": expires_in},
+            )
+        except httpx.HTTPError as error:
+            raise DatabaseUnavailable("Não foi possível assinar as fotos.", error) from error
+
+        if response.is_error:
+            raise DatabaseUnavailable(
+                f"O armazenamento respondeu com erro ({response.status_code}): "
+                f"{response.text[:200]}"
+            )
+
+        signed = {}
+        for item in self._json(response) or []:
+            url, path = item.get("signedURL"), item.get("path")
+            if url and path and not item.get("error"):
+                # O `signedURL` vem relativo a `/storage/v1`.
+                signed[path] = f"{str(self._storage.base_url).rstrip('/')}{url}"
+
+        return signed
 
     async def select(
         self,

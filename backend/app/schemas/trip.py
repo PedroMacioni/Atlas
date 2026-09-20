@@ -48,6 +48,8 @@ class EventKind(StrEnum):
     RECOMMENDATION = "recommendation"
     TOURIST_SPOT = "tourist_spot"
     EMERGENCY = "emergency"
+    # Leitura automática da câmera: só a classe fica, a foto não (RF-22).
+    SCENE = "scene"
 
 
 class EndReason(StrEnum):
@@ -84,6 +86,7 @@ class EventCreateRequest(ApiModel):
     emotion: Emotion | None = None
     emotion_confidence: float | None = Field(default=None, ge=0, le=1)
     image_class: ImageClass | None = None
+    image_confidence: float | None = Field(default=None, ge=0, le=1)
     decision: Decision | None = None
     justification: str | None = Field(default=None, max_length=1000)
 
@@ -119,6 +122,7 @@ class TripEvent(ApiModel):
     emotion: Emotion | None = None
     emotion_confidence: float | None = None
     image_class: ImageClass | None = None
+    image_confidence: float | None = None
     decision: Decision | None = None
     justification: str | None = None
 
@@ -151,6 +155,18 @@ class TripCard(ApiModel):
     predominant_emotion: Emotion | None = None
 
 
+class Photo(ApiModel):
+    """Uma foto guardada no diário (RF-22, CA-14)."""
+
+    id: UUID
+    event_id: UUID
+    # URL temporária do bucket privado. Expira; o app a busca junto da viagem.
+    url: str
+    image_class: ImageClass | None = None
+    taken_at: datetime
+    location: Coordinate | None = None
+
+
 class TripDetail(TripCard):
     """Resumo final e detalhe do histórico (RF-26, RF-29)."""
 
@@ -158,6 +174,8 @@ class TripDetail(TripCard):
     path: list[Coordinate] = Field(default_factory=list)
     stops: list[Stop] = Field(default_factory=list)
     events: list[TripEvent] = Field(default_factory=list)
+    # Em ordem cronológica, como o resumo final as apresenta (§7.2).
+    photos: list[Photo] = Field(default_factory=list)
     # "Maior trecho sem parada" do resumo (§7.2), em segundos. `null` enquanto
     # a viagem não terminou.
     longest_stretch_without_stop_seconds: float | None = None

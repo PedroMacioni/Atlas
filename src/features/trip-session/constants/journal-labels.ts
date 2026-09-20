@@ -48,4 +48,5 @@ export const EVENT_VISUALS: Record<EventKind, { title: string; icon: IconName; c
     recommendation: { title: 'Recomendação', icon: 'lightbulb-on-outline', color: 'categoryLodging' },
     tourist_spot: { title: 'Ponto turístico', icon: 'camera', color: 'categoryNature' },
     emergency: { title: 'Emergência', icon: 'alarm-light', color: 'danger' },
+    scene: { title: 'Leitura da câmera', icon: 'camera-outline', color: 'textSecondary' },
   };

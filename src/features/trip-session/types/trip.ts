@@ -27,7 +27,9 @@ export type EventKind =
   | 'command'
   | 'recommendation'
   | 'tourist_spot'
-  | 'emergency';
+  | 'emergency'
+  /** Leitura automática da câmera: vira classe, não vira foto guardada. */
+  | 'scene';
 
 /** As três formas de encerrar uma viagem (RF-25). */
 export type EndReason = 'arrival' | 'button' | 'voice';
@@ -41,6 +43,7 @@ export type TripEvent = {
   emotion: Emotion | null;
   emotionConfidence: number | null;
   imageClass: ImageClass | null;
+  imageConfidence: number | null;
   decision: Decision | null;
   justification: string | null;
 };
@@ -53,6 +56,17 @@ export type TripStop = {
   reason: string | null;
   location: Coordinate;
   createdAt: string;
+};
+
+/** Uma foto guardada no diário (RF-22, CA-14). */
+export type TripPhoto = {
+  id: string;
+  eventId: string;
+  /** URL temporária, assinada pela API. Expira — vem junto da viagem. */
+  url: string;
+  imageClass: ImageClass | null;
+  takenAt: string;
+  location: Coordinate | null;
 };
 
 /** Card do histórico (RF-28). */
@@ -74,6 +88,7 @@ export type TripCard = {
 export type TripDetail = TripCard & {
   origin: Coordinate;
   path: Coordinate[];
+  photos: TripPhoto[];
   stops: TripStop[];
   events: TripEvent[];
   longestStretchWithoutStopSeconds: number | null;

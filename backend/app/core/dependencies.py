@@ -23,6 +23,7 @@ from app.services.nearby_service import NearbyService
 from app.services.place_service import PlaceService
 from app.services.recommendation_service import RecommendationService
 from app.services.route_service import RouteService
+from app.services.scene_service import SceneService
 from app.services.trip_service import TripService
 
 
@@ -62,8 +63,21 @@ def get_trip_repository(database: DatabaseDep) -> TripRepository:
 
 def get_trip_service(
     repository: Annotated[TripRepository, Depends(get_trip_repository)],
+    settings: SettingsDep,
 ) -> TripService:
-    return TripService(repository)
+    return TripService(repository, photo_url_ttl_seconds=settings.photo_url_ttl_seconds)
+
+
+def get_scene_service(
+    request: Request,
+    repository: Annotated[TripRepository, Depends(get_trip_repository)],
+    settings: SettingsDep,
+) -> SceneService:
+    return SceneService(
+        repository,
+        request.app.state.scene_classifier,
+        photo_url_ttl_seconds=settings.photo_url_ttl_seconds,
+    )
 
 
 def get_decision_model(request: Request) -> DecisionModel | None:
@@ -88,6 +102,7 @@ PlaceServiceDep = Annotated[PlaceService, Depends(get_place_service)]
 NearbyServiceDep = Annotated[NearbyService, Depends(get_nearby_service)]
 RouteServiceDep = Annotated[RouteService, Depends(get_route_service)]
 TripServiceDep = Annotated[TripService, Depends(get_trip_service)]
+SceneServiceDep = Annotated[SceneService, Depends(get_scene_service)]
 RecommendationServiceDep = Annotated[RecommendationService, Depends(get_recommendation_service)]
 
 # Identificador anônimo do aparelho (escopo §8). Sem login: o aplicativo gera

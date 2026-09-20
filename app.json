@@ -32,7 +32,8 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
       ]
     },
     "plugins": [
@@ -54,6 +55,13 @@
           "isAndroidBackgroundLocationEnabled": false,
           "locationAlwaysPermission": "O Atlas usa sua localização para mostrar onde você está no mapa e orientar o trajeto.",
           "motionUsagePermission": "O Atlas não usa os sensores de movimento; esta permissão não é solicitada."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Atlas usa a câmera para classificar a cena da viagem e registrar pontos turísticos.",
+          "recordAudioAndroid": false
         }
       ],
       "expo-font",

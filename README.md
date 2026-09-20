@@ -279,18 +279,38 @@ os cards têm altura de conteúdo e o mapa é o único elemento elástico. Em to
 o efeito é o mesmo — nenhuma competição de gesto entre o arrasto do mapa e o
 rolamento da tela.
 
+#### A câmera que a IA usa (RF-16, RF-22, CA-06)
+
+No alto, à direita, uma **miniatura do tamanho de um crachá** mostra o que a
+câmera traseira está vendo, com a última classe embaixo: "Estrada", "Posto",
+"Restaurante" ou "Ponto turístico".
+
+Ela é visível de propósito, por duas razões. O `expo-camera` só fotografa com
+a pré-visualização montada e pronta — não existe captura escondida. E uma
+câmera que fotografa sem aparecer seria desonesta com quem está no carro.
+
+Dois usos, como o escopo separa (RF-22):
+
+| | Leitura automática | "Registrar ponto turístico" |
+|---|---|---|
+| Quem dispara | O Atlas, a cada 5 min (o primeiro, 30 s após a partida) | Você: por voz, tocando a miniatura, ou aceitando a recomendação |
+| A foto fica? | Não. Só a classe vai para o diário | Sim, no bucket privado |
+| Para quê | É a variável **imagem** do Random Forest; uma cena nova de posto ou restaurante dispara a próxima avaliação | Aparece no resumo final e no histórico (CA-14) |
+
+A leitura automática não vira evento toda vez: só quando a classe muda, quando
+a anterior está envelhecendo (20 min) ou quando é a primeira. Um diário cheio
+de "estrada, estrada, estrada" não diria nada a mais ao modelo.
+
+Sem permissão de câmera, ou com a IA de imagem fora do ar, a miniatura não
+aparece e "Registrar ponto turístico" grava só o local — o escopo pede a
+marcação do ponto, e a foto é o que a enriquece.
+
 ### O que aparece mas não funciona
 
-Dois elementos do design existem como casca visual, atenuados e marcados
-**"Em breve"**, porque as capacidades que eles representam são fases futuras:
-
-- **`Diga "Atlas" para começar`** — reconhecimento de fala exige módulo nativo
-  de terceiros que não roda no Expo Go.
-- **Chips de categoria** (posto, restaurante, hotel, hospital) — dependem do
-  Google Places.
-
-Nenhum dos dois é tocável. Um microfone que não ouve é pior que um microfone
-ausente, e o mesmo vale para um botão que não busca nada.
+Um elemento do design existe como casca visual, atenuado e marcado
+**"Em breve"**: **`Diga "Atlas" para começar`** — a escuta contínua da palavra
+"Atlas", sem toque, ainda não existe (o microfone com toque, sim). Ele não é
+tocável: um microfone que não ouve é pior que um microfone ausente.
 
 ---
 
@@ -460,7 +480,8 @@ Nenhuma versão foi fixada manualmente — todas foram resolvidas por
 | `react-native-safe-area-context` | Recortes de tela (Dynamic Island, barra de status). |
 | `react-native-gesture-handler` | Gesto de arraste do painel da viagem. Exige `GestureHandlerRootView` na raiz. |
 | `react-native-reanimated` + `react-native-worklets` | Animação do painel na thread de UI. O plugin de Babel entra sozinho pelo `babel-preset-expo` quando o pacote está instalado — não há `babel.config.js` no projeto. |
-| `expo-image` | Reservado para as próximas fases; ainda não utilizado. |
+| `expo-camera` | Câmera da viagem: leitura da cena e foto do ponto turístico. Exige development build. |
+| `expo-image` | Fotos da viagem no resumo e no histórico, com cache por `recyclingKey`. |
 
 Sobre os ícones: o design pede a mesma cor de categoria no iOS e no Android
 (bomba azul, garfo laranja, cama roxa, cruz vermelha). SF Symbols não existe no
@@ -723,10 +744,11 @@ testada com 25 frases.
 funciona; a escuta contínua da palavra "Atlas", sem toque, vem depois de o
 fluxo ser validado no aparelho.
 
-### Development build (obrigatório para a voz)
+### Development build (obrigatório para a voz e a câmera)
 
-O reconhecimento de fala é um módulo nativo e **não existe no Expo Go**. No
-Expo Go o app continua abrindo — o microfone só não aparece. Para ter voz:
+Reconhecimento de fala e câmera são módulos nativos e **não existem no Expo
+Go**. Lá o app continua abrindo: o microfone não aparece e a miniatura da
+câmera também não. Para ter os dois:
 
 ```bash
 npm install -g eas-cli
@@ -761,11 +783,9 @@ investimento (sem recálculo de rota, sem rotas alternativas).
 1. **Emoção na voz** (CA-07) — o áudio de cada comando já é gravado no
    aparelho; falta enviá-lo ao Python e classificar nos 5 estados.
 2. **Escuta contínua de "Atlas"** (CA-02) — sem toque, por cima do botão.
-3. **Câmera + classificação de imagem** (CA-06) — `expo-camera`, foto salva
-   em "Registrar ponto turístico", classe gravada no diário.
-4. **Testes do aplicativo** — as funções puras (`trip-progress`, `geo`,
+3. **Testes do aplicativo** — as funções puras (`trip-progress`, `geo`,
    `traveled-track`, `maneuver-text`, `filter-places`...) ainda não têm runner.
-5. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
+4. **Ensaio dos 6 cenários de demonstração** do §19, de ponta a ponta.
 
 ---
 
@@ -776,7 +796,7 @@ investimento (sem recálculo de rota, sem rotas alternativas).
 | Backend | **FastAPI / Python** | API local: rotas, lugares, viagens e, a seguir, os modelos de IA. | **Implementado** |
 | Dados | **Supabase / PostgreSQL** | Lugares, cache de rotas, viagens, diário e histórico. Sem login. | **Implementado** |
 | Decisão | **Random Forest** | 6 variáveis → 6 decisões (CONTINUAR, DESCANSAR, ABASTECER, ALIMENTAR-SE, REGISTRAR PONTO TURÍSTICO, FAZER UMA PARADA), sempre com justificativa. Ver [`backend/ml/`](backend/ml/README.md). | **Implementado** |
-| Visão | **Classificação de imagem** | Estrada, Posto, Restaurante, Ponto turístico. | Previsto |
+| Visão | **Classificação de imagem (CLIP)** | Estrada, Posto, Restaurante, Ponto turístico, sem treino. A câmera lê a cena a cada 5 min e alimenta o Random Forest; a foto só é guardada em "Registrar ponto turístico". | **Implementado** |
 | Áudio | **Voz e emoção** | Palavra "Atlas", comandos, resposta falada; emoção em Cansado, Neutro, Animado, Tenso, Bravo. | **Parcial** — comandos e resposta falada sim; escuta contínua e emoção não |
 | Lugares | **Google Places** + OpenStreetMap | Busca por proximidade nas 5 categorias, com nota; OSM de reserva. | **Implementado** (falta a chave) |
 
@@ -786,6 +806,6 @@ O que já está pronto para receber o resto:
   `emotion`, `imageClass`, `decision`, `justification` — com os vocabulários
   do escopo fechados no banco e no tipo. O resumo e a linha do tempo já os
   exibem.
-- `recommendations` e `photos` já existem no banco, esperando os modelos e a
-  câmera.
+- `recommendations` e `photos` estão em uso: a câmera já grava a classe da
+  cena no diário e guarda a foto do ponto turístico.
 - O prefixo `/v1` nas rotas deixa espaço para evoluir o contrato.

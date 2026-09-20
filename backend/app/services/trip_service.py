@@ -7,19 +7,21 @@ recomendação é um evento do diário com `decision` e `justification`, uma
 emoção detectada é um evento com `emotion`. O resumo já sabe ler esses campos.
 """
 
+import logging
 from collections import Counter
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from app.core.errors import TripAlreadyFinished, TripNotFound
+from app.core.errors import DatabaseUnavailable, TripAlreadyFinished, TripNotFound
 from app.repositories.trip_repository import TripRepository
 from app.schemas.coordinate import Coordinate
 from app.schemas.trip import (
     Emotion,
     EventCreateRequest,
     EventKind,
+    Photo,
     Stop,
     StopCreateRequest,
     TripCard,
@@ -34,10 +36,13 @@ from app.schemas.trip import (
 # demonstração, e cem viagens já é mais do que o grupo vai fazer.
 HISTORY_LIMIT = 100
 
+logger = logging.getLogger("atlas.api")
+
 
 class TripService:
-    def __init__(self, repository: TripRepository) -> None:
+    def __init__(self, repository: TripRepository, *, photo_url_ttl_seconds: int = 3_600) -> None:
         self._repository = repository
+        self._photo_url_ttl = photo_url_ttl_seconds
 
     async def start(self, device: UUID, payload: TripCreateRequest) -> TripDetail:
         device_id = await self._repository.ensure_device(device)
@@ -85,6 +90,7 @@ class TripService:
                 "emotion": _value(payload.emotion),
                 "emotion_confidence": payload.emotion_confidence,
                 "image_class": _value(payload.image_class),
+                "image_confidence": payload.image_confidence,
                 "decision": _value(payload.decision),
                 "justification": payload.justification,
             }
@@ -176,7 +182,45 @@ class TripService:
 
         stops = await self._repository.list_stops(row["id"])
         events = await self._repository.list_events(row["id"])
-        return _detail(row, stops=stops, events=events)
+        photos = await self._photos(row["id"])
+        return _detail(row, stops=stops, events=events, photos=photos)
+
+    async def _photos(self, trip_id: Any) -> list[Photo]:
+        """
+        As fotos da viagem, com URL temporária (RF-22, CA-14).
+
+        Uma falha aqui não derruba o resumo: sem armazenamento, a viagem
+        aparece sem as fotos, e é melhor que uma tela de erro.
+        """
+        try:
+            rows = await self._repository.list_photos(trip_id)
+            signed = await self._repository.sign_photos(
+                [row["storage_path"] for row in rows], expires_in=self._photo_url_ttl
+            )
+        except DatabaseUnavailable as error:
+            logger.warning("Fotos indisponíveis nesta viagem: %s", error)
+            return []
+
+        photos = []
+        for row in rows:
+            event = row.get("trip_events") or {}
+            url = signed.get(row["storage_path"])
+
+            if not url:
+                continue
+
+            photos.append(
+                Photo(
+                    id=row["id"],
+                    event_id=event["id"],
+                    url=url,
+                    image_class=event.get("image_class"),
+                    taken_at=event["occurred_at"],
+                    location=_coordinate(event.get("latitude"), event.get("longitude")),
+                )
+            )
+
+        return photos
 
     async def open_trip(self, device: UUID, trip_id: UUID) -> tuple[UUID, dict[str, Any]]:
         """A viagem, desde que seja do aparelho e ainda esteja em andamento."""
@@ -258,7 +302,13 @@ def _card(row: dict[str, Any]) -> TripCard:
     )
 
 
-def _detail(row: dict[str, Any], *, stops: list[dict], events: list[dict]) -> TripDetail:
+def _detail(
+    row: dict[str, Any],
+    *,
+    stops: list[dict],
+    events: list[dict],
+    photos: list[Photo] | None = None,
+) -> TripDetail:
     card = _card({**row, "stops": [{"count": len(stops)}]})
     stretch = None
 
@@ -277,6 +327,7 @@ def _detail(row: dict[str, Any], *, stops: list[dict], events: list[dict]) -> Tr
         **card.model_dump(),
         origin=Coordinate(latitude=row["origin_latitude"], longitude=row["origin_longitude"]),
         path=_path(row.get("path")),
+        photos=photos or [],
         stops=[_stop(stop) for stop in stops],
         events=[_event(event) for event in events],
         longest_stretch_without_stop_seconds=stretch,
@@ -293,6 +344,7 @@ def _event(row: dict[str, Any]) -> TripEvent:
         emotion=row.get("emotion"),
         emotion_confidence=row.get("emotion_confidence"),
         image_class=row.get("image_class"),
+        image_confidence=row.get("image_confidence"),
         decision=row.get("decision"),
         justification=row.get("justification"),
     )

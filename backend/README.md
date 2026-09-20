@@ -180,6 +180,7 @@ em `schemas/trip.py` e nos `CHECK` do banco:
 |---|---|
 | `emotion` | `cansado`, `neutro`, `animado`, `tenso`, `bravo` |
 | `imageClass` | `estrada`, `posto`, `restaurante`, `ponto_turistico` |
+| `kind` | `trip_started`, `trip_ended`, `stop`, `command`, `recommendation`, `tourist_spot`, `emergency`, `scene` |
 | `decision` | `continuar`, `descansar`, `abastecer`, `alimentar`, `registrar_ponto_turistico`, `fazer_parada` |
 
 ### Opções próximas (`GET /v1/nearby`)
@@ -281,6 +282,54 @@ limite.
    API mostra a resposta do Google — quase sempre a API não ativada (passo 3)
    ou a restrição da chave (passo 4).
 
+### Câmera (`POST /v1/trips/{id}/scenes`)
+
+A foto sobe como `multipart/form-data` no campo `image` (JPEG, até 5 MB), com
+`purpose` no corpo e a posição na query:
+
+| `purpose` | O que acontece | Guarda a foto? |
+|---|---|---|
+| `context` (padrão) | Leitura automática da câmera. Vira um evento `scene` com a classe e a confiança. | Não |
+| `tourist_spot` | "Registrar ponto turístico": evento `tourist_spot`, foto no bucket privado e URL assinada na resposta. | Sim |
+
+A resposta traz `imageClass`, `confidence`, as 4 `probabilities` e `recorded`.
+`recorded: false` com `reason` diz por que a leitura não virou evento:
+
+- `unchanged` — a cena é a mesma da leitura anterior e ela ainda é recente
+  (menos de 20 min). O diário não ganha "estrada, estrada, estrada", e o
+  modelo já tem essa leitura;
+- `low_confidence` — abaixo de 0,5 a câmera pegou o painel, o céu ou a
+  traseira de um caminhão. O ponto turístico pedido pelo usuário é gravado de
+  qualquer jeito: quem mandou registrar foi ele.
+
+Uma leitura que **muda** a cena para posto, restaurante ou ponto turístico
+dispara a próxima avaliação do Random Forest (`ml/policy.evaluation_due`) — é
+por isso que a câmera existe no fluxo, e não só no álbum.
+
+As fotos guardadas voltam em `photos` no detalhe da viagem (`GET
+/v1/trips/{id}`), em ordem cronológica e com URL temporária — o resumo final
+e o histórico as mostram (CA-14).
+
+### Configurar a câmera
+
+O classificador é o **CLIP** (`openai/clip-vit-base-patch32`), que compara a
+foto com descrições em texto: não há treino, e as 4 classes do escopo são
+frases em `app/vision/scene_classifier.py`. Medido em 20/09/2026 num Ryzen 7
+5700X3D, leva ~50 ms por foto na CPU.
+
+```bash
+uv sync --extra vision
+```
+
+O modelo (~600 MB) é baixado do Hugging Face na primeira subida e fica no
+cache do usuário. O carregamento acontece **numa thread**: a API sobe na hora
+e, até o modelo ficar pronto, a câmera responde `vision_unavailable`. Sem o
+extra instalado ou com `ATLAS_VISION_ENABLED=false`, a câmera fica inerte e o
+resto da viagem funciona igual.
+
+O bucket `photos` é privado e só a chave de serviço o alcança; o aplicativo
+recebe URLs assinadas, válidas por `ATLAS_PHOTO_URL_TTL_SECONDS`.
+
 ### Recomendações (Random Forest)
 
 O modelo, o dataset, as regras da equipe, a política de quando avaliar e a
@@ -314,6 +363,8 @@ como já fazia com `HttpError.kind` em `utils/http.ts`.
 | `model_unavailable` | 503 | O modelo não foi treinado ou não carregou — rode `ml/train.py`. |
 | `simulation_disabled` | 403 | Modo de demonstração desligado (`ATLAS_ML_SIMULATION_ENABLED=false`). |
 | `recommendation_not_found` | 404 | Recomendação que não é desta viagem. |
+| `vision_unavailable` | 503 | O classificador de imagem está carregando, desligado ou sem o extra `vision`. |
+| `invalid_image` | 422 | O arquivo enviado não é uma imagem, está vazio ou passa de 5 MB. |
 | `nearby_unavailable` | 502 | Nenhuma fonte de lugares próximos respondeu, nem o OpenStreetMap. |
 | `database_unavailable` | 503 | O Supabase não respondeu. |
 | `internal_error` | 500 | Falha não prevista. O detalhe fica no log, nunca no corpo. |
@@ -473,8 +524,8 @@ aplicativo não percebe.
 
 1. **Busca de endereço por texto** (RF-04) — hoje o texto busca só os lugares
    salvos. O *Text Search* do Places resolve, em outro SKU.
-2. **Emoção na voz e classificação de imagem** — endpoints que recebem áudio e
-   foto do app e devolvem a classe e a confiança.
+2. **Emoção na voz** — o endpoint que recebe o áudio do app e devolve a
+   emoção e a confiança, como `scenes` já faz com a foto.
 3. **Limpeza do cache** — um `pg_cron` diário apagando linhas vencidas.
 
 Não há autenticação no plano: o escopo exclui login, e o aparelho é

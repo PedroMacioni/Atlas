@@ -35,6 +35,7 @@ from app.providers.tomtom import TomTomNearbyProvider, TomTomPlaceSearch
 from app.routers import health, nearby, places, recommendations, routes, trips
 from app.services.daily_budget import DailyBudget
 from app.services.nearby_service import NearbyService, NearbySource
+from app.vision.scene_classifier import ClipSceneClassifier
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +68,8 @@ async def lifespan(app: FastAPI):
     app.state.database = database
     app.state.route_provider = OsrmRouteProvider(outbound, str(settings.osrm_base_url))
     app.state.decision_model = DecisionModel.load(settings.ml_model_path)
+    app.state.scene_classifier = _scene_classifier(settings)
+
     google_key = _secret(settings.google_places_api_key)
     tomtom_key = _secret(settings.tomtom_api_key)
 
@@ -81,12 +84,13 @@ async def lifespan(app: FastAPI):
     )
 
     logging.getLogger("atlas.api").info(
-        "Atlas API pronta — ambiente=%s provider=%s próximos=%s busca=%s modelo=%s",
+        "Atlas API pronta — ambiente=%s provider=%s próximos=%s busca=%s modelo=%s câmera=%s",
         settings.environment,
         app.state.route_provider.id,
         "+".join([*(["google"] if google_key else []), *(["tomtom"] if tomtom_key else []), "osm"]),
         "catálogo+tomtom" if tomtom_key else "catálogo",
         app.state.decision_model.version if app.state.decision_model else "ausente",
+        settings.vision_model if app.state.scene_classifier else "desligada",
     )
 
     try:
@@ -94,6 +98,22 @@ async def lifespan(app: FastAPI):
     finally:
         await outbound.aclose()
         await database.aclose()
+
+
+def _scene_classifier(settings) -> ClipSceneClassifier | None:
+    """
+    O classificador de imagem, carregando numa thread.
+
+    O CLIP leva alguns segundos para abrir — e minutos na primeira vez, quando
+    ainda baixa o modelo. Nada disso pode atrasar a subida da API: até ficar
+    pronto, a câmera responde `vision_unavailable` e o resto da viagem segue.
+    """
+    if not settings.vision_enabled:
+        return None
+
+    classifier = ClipSceneClassifier(settings.vision_model)
+    classifier.load_in_background()
+    return classifier
 
 
 def _secret(value: SecretStr | None) -> str | None:

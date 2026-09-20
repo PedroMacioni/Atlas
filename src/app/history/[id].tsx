@@ -9,6 +9,7 @@ import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import { AtlasMap } from '@/features/map/components/atlas-map';
 import { JournalTimeline } from '@/features/trip-session/components/journal-timeline';
+import { PhotoGallery } from '@/features/trip-session/components/photo-gallery';
 import { EMOTION_LABELS } from '@/features/trip-session/constants/journal-labels';
 import { useTripDetail } from '@/features/trip-session/hooks/use-trip-history';
 import type { TripDetail } from '@/features/trip-session/types/trip';
@@ -134,10 +135,8 @@ function Summary({ trip }: { trip: TripDetail }) {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Fotos" hint="Em breve" />
-        <Text variant="bodySoft" color="textSecondary">
-          As fotos de pontos turísticos aparecem aqui quando a captura de imagem entrar.
-        </Text>
+        <SectionHeader title="Fotos" hint={String(trip.photos.length)} />
+        <PhotoGallery photos={trip.photos} />
       </View>
 
       <View style={styles.section}>

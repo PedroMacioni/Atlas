@@ -98,6 +98,20 @@ class NearbyUnavailableError(AtlasError):
     status_code = status.HTTP_502_BAD_GATEWAY
 
 
+class VisionUnavailableError(AtlasError):
+    """O classificador de imagem não está carregado — ou falta o extra `vision`."""
+
+    code = "vision_unavailable"
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+class InvalidImageError(AtlasError):
+    """O arquivo enviado não é uma imagem legível."""
+
+    code = "invalid_image"
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
 class DatabaseUnavailable(AtlasError):
     """O Supabase não respondeu ou respondeu com erro."""
 

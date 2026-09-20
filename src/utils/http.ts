@@ -68,7 +68,10 @@ export type FetchJsonOptions = {
   signal?: AbortSignal;
   /** Verbo HTTP. Padrão: `GET`. */
   method?: 'GET' | 'POST';
-  /** Corpo da requisição, serializado como JSON. */
+  /**
+   * Corpo da requisição. Vai como JSON, exceto um `FormData` — que sobe como
+   * multipart, com o limite escolhido pelo próprio `fetch`.
+   */
   body?: unknown;
   /** Cabeçalhos extras — o identificador do aparelho, por exemplo. */
   headers?: Record<string, string>;
@@ -82,6 +85,10 @@ export type FetchJsonOptions = {
  */
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, method = 'GET', body, headers } = options;
+
+  // Um `FormData` se serializa sozinho, e o cabeçalho tem de trazer o limite
+  // que só o `fetch` conhece: definir `content-type` na mão quebraria o envio.
+  const isMultipart = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -98,10 +105,10 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
       signal: controller.signal,
       headers: {
         accept: 'application/json',
-        ...(body === undefined ? null : { 'content-type': 'application/json' }),
+        ...(body === undefined || isMultipart ? null : { 'content-type': 'application/json' }),
         ...headers,
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isMultipart ? body : JSON.stringify(body),
     });
   } catch {
     if (controller.signal.aborted) {

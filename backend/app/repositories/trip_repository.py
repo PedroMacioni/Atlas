@@ -88,12 +88,36 @@ class TripRepository:
             params={
                 "select": (
                     "id,kind,occurred_at,latitude,longitude,command,emotion,"
-                    "emotion_confidence,image_class,decision,justification"
+                    "emotion_confidence,image_class,image_confidence,decision,justification"
                 ),
                 "trip_id": f"eq.{trip_id}",
                 "order": "occurred_at.asc",
             },
         )
+
+    async def add_photo(self, row: Row) -> Row:
+        return await self._database.insert("photos", row)
+
+    async def list_photos(self, trip_id: UUID) -> list[Row]:
+        """As fotos da viagem, com o evento do diário que cada uma registra."""
+        return await self._database.select(
+            "photos",
+            params={
+                # `!inner` vira JOIN: só as fotos de eventos desta viagem.
+                "select": (
+                    "id,storage_path,created_at,"
+                    "trip_events!inner(id,trip_id,occurred_at,latitude,longitude,image_class)"
+                ),
+                "trip_events.trip_id": f"eq.{trip_id}",
+                "order": "created_at.asc",
+            },
+        )
+
+    async def sign_photos(self, paths: list[str], *, expires_in: int) -> dict[str, str]:
+        return await self._database.sign("photos", paths, expires_in=expires_in)
+
+    async def upload_photo(self, path: str, content: bytes) -> str:
+        return await self._database.upload("photos", path, content, content_type="image/jpeg")
 
     async def add_recommendation(self, row: Row) -> Row:
         return await self._database.insert("recommendations", row)

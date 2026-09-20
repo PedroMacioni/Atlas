@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     google_places_daily_limit: int = Field(default=30, ge=0)
     overpass_url: HttpUrl = HttpUrl("https://overpass-api.de/api/interpreter")
 
+    # --- Câmera (classificação de imagem) --------------------------------
+    # Ligada, a API carrega o CLIP na subida e classifica as fotos do app em
+    # Estrada, Posto, Restaurante ou Ponto turístico (RF-16). Desligada — ou
+    # sem o extra `vision` instalado — a câmera fica inerte e o resto funciona.
+    vision_enabled: bool = True
+    vision_model: str = "openai/clip-vit-base-patch32"
+    # Validade da URL assinada de uma foto. Uma hora cobre ver o resumo e
+    # percorrer o histórico sem deixar link vivo por aí.
+    photo_url_ttl_seconds: int = Field(default=3_600, gt=0)
+
     # --- Random Forest --------------------------------------------------
     # Modelo gerado por `ml/train.py`. Ausente, a API sobe mesmo assim e as
     # recomendações respondem `model_unavailable`.
