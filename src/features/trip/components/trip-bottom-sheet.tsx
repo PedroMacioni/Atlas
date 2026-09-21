@@ -1,11 +1,9 @@
-import type { ReactNode } from 'react';
+import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { useMemo, useRef, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { GestureDetector } from 'react-native-gesture-handler';
-import Animated from 'react-native-reanimated';
 
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Text } from '@/components/ui/text';
-import { useDraggableSheet } from '@/features/trip/hooks/use-draggable-sheet';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -14,150 +12,104 @@ import { formatArrivalTime, formatShortDuration } from '@/utils/arrival';
 import { formatDistance } from '@/utils/distance';
 
 export type TripBottomSheetProps = {
-  /** Segundos até o destino. */
   remainingSeconds: number;
-  /** Metros até o destino. */
   remainingMeters: number;
-  /** Respiro inferior do aparelho, já resolvido pela tela. */
   bottomInset: number;
-  /** Encerra a viagem e sai da tela. */
-  onEndTrip: () => void;
-  /**
-   * Conteúdo que flutua acima do painel, alinhado à esquerda — o velocímetro.
-   *
-   * Entra aqui, e não solto na tela, porque precisa **acompanhar o arraste**:
-   * ancorado à tela, ficaria parado enquanto o painel desce, e o vão entre os
-   * dois mudaria de tamanho conforme o estado.
-   */
   leading?: ReactNode;
+  onEndTrip?: () => void;
 };
 
 /**
- * Painel inferior da viagem, arrastável.
+ * Painel arrastável com hora de chegada, duração e distância.
  *
- * Dois estados, e a divisão entre eles é sobre atenção:
- *
- * - **Fechado** é o estado de quem está dirigindo. Três números, grandes e sem
- *   rótulo: o horário de chegada, o tempo e a distância que faltam. Um relógio
- *   não precisa ser apresentado como relógio, e cada palavra a menos é espaço
- *   que volta para o mapa. Nenhum botão — nada aqui pede decisão.
- * - **Aberto** é o estado de quem parou para decidir. Revela **Parar** e
- *   **Continuar**, dois alvos grandes, longe de toque acidental.
- *
- * O horário vem primeiro e maior porque é a pergunta que de fato se faz numa
- * viagem: *a que horas eu chego?*. Tempo e distância respondem a mesma coisa de
- * forma indireta — quem quer saber "dá tempo?" lê o relógio, não faz a conta.
- *
- * O componente é apresentação: a mecânica do arraste vive em
- * `use-draggable-sheet`.
+ * Ao puxar para cima, revela o botão "Encerrar viagem".
  */
 export function TripBottomSheet({
   remainingSeconds,
   remainingMeters,
   bottomInset,
-  onEndTrip,
   leading,
+  onEndTrip,
 }: TripBottomSheetProps) {
-  const sheet = useDraggableSheet();
+  const sheetRef = useRef<BottomSheet>(null);
+
+  // Colapsado esconde o botão, expandido revela
+  const snapPoints = useMemo(() => {
+    const collapsed = 80 + bottomInset;
+    const expanded = 170 + bottomInset;
+    return [collapsed, expanded];
+  }, [bottomInset]);
 
   return (
-    /*
-      O container externo é transparente e carrega o movimento; o cartão branco
-      é o painel em si. Separá-los é o que permite o velocímetro flutuar acima
-      do painel e ainda assim se mover com ele.
-    */
-    <Animated.View style={sheet.sheetStyle}>
+    <View style={styles.container} pointerEvents="box-none">
       {leading ? <View style={styles.leading}>{leading}</View> : null}
-
-      <View style={[styles.sheet, shadows.raised]}>
-        {/*
-          O gesto cobre só a alça e os números, e não o painel inteiro: com os
-          botões dentro do detector, um toque em "Parar" competiria com o toque
-          que fecha o painel — e a ação errada venceria de vez em quando.
-        */}
-        <GestureDetector gesture={sheet.gesture}>
-          {/*
-            O respiro do aparelho vive aqui, e não no painel: com o painel
-            fechado é esta a última coisa visível, e os números não podem
-            encostar na borda inferior nem ficar sobre o indicador de gesto.
-          */}
-          <View style={[styles.grabArea, { paddingBottom: bottomInset + spacing.sm }]}>
-            <View style={styles.handle} />
-
-            <Text variant="display" align="center" numberOfLines={1} adjustsFontSizeToFit>
-              {formatArrivalTime(remainingSeconds)}
+      <BottomSheet
+        ref={sheetRef}
+        index={0}
+        snapPoints={snapPoints}
+        backgroundStyle={[styles.background, shadows.raised]}
+        handleIndicatorStyle={styles.handle}
+        enablePanDownToClose={false}
+        enableDynamicSizing={false}>
+        <BottomSheetView style={styles.content}>
+          <Text variant="display" align="center" numberOfLines={1} adjustsFontSizeToFit>
+            {formatArrivalTime(remainingSeconds)}
+          </Text>
+          <View style={styles.metrics}>
+            <Text variant="metric" numberOfLines={1} align="right" style={styles.metric}>
+              {formatShortDuration(remainingSeconds)}
             </Text>
-
-            <View style={styles.metrics}>
-              <Text variant="metric" numberOfLines={1} align="right" style={styles.metric}>
-                {formatShortDuration(remainingSeconds)}
-              </Text>
-
-              <View style={styles.dot} />
-
-              <Text variant="metric" numberOfLines={1} align="left" style={styles.metric}>
-                {formatDistance(remainingMeters)}
-              </Text>
-            </View>
+            <View style={styles.dot} />
+            <Text variant="metric" numberOfLines={1} align="left" style={styles.metric}>
+              {formatDistance(remainingMeters)}
+            </Text>
           </View>
-        </GestureDetector>
 
-        {/*
-          As ações existem no layout desde o início — é a altura delas que diz
-          quanto o painel precisa descer. Ficam fora da tela enquanto ele está
-          fechado, e não escondidas por opacidade: um botão invisível mas
-          tocável é uma armadilha.
-
-          O respiro inferior é medido junto, de propósito: é o que garante que
-          descer a altura deste bloco esconda os botões por completo.
-        */}
-        <View
-          style={[styles.actions, { paddingBottom: bottomInset + spacing.lg }]}
-          onLayout={(event) => sheet.onHiddenAreaLayout(event.nativeEvent.layout.height)}>
-          {/*
-            Os dois são o mesmo botão, com gradientes diferentes: é o que
-            garante altura, raio e sombra idênticos. Nenhum leva seta — uma
-            seta sugere "avançar para a próxima tela", e aqui as duas ações
-            terminam na própria tela.
-          */}
-          <View style={styles.action}>
-            <PrimaryButton label="Parar" tone="danger" showChevron={false} onPress={onEndTrip} />
+          <View style={styles.buttonContainer}>
+            <PrimaryButton
+              label="Encerrar viagem"
+              icon="stop-circle-outline"
+              tone="danger"
+              showChevron={false}
+              onPress={onEndTrip ?? (() => {})}
+            />
           </View>
-          <View style={styles.action}>
-            <PrimaryButton label="Continuar" showChevron={false} onPress={sheet.close} />
-          </View>
-        </View>
-      </View>
-    </Animated.View>
+        </BottomSheetView>
+      </BottomSheet>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  /** Faixa do velocímetro: à esquerda, com respiro antes do painel. */
+  container: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    left: 0,
+    top: 0,
+  },
   leading: {
+    position: 'absolute',
+    bottom: 110,
+    left: 0,
+    right: 0,
     alignItems: 'flex-start',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
   },
-  sheet: {
+  background: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    paddingTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
   },
-  /** Área que responde ao arrasto: alça e números. */
-  grabArea: {
-    gap: spacing.xs,
-  },
-  /** Traço que anuncia que o painel se move. */
   handle: {
-    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: radius.pill,
     backgroundColor: colors.border,
-    marginBottom: spacing.xs,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
   },
   metrics: {
     flexDirection: 'row',
@@ -165,11 +117,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
   },
-  /**
-   * As duas métricas recebem a mesma largura e se alinham para lados opostos,
-   * o que mantém o ponto exatamente no centro — independente de "7,9 km" ser
-   * mais curto que "1h05".
-   */
   metric: {
     flex: 1,
   },
@@ -179,11 +126,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.textSecondary,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  action: {
-    flex: 1,
+  buttonContainer: {
+    marginTop: spacing.md,
   },
 });

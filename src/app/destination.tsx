@@ -256,9 +256,17 @@ export default function DestinationScreen() {
               placeholder="Para onde?"
               onVoicePress={onVoicePress}
               voiceDisabled={!voice.available}
+              tone="floating"
             />
 
             <VoiceIndicator voice={voice} />
+
+            <View style={styles.categoryHeading}>
+              <Text variant="heading">Encontre perto de você</Text>
+              <Text variant="label" color="textSecondary">
+                {nearbyEnabled ? 'Escolha uma opção' : 'Indisponível agora'}
+              </Text>
+            </View>
 
             <View style={styles.categories}>
               {SCOPE_CATEGORIES.map((category) => (
@@ -276,7 +284,7 @@ export default function DestinationScreen() {
 
             {!isNearbyAvailable() ? (
               <Text variant="label" color="textSecondary">
-                As opções próximas vêm da API do Atlas — configure EXPO_PUBLIC_ATLAS_API_URL.
+                As opções próximas estão indisponíveis no momento.
               </Text>
             ) : !location.coordinate && !location.isLoading ? (
               <Text variant="label" color="textSecondary">
@@ -370,7 +378,7 @@ function emptyMessage({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceMuted,
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -379,6 +387,12 @@ const styles = StyleSheet.create({
   header: {
     gap: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  categoryHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
   categories: {
     flexDirection: 'row',

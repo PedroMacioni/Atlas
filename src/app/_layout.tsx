@@ -23,7 +23,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
  */
 const STACK_OPTIONS = {
   headerShown: true,
-  headerBackTitle: 'Voltar',
+  headerBackButtonDisplayMode: 'minimal',
   headerTintColor: colors.primary,
   headerTitleStyle: { fontFamily: fontFamily.bold, fontSize: 17, color: colors.text },
   headerStyle: { backgroundColor: colors.background },
@@ -68,13 +68,25 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <Stack screenOptions={STACK_OPTIONS}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="destination" options={{ title: 'Definir destino' }} />
+          <Stack.Screen
+            name="destination"
+            options={{ title: 'Definir destino', headerStyle: { backgroundColor: colors.surfaceMuted } }}
+          />
           {/*
             A viagem esconde o cabeçalho: o mapa encosta nas quatro bordas e a
             tela traz o próprio botão de voltar, sobre o mapa. Um cabeçalho ali
             roubaria a faixa onde vive a instrução de manobra.
           */}
           <Stack.Screen name="trip" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="trip-actions"
+            options={{
+              headerShown: false,
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.62],
+              sheetGrabberVisible: true,
+            }}
+          />
           <Stack.Screen name="history/[id]" options={{ title: 'Resumo da viagem' }} />
           {/*
             Emergência sobe em folha, por cima de qualquer tela — inclusive da

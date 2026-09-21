@@ -1,13 +1,9 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
-import { SceneCamera, type SceneCameraHandle } from '@/features/camera/components/scene-camera';
-import { useSceneReadings } from '@/features/camera/hooks/use-scene-readings';
-import { describeSceneError } from '@/features/camera/services/scene-service';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
@@ -17,6 +13,7 @@ import { ManeuverBanner } from '@/features/trip/components/maneuver-banner';
 import { SpeedBadge } from '@/features/trip/components/speed-badge';
 import { TripBottomSheet } from '@/features/trip/components/trip-bottom-sheet';
 import { useDetour } from '@/features/trip/hooks/use-detour';
+import { subscribeTripActions } from '@/features/trip/state/trip-action-request';
 import { DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
 import { useTripDestination } from '@/features/trip/hooks/use-trip-destination';
 import { useTripOrigin } from '@/features/trip/hooks/use-trip-origin';
@@ -33,7 +30,6 @@ import {
   describeTripError,
   recordEvent,
 } from '@/features/trip-session/services/trip-session-service';
-import { IMAGE_CLASS_LABELS } from '@/features/trip-session/constants/journal-labels';
 import type { EndReason } from '@/features/trip-session/types/trip';
 import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
 import { VoiceIndicator } from '@/features/voice/components/voice-indicator';
@@ -94,7 +90,6 @@ export default function TripScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<AtlasMapHandle>(null);
-  const cameraRef = useRef<SceneCameraHandle>(null);
 
   const destination = useTripDestination();
   const tracking = useLocationTracking();
@@ -131,18 +126,6 @@ export default function TripScreen() {
   const recommendations = useRecommendations({
     tripId: session.tripId,
     traveledMeters: session.traveledMeters,
-    location: tracking.position?.coordinate ?? null,
-  });
-
-  /*
-    A câmera lendo a estrada (RF-16, RF-22). A leitura automática vira só a
-    classe da cena no diário — é a variável "imagem" do Random Forest. A foto
-    guardada é a do ponto turístico, pedida por voz, pelo toque na miniatura
-    ou por uma recomendação aceita.
-  */
-  const scene = useSceneReadings({
-    tripId: session.tripId,
-    camera: cameraRef,
     location: tracking.position?.coordinate ?? null,
   });
 
@@ -243,15 +226,6 @@ export default function TripScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasArrived]);
 
-  const registerStop = () => {
-    session
-      .registerStop()
-      .then(() => flash('Parada registrada no diário.'))
-      .catch((cause: unknown) =>
-        flash(cause instanceof Error ? cause.message : describeTripError(cause)),
-      );
-  };
-
   const openEmergency = () => {
     const here = tracking.position?.coordinate;
 
@@ -304,23 +278,21 @@ export default function TripScreen() {
       throw new Error('A viagem não está sendo registrada.');
     }
 
-    if (cameraRef.current?.isReady()) {
-      try {
-        const result = await scene.registerTouristSpot();
-        const label = IMAGE_CLASS_LABELS[result.imageClass];
-        flash(`Ponto turístico registrado — a IA viu ${label.toLowerCase()}.`);
-        return;
-      } catch (cause) {
-        flash(`${describeSceneError(cause)} Registrando só o local.`);
-      }
-    }
-
     await recordEvent(session.tripId, {
       kind: 'tourist_spot',
       command: 'Ponto turístico registrado',
       location: tracking.position?.coordinate ?? null,
     });
     flash('Ponto turístico registrado no diário.');
+  };
+
+  const registerStop = () => {
+    session
+      .registerStop()
+      .then(() => flash('Parada registrada no diário.'))
+      .catch((cause: unknown) =>
+        flash(cause instanceof Error ? cause.message : describeTripError(cause)),
+      );
   };
 
   /** O local escolhido vira parada no caminho; o destino continua o mesmo. */
@@ -402,6 +374,25 @@ export default function TripScreen() {
     enabled: tripVoice.state === 'idle',
   });
 
+  useEffect(
+    () =>
+      subscribeTripActions((action) => {
+        if (action === 'toggle-wake') {
+          wake.toggle();
+        } else if (action === 'ask-recommendation') {
+          recommendations.ask();
+        } else if (action === 'register-stop') {
+          registerStop();
+        } else {
+          confirmEnd();
+        }
+      }),
+    // As funções são lidas quando a ação chega; reinscrever a cada render não
+    // melhora a entrega e pode trocar o listener enquanto o sheet fecha.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [wake.toggle, recommendations.ask, registerStop, confirmEnd],
+  );
+
   // As 3 opções de uma parada pedida por voz: lidas e escolhidas por voz.
   useEffect(() => {
     const places = stopOptions.result?.places;
@@ -482,16 +473,6 @@ export default function TripScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recommendations.assistance]);
 
-  const openSimulator = () => {
-    router.push({
-      pathname: '/simulator',
-      params: {
-        ...(session.tripId ? { tripId: session.tripId } : null),
-        distanceMeters: String(Math.round(session.traveledMeters)),
-      },
-    });
-  };
-
   const toggleFocus = () => {
     setIsFollowing((following) => {
       if (following) {
@@ -523,16 +504,8 @@ export default function TripScreen() {
           style={[styles.top, { paddingTop: insets.top + spacing.sm }]}
           pointerEvents="box-none">
           <View style={styles.topRow} pointerEvents="box-none">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Voltar"
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}>
-              <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
-            </Pressable>
-
             {/*
-              A instrução ocupa o resto da linha. Sem manobra em mãos, a faixa
+              A instrução ocupa toda a largura. Sem manobra em mãos, a faixa
               mostra o destino: um espaço reservado e vazio seria pior que uma
               faixa que diz para onde se vai.
             */}
@@ -646,22 +619,6 @@ export default function TripScreen() {
             instrução, que é o elemento mais importante da tela.
           */}
           <View style={styles.mapActions} pointerEvents="box-none">
-            {/*
-              O que a IA está vendo. Só aparece com a viagem sendo registrada
-              e com a permissão dada — sem isso, a câmera não se monta.
-            */}
-            {session.status === 'active' ? (
-              <SceneCamera
-                ref={cameraRef}
-                caption={scene.caption}
-                onPress={() => {
-                  registerTouristSpot().catch((cause: unknown) =>
-                    flash(describeSceneError(cause)),
-                  );
-                }}
-              />
-            ) : null}
-
             {/* Só num development build: no Expo Go não há reconhecimento de fala. */}
             {tripVoice.available ? (
               <FloatingIconButton
@@ -671,20 +628,9 @@ export default function TripScreen() {
                 accessibilityLabel={
                   tripVoice.state === 'listening' ? 'Parar de ouvir' : 'Falar com o Atlas'
                 }
+                accessibilityHint="Toque longo ativa ou desativa a escuta contínua"
                 onPress={tripVoice.onMicPress}
-              />
-            ) : null}
-
-            {wake.available ? (
-              <FloatingIconButton
-                icon={wake.watching ? 'ear-hearing' : 'ear-hearing-off'}
-                iconColor={wake.watching ? 'primary' : 'textSecondary'}
-                accessibilityLabel={
-                  wake.watching
-                    ? 'Parar de ouvir a palavra Atlas'
-                    : 'Deixar o Atlas sempre atento à palavra Atlas'
-                }
-                onPress={wake.toggle}
+                onLongPress={wake.available ? wake.toggle : undefined}
               />
             ) : null}
 
@@ -699,23 +645,15 @@ export default function TripScreen() {
               onPress={toggleFocus}
             />
 
-            {session.status === 'active' ? (
-              <FloatingIconButton
-                icon="lightbulb-on-outline"
-                accessibilityLabel="Atlas, preciso abastecer ou descansar"
-                accessibilityHint="Toque longo abre o simulador do Random Forest"
-                onPress={recommendations.ask}
-                onLongPress={openSimulator}
-              />
-            ) : null}
+            <FloatingIconButton
+              size="lg"
+              icon="dots-horizontal"
+              accessibilityLabel="Abrir ações da viagem"
+              onPress={() =>
+                router.push({ pathname: '/trip-actions', params: { watching: wake.watching ? '1' : '0' } })
+              }
+            />
 
-            {session.status === 'active' ? (
-              <FloatingIconButton
-                icon="map-marker-plus"
-                accessibilityLabel="Registrar parada no diário de bordo"
-                onPress={registerStop}
-              />
-            ) : null}
 
             {/* Emergência sempre à mão, com ou sem viagem registrada (§11). */}
             <FloatingIconButton
@@ -731,11 +669,8 @@ export default function TripScreen() {
           remainingSeconds={remainingSeconds}
           remainingMeters={remainingMeters}
           bottomInset={insets.bottom}
-          onEndTrip={confirmEnd}
-          // O velocímetro entra como conteúdo do painel para acompanhar o
-          // arraste. A velocidade vem crua do GPS, em m/s; a conversão e a
-          // decisão de esconder o mostrador vivem no componente.
           leading={<SpeedBadge metersPerSecond={tracking.position?.speed ?? null} />}
+          onEndTrip={confirmEnd}
         />
       </View>
     </View>
@@ -761,24 +696,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     gap: spacing.sm,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.raised,
-  },
-  backPressed: {
-    opacity: 0.7,
-  },
   bannerSlot: {
-    flex: 1,
+    alignSelf: 'stretch',
   },
   /** Alinha o controle de câmera à direita, sob a faixa de instrução. */
   mapActions: {

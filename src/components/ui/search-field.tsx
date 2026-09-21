@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
+import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import { fontFamily, textVariants } from '@/theme/typography';
 
@@ -12,9 +13,15 @@ export type SearchFieldProps = {
   placeholder: string;
   /** Ação do microfone. Omitir esconde o botão. */
   onVoicePress?: () => void;
+  /** Chamado quando o campo recebe foco, por exemplo para abrir a tela de busca. */
+  onFocus?: () => void;
+  /** Transforma o campo em uma porta de entrada sem receber foco/teclado. */
+  onPress?: () => void;
   /** Atenua o microfone, para quando a captura de voz ainda não existe. */
   voiceDisabled?: boolean;
   autoFocus?: boolean;
+  /** `floating` integra a busca a uma superfície visual, como um mapa. */
+  tone?: 'default' | 'floating';
 };
 
 /**
@@ -28,13 +35,18 @@ export function SearchField({
   onChangeText,
   placeholder,
   onVoicePress,
+  onFocus,
+  onPress,
   voiceDisabled = false,
   autoFocus = false,
+  tone = 'default',
 }: SearchFieldProps) {
   const hasText = value.length > 0;
 
-  return (
-    <View style={styles.container}>
+  const field = (
+    <View
+      pointerEvents={onPress ? 'none' : 'auto'}
+      style={[styles.container, tone === 'floating' && styles.floating]}>
       <MaterialCommunityIcons name="magnify" size={22} color={colors.textSecondary} />
 
       <TextInput
@@ -43,9 +55,11 @@ export function SearchField({
         placeholder={placeholder}
         placeholderTextColor={colors.textSecondary}
         autoFocus={autoFocus}
+        editable={!onPress}
         autoCorrect={false}
         returnKeyType="search"
         clearButtonMode="never"
+        onFocus={onFocus}
         style={styles.input}
       />
 
@@ -75,6 +89,16 @@ export function SearchField({
       ) : null}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <Pressable accessibilityRole="button" accessibilityLabel={placeholder} onPress={onPress}>
+        {field}
+      </Pressable>
+    );
+  }
+
+  return field;
 }
 
 const styles = StyleSheet.create({
@@ -87,6 +111,13 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: radius.lg,
     backgroundColor: colors.surfaceMuted,
+  },
+  floating: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    ...shadows.raised,
   },
   input: {
     flex: 1,
