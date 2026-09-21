@@ -495,7 +495,9 @@ export default function TripScreen() {
         stops={detour.waypoints}
         showsUserLocation={hasPosition}
         showsOriginMarker={!hasPosition}
-        focus={isFollowing ? 'user' : 'route'}
+        focus={isFollowing ? 'navigation' : 'route'}
+        userHeading={tracking.position?.heading ?? null}
+        routeProgressIndex={progress?.nearestIndex ?? 0}
       />
 
       {/* Camada de controles. `box-none` deixa o arrasto do mapa passar. */}
