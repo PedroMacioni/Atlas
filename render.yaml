@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: atlas-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ATLAS_ENVIRONMENT
+        value: production
+      - key: ATLAS_SUPABASE_URL
+        sync: false
+      - key: ATLAS_SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ATLAS_VISION_ENABLED
+        value: "false"
+      - key: ATLAS_VOICE_EMOTION_ENABLED
+        value: "false"
+      - key: ATLAS_CORS_ALLOW_ORIGINS
+        value: '["*"]'
