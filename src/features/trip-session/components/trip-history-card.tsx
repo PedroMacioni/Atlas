@@ -38,32 +38,47 @@ export function TripHistoryCard({ trip, onPress }: TripHistoryCardProps) {
       accessibilityLabel={`Viagem para ${trip.destinationName}, ${formatDateTime(trip.startedAt)}`}
       onPress={onPress}
       style={({ pressed }) => [styles.card, shadows.card, pressed && styles.pressed]}>
-      <View style={styles.texts}>
-        <Text variant="label" color="textSecondary">
-          {formatDateTime(trip.startedAt)}
-          {inProgress ? ' · não encerrada' : ''}
-        </Text>
-        <Text variant="heading" numberOfLines={1}>
-          {trip.destinationName}
-        </Text>
+      <View style={styles.mainRow}>
+        <View style={styles.routeIcon}>
+          <MaterialCommunityIcons name="navigation-variant" size={22} color={colors.primary} />
+        </View>
+
+        <View style={styles.texts}>
+          <Text variant="label" color="textSecondary" numberOfLines={1}>
+            {formatDateTime(trip.startedAt)}
+            {inProgress ? ' · não encerrada' : ''}
+          </Text>
+          <Text variant="heading" numberOfLines={1}>
+            {trip.destinationName}
+          </Text>
+          <Text variant="label" color="textSecondary" numberOfLines={1}>
+            De {trip.originName}
+          </Text>
+        </View>
+
+        <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textSecondary} />
+      </View>
+
+      <View style={styles.facts}>
         <Text variant="bodySoft" color="textSecondary" numberOfLines={1}>
           {facts.join('  ·  ')}
         </Text>
       </View>
-
-      <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textSecondary} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.md,
     padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
+  },
+  mainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   pressed: {
     opacity: 0.8,
@@ -71,5 +86,18 @@ const styles = StyleSheet.create({
   texts: {
     flex: 1,
     gap: 2,
+  },
+  routeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  facts: {
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
 });

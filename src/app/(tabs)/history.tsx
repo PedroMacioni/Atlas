@@ -3,7 +3,6 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppHeader } from '@/components/ui/app-header';
-import { SectionHeader } from '@/components/ui/section-header';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import { TripHistoryCard } from '@/features/trip-session/components/trip-history-card';
@@ -35,10 +34,12 @@ export default function HistoryScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListHeaderComponent={
           <View style={styles.header}>
-            <SectionHeader
-              title="Suas viagens"
-              hint={trips.length > 0 ? String(trips.length) : undefined}
-            />
+            <Text variant="title">Suas viagens</Text>
+            <Text variant="bodySoft" color="textSecondary">
+              {trips.length > 0
+                ? `${trips.length} ${trips.length === 1 ? 'trajeto registrado' : 'trajetos registrados'}`
+                : 'Seus trajetos aparecerão aqui.'}
+            </Text>
             {history.error ? (
               <StatusMessage tone="error" message={history.error} onRetry={history.reload} />
             ) : null}
@@ -79,8 +80,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
   },
   header: {
-    gap: spacing.md,
-    paddingBottom: spacing.md,
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
   },
   separator: {
     height: spacing.sm,

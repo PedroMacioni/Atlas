@@ -8,7 +8,7 @@ import {
   useState,
   type Ref,
 } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type EdgePadding, type Region } from 'react-native-maps';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
@@ -27,6 +27,8 @@ export type AtlasMapHandle = {
   fitRoute: () => void;
   /** Volta a câmera para a posição atual do usuário. */
   centerOnUser: () => void;
+  /** Ativa a visão 3D de navegação próxima ao usuário. */
+  goToNavigation: () => void;
 };
 
 export type AtlasMapProps = {
@@ -105,11 +107,11 @@ const USER_FOCUS_DELTA = 0.045;
  * Enquadramento do acompanhamento contínuo — mais fechado que o de
  * centralizar.
  *
- * Cerca de um quilômetro de janela: largo o bastante para mostrar a próxima
- * curva, fechado o bastante para o deslocamento ser perceptível. No zoom de
+ * Cerca de 300-400 metros de janela: próximo o bastante para parecer o Waze,
+ * mostrando a próxima curva sem perder o contexto. No zoom de
  * `USER_FOCUS_DELTA` o carro pareceria imóvel.
  */
-const FOLLOW_DELTA = 0.01;
+const FOLLOW_DELTA = 0.0025;
 
 /** Duração das transições de câmera. */
 const ANIMATION_MS = 450;
@@ -154,13 +156,24 @@ export function AtlasMap({
   const [isMapReady, setIsMapReady] = useState(false);
 
   const initialRegion = useMemo(() => {
-    if ((focus === 'user' || focus === 'navigation') && currentLocation) {
+    // Modo navegação: começa próximo ao usuário ou à origem
+    if (focus === 'navigation') {
+      const center = currentLocation ?? origin;
+      return {
+        ...center,
+        latitudeDelta: FOLLOW_DELTA,
+        longitudeDelta: FOLLOW_DELTA,
+      };
+    }
+    // Modo acompanhamento: segue o usuário
+    if (focus === 'user' && currentLocation) {
       return {
         ...currentLocation,
         latitudeDelta: FOLLOW_DELTA,
         longitudeDelta: FOLLOW_DELTA,
       };
     }
+    // Modo rota: enquadra origem e destino
     return buildInitialRegion(origin, destination);
   }, [focus, currentLocation, origin, destination]);
 
@@ -199,7 +212,33 @@ export function AtlasMap({
     );
   }, [currentLocation]);
 
-  useImperativeHandle(ref, () => ({ fitRoute, centerOnUser }), [fitRoute, centerOnUser]);
+  const goToNavigation = useCallback(() => {
+    if (!currentLocation) {
+      return;
+    }
+
+    // Calcula o deslocamento para efeito terceira pessoa
+    const headingRad = (userHeading ?? 0) * (Math.PI / 180);
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos(currentLocation.latitude * Math.PI / 180);
+    const offsetLat = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLat) * Math.cos(headingRad);
+    const offsetLng = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLng) * Math.sin(headingRad);
+
+    mapRef.current?.animateCamera(
+      {
+        center: {
+          latitude: currentLocation.latitude + offsetLat,
+          longitude: currentLocation.longitude + offsetLng,
+        },
+        pitch: NAVIGATION_CONFIG.PITCH,
+        heading: userHeading ?? 0,
+        zoom: NAVIGATION_CONFIG.ZOOM,
+      },
+      { duration: NAVIGATION_CONFIG.ANIMATION_MS },
+    );
+  }, [currentLocation, userHeading]);
+
+  useImperativeHandle(ref, () => ({ fitRoute, centerOnUser, goToNavigation }), [fitRoute, centerOnUser, goToNavigation]);
 
   // Enquadra a rota sozinho assim que ela chega — mas só depois que o mapa
   // nativo está montado, senão `fitToCoordinates` é ignorado silenciosamente.
@@ -242,17 +281,32 @@ export function AtlasMap({
    *
    * Usa `animateCamera` ao invés de `animateToRegion` para controlar
    * pitch (inclinação) e heading (rotação) da câmera.
+   *
+   * O centro da câmera é deslocado "à frente" do usuário na direção do
+   * heading, criando um efeito de terceira pessoa onde o usuário aparece
+   * na parte inferior da tela e a estrada é visível à frente.
    */
   useEffect(() => {
     if (focus !== 'navigation' || !isMapReady || !currentLocation) {
       return;
     }
 
+    // Calcula o deslocamento em graus a partir de metros
+    // 1 grau de latitude ≈ 111320 metros
+    // 1 grau de longitude ≈ 111320 * cos(latitude) metros
+    const headingRad = (userHeading ?? 0) * (Math.PI / 180);
+    const metersPerDegreeLat = 111320;
+    const metersPerDegreeLng = 111320 * Math.cos(currentLocation.latitude * Math.PI / 180);
+
+    // Desloca a câmera "à frente" do usuário na direção do heading
+    const offsetLat = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLat) * Math.cos(headingRad);
+    const offsetLng = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLng) * Math.sin(headingRad);
+
     mapRef.current?.animateCamera(
       {
         center: {
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
+          latitude: currentLocation.latitude + offsetLat,
+          longitude: currentLocation.longitude + offsetLng,
         },
         pitch: NAVIGATION_CONFIG.PITCH,
         heading: userHeading ?? 0,
@@ -342,12 +396,35 @@ export function AtlasMap({
         ))}
 
         {/*
+          Modo navegação: seta customizada que rotaciona conforme o heading.
+          Substitui o ponto azul nativo para dar o efeito visual do Waze.
+        */}
+        {focus === 'navigation' && currentLocation ? (
+          <Marker
+            coordinate={currentLocation}
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat
+            rotation={Platform.OS === 'ios' ? 0 : (userHeading ?? 0)}
+            tracksViewChanges={false}>
+            <View
+              style={[
+                styles.arrowContainer,
+                Platform.OS === 'ios' && { transform: [{ rotate: `${userHeading ?? 0}deg` }] },
+              ]}>
+              <MaterialCommunityIcons name="navigation" size={32} color={colors.primary} />
+            </View>
+          </Marker>
+        ) : null}
+
+        {/*
           Com permissão concedida, `showsUserLocation` já desenha o ponto azul
           nativo da plataforma; não duplicamos um Marker. Sem permissão, nada
           é renderizado e `currentLocation` segue disponível para lógica de
           câmera futura.
+
+          No modo navegação, a seta customizada substitui o ponto azul.
         */}
-        {!showsUserLocation && currentLocation ? (
+        {focus !== 'navigation' && !showsUserLocation && currentLocation ? (
           <Marker coordinate={currentLocation} title="Você está aqui" pinColor={colors.primary} />
         ) : null}
       </MapView>
@@ -407,5 +484,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     ...shadows.card,
+  },
+  /** Container da seta de navegação com sombra para destacar do mapa. */
+  arrowContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.raised,
   },
 });

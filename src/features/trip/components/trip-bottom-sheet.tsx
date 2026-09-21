@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   },
   leading: {
     position: 'absolute',
-    bottom: 110,
+    bottom: 160,
     left: 0,
     right: 0,
     alignItems: 'flex-start',

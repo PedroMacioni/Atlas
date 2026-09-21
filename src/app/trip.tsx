@@ -4,6 +4,9 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
+import { SceneCamera, type SceneCameraHandle } from '@/features/camera/components/scene-camera';
+import { useSceneReadings } from '@/features/camera/hooks/use-scene-readings';
+import { describeSceneError } from '@/features/camera/services/scene-service';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
@@ -26,6 +29,7 @@ import type { NearbyPlace } from '@/features/nearby/types/nearby';
 import { RecommendationCard } from '@/features/recommendation/components/recommendation-card';
 import { useRecommendations } from '@/features/recommendation/hooks/use-recommendations';
 import { useTripSession } from '@/features/trip-session/hooks/use-trip-session';
+import { IMAGE_CLASS_LABELS } from '@/features/trip-session/constants/journal-labels';
 import {
   describeTripError,
   recordEvent,
@@ -46,16 +50,6 @@ import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 
 const EMPTY_ROUTE: never[] = [];
-
-/**
- * Quanto tempo a rota inteira fica enquadrada antes de a câmera descer para o
- * acompanhamento.
- *
- * Existe porque as duas informações são necessárias em ordem: primeiro "para
- * onde eu vou", que só o trajeto inteiro responde, depois "onde eu estou
- * agora", que é o resto da viagem.
- */
-const OVERVIEW_HOLD_MS = 2_200;
 
 /**
  * Respiro que a câmera reserva ao enquadrar a rota.
@@ -90,6 +84,7 @@ export default function TripScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<AtlasMapHandle>(null);
+  const cameraRef = useRef<SceneCameraHandle>(null);
 
   const destination = useTripDestination();
   const tracking = useLocationTracking();
@@ -129,18 +124,15 @@ export default function TripScreen() {
     location: tracking.position?.coordinate ?? null,
   });
 
-  const [isFollowing, setIsFollowing] = useState(false);
+  const scene = useSceneReadings({
+    tripId: session.tripId,
+    camera: cameraRef,
+    location: tracking.position?.coordinate ?? null,
+  });
+
+  const [isFollowing, setIsFollowing] = useState(true);
   const [isEnding, setIsEnding] = useState(false);
 
-  useEffect(() => {
-    if (!trip.route) {
-      return;
-    }
-
-    const timeoutId = setTimeout(() => setIsFollowing(true), OVERVIEW_HOLD_MS);
-
-    return () => clearTimeout(timeoutId);
-  }, [trip.route]);
 
   /**
    * Próxima manobra à frente.
@@ -278,12 +270,28 @@ export default function TripScreen() {
       throw new Error('A viagem não está sendo registrada.');
     }
 
+    if (cameraRef.current?.isReady()) {
+      try {
+        const result = await scene.registerTouristSpot();
+        const label = IMAGE_CLASS_LABELS[result.imageClass];
+        flash(`Ponto turístico registrado — a IA viu ${label.toLowerCase()}.`);
+        return;
+      } catch (cause) {
+        flash(`${describeSceneError(cause)} Registrando só o local.`);
+      }
+    }
+
     await recordEvent(session.tripId, {
       kind: 'tourist_spot',
       command: 'Ponto turístico registrado',
       location: tracking.position?.coordinate ?? null,
     });
     flash('Ponto turístico registrado no diário.');
+  };
+
+  /** Chamado após o usuário tirar a foto na câmera fullscreen. */
+  const onCameraCapture = () => {
+    registerTouristSpot().catch((cause: unknown) => flash(describeSceneError(cause)));
   };
 
   const registerStop = () => {
@@ -476,7 +484,11 @@ export default function TripScreen() {
   const toggleFocus = () => {
     setIsFollowing((following) => {
       if (following) {
+        // Indo para overview: enquadra a rota inteira
         mapRef.current?.fitRoute();
+      } else {
+        // Voltando para navegação: câmera 3D próxima ao usuário
+        mapRef.current?.goToNavigation();
       }
       return !following;
     });
@@ -493,7 +505,7 @@ export default function TripScreen() {
         destination={destination}
         routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
         stops={detour.waypoints}
-        showsUserLocation={hasPosition}
+        showsUserLocation={hasPosition && !isFollowing}
         showsOriginMarker={!hasPosition}
         focus={isFollowing ? 'navigation' : 'route'}
         userHeading={tracking.position?.heading ?? null}
@@ -621,6 +633,13 @@ export default function TripScreen() {
             instrução, que é o elemento mais importante da tela.
           */}
           <View style={styles.mapActions} pointerEvents="box-none">
+            {session.status === 'active' ? (
+              <SceneCamera
+                ref={cameraRef}
+                onCapture={onCameraCapture}
+              />
+            ) : null}
+
             {/* Só num development build: no Expo Go não há reconhecimento de fala. */}
             {tripVoice.available ? (
               <FloatingIconButton
@@ -659,6 +678,7 @@ export default function TripScreen() {
 
             {/* Emergência sempre à mão, com ou sem viagem registrada (§11). */}
             <FloatingIconButton
+              size="lg"
               icon="alarm-light"
               iconColor="danger"
               accessibilityLabel="Emergência: Hospital, SAMU 192 e Polícia 190"

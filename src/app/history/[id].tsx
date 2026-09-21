@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/ui/card';
-import { MetricTile } from '@/components/ui/metric-tile';
 import { SectionHeader } from '@/components/ui/section-header';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
@@ -55,13 +54,10 @@ function Summary({ trip }: { trip: TripDetail }) {
 
   return (
     <>
-      <View style={styles.title}>
-        <Text variant="label" color="textSecondary">
-          {formatDateTime(trip.startedAt)}
-        </Text>
+      <View style={styles.titleBlock}>
         <Text variant="title">{trip.destinationName}</Text>
         <Text variant="bodySoft" color="textSecondary">
-          Saída: {trip.originName}
+          De {trip.originName} · {formatDateTime(trip.startedAt)}
         </Text>
       </View>
 
@@ -79,34 +75,48 @@ function Summary({ trip }: { trip: TripDetail }) {
         />
       </View>
 
-      <View style={styles.metrics}>
-        <MetricTile
-          icon="map-marker-distance"
-          label="Distância total"
+      <Card style={styles.metrics}>
+        <SummaryMetric
+          label="Distância"
           value={trip.distanceMeters !== null ? formatDistance(trip.distanceMeters) : '--'}
         />
-        <MetricTile
-          icon="clock-outline"
+        <View style={styles.metricDivider} />
+        <SummaryMetric
           label="Duração"
           value={trip.durationSeconds !== null ? formatShortDuration(trip.durationSeconds) : '--'}
         />
-        <MetricTile icon="map-marker-plus" label="Paradas" value={String(trip.stopCount)} />
-        <MetricTile
-          icon="timer-sand"
-          label="Maior trecho sem parada"
-          value={
-            trip.longestStretchWithoutStopSeconds !== null
+        <View style={styles.metricDivider} />
+        <SummaryMetric label="Paradas" value={String(trip.stopCount)} />
+      </Card>
+
+      <Card tone="muted" style={styles.insights}>
+        <View style={styles.insightRow}>
+          <Text variant="label" color="textSecondary">
+            Maior trecho sem parada
+          </Text>
+          <Text variant="body">
+            {trip.longestStretchWithoutStopSeconds !== null
               ? formatShortDuration(trip.longestStretchWithoutStopSeconds)
-              : '--'
-          }
-        />
-        <MetricTile icon="camera-marker" label="Locais registrados" value={String(touristSpots)} />
-        <MetricTile
-          icon="emoticon-outline"
-          label="Emoção predominante"
-          value={trip.predominantEmotion ? EMOTION_LABELS[trip.predominantEmotion] : '--'}
-        />
-      </View>
+              : '--'}
+          </Text>
+        </View>
+        <View style={styles.insightRow}>
+          <Text variant="label" color="textSecondary">
+            Emoção predominante
+          </Text>
+          <Text variant="body">
+            {trip.predominantEmotion ? EMOTION_LABELS[trip.predominantEmotion] : '--'}
+          </Text>
+        </View>
+        {touristSpots > 0 ? (
+          <View style={styles.insightRow}>
+            <Text variant="label" color="textSecondary">
+              Locais registrados
+            </Text>
+            <Text variant="body">{touristSpots}</Text>
+          </View>
+        ) : null}
+      </Card>
 
       {trip.endedAt === null ? (
         <StatusMessage tone="info" message="Esta viagem não foi encerrada pelo aplicativo." />
@@ -147,6 +157,19 @@ function Summary({ trip }: { trip: TripDetail }) {
   );
 }
 
+function SummaryMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metricItem}>
+      <Text variant="label" color="textSecondary" align="center" numberOfLines={1}>
+        {label}
+      </Text>
+      <Text variant="metric" align="center" numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -157,16 +180,36 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.lg,
   },
-  title: {
+  titleBlock: {
     gap: 2,
   },
   map: {
-    aspectRatio: 16 / 11,
+    aspectRatio: 1.22,
+    minHeight: 230,
   },
   metrics: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
+  },
+  metricItem: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  metricDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: colors.border,
+  },
+  insights: {
     gap: spacing.sm,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
   section: {
     gap: spacing.sm,

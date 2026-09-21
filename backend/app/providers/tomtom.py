@@ -36,7 +36,10 @@ NEARBY_CATEGORIES: dict[NearbyCategory, list[int]] = {
     NearbyCategory.HOTEL: [7314],
     # Atração turística, museu, mirante.
     NearbyCategory.PONTO_TURISTICO: [7376, 7317, 7337],
-    NearbyCategory.HOSPITAL: [7321],
+    # Hospital e pronto-socorro. A categoria ampla de saúde (9663) fica de
+    # fora: ela inclui consultórios, vigilâncias e outros serviços que não
+    # atendem uma emergência.
+    NearbyCategory.HOSPITAL: [7321, 9956],
     NearbyCategory.DESCANSO: [7314, 7311],
     # Área de serviço, posto, café.
     NearbyCategory.PARADA: [7395, 7311, 9376],
@@ -111,7 +114,11 @@ class TomTomNearbyProvider:
         except PlaceSearchUnavailable as error:
             raise NearbyUnavailable(str(error)) from error
 
-        return [c for c in map(_to_candidate, payload.get("results") or []) if c]
+        return [
+            candidate
+            for candidate in (_to_candidate(raw, category) for raw in payload.get("results") or [])
+            if candidate
+        ]
 
 
 async def _get(client: httpx.AsyncClient, url: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -174,11 +181,14 @@ def _to_place(raw: Any) -> Place | None:
     )
 
 
-def _to_candidate(raw: Any) -> Candidate | None:
+def _to_candidate(raw: Any, category: NearbyCategory) -> Candidate | None:
     point = _point(raw)
     name = (raw.get("poi") or {}).get("name") if isinstance(raw, dict) else None
 
     if point is None or not name:
+        return None
+
+    if category is NearbyCategory.HOSPITAL and not _is_emergency_care(raw):
         return None
 
     address = raw.get("address") or {}
@@ -188,6 +198,17 @@ def _to_candidate(raw: Any) -> Candidate | None:
         address=_street(address) or address.get("freeformAddress"),
         location=point,
     )
+
+
+def _is_emergency_care(raw: Any) -> bool:
+    """Aceita somente hospital ou pronto-socorro na lista de emergência."""
+    if not isinstance(raw, dict):
+        return False
+
+    category_set = (raw.get("poi") or {}).get("categorySet") or []
+    ids = [str(item.get("id", "")) for item in category_set if isinstance(item, dict)]
+    # 7321 inclui as subcategorias de hospital; 9956 é pronto-socorro.
+    return any(category_id.startswith("7321") or category_id.startswith("9956") for category_id in ids)
 
 
 def _point(raw: Any) -> Coordinate | None:

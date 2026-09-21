@@ -4,8 +4,8 @@ import { colors } from '@/theme/colors';
 export const NAVIGATION_CONFIG = {
   /** Inclinação da câmera em graus (visão 3D) */
   PITCH: 60,
-  /** Zoom aproximado para navegação */
-  ZOOM: 17,
+  /** Zoom aproximado para navegação (18-19 é o padrão do Waze) */
+  ZOOM: 18.5,
   /** Duração das animações de câmera em ms */
   ANIMATION_MS: 450,
   /** Distância em metros para considerar "fora da rota" */
@@ -14,6 +14,12 @@ export const NAVIGATION_CONFIG = {
   ARRIVED_THRESHOLD: 30,
   /** Movimento mínimo em metros para calcular heading */
   MIN_MOVEMENT_FOR_HEADING: 5,
+  /**
+   * Distância em metros que a câmera fica "à frente" do usuário.
+   * Isso cria o efeito de terceira pessoa, com o usuário na parte
+   * inferior da tela e a estrada visível à frente.
+   */
+  CAMERA_AHEAD_OFFSET: 80,
 } as const;
 
 /** Cores das polylines de rota progressiva */

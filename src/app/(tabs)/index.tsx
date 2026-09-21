@@ -84,7 +84,8 @@ export default function HomeScreen() {
             />
           ) : null}
           <FloatingIconButton
-            icon="shield-alert-outline"
+            size="lg"
+            icon="alarm-light"
             iconColor="danger"
             accessibilityLabel="Abrir emergência"
             onPress={openEmergency}

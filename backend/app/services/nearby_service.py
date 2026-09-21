@@ -26,6 +26,25 @@ from app.utils.geo import distance_meters
 
 logger = logging.getLogger("atlas.api")
 
+# Serviços de vigilância, consultórios e farmácias aparecem ocasionalmente com
+# a classificação errada em catálogos abertos. Nunca são uma alternativa segura
+# para o botão de emergência.
+_NOT_EMERGENCY_MEDICAL_TERMS = (
+    "vigilância",
+    "vigilancia",
+    "vigilance",
+    "secretaria",
+    "prefeitura",
+    "farmácia",
+    "farmacia",
+    "laboratório",
+    "laboratorio",
+    "consultório",
+    "consultorio",
+    "odont",
+    "veterin",
+)
+
 # 3 é o que o escopo pede (RF-08) e o que a voz lê; a lista da tela de
 # destino pede até 10.
 DEFAULT_RESULTS = 3
@@ -111,7 +130,12 @@ class NearbyService:
                 logger.warning("%s falhou: %s", source.label, error)
                 reason = reason or f"{source.label} indisponível"
                 continue
-            return found, source.provider.id, reason
+
+            found = _appropriate_candidates(category, found)
+            if found:
+                return found, source.provider.id, reason
+
+            reason = reason or f"{source.label} sem hospitais adequados"
 
         try:
             found = await self._fallback.search(category, origin, radius, wanted)
@@ -121,7 +145,18 @@ class NearbyService:
                 "Não foi possível buscar lugares próximos agora."
             ) from error
 
-        return found, self._fallback.id, reason
+        return _appropriate_candidates(category, found), self._fallback.id, reason
+
+
+def _appropriate_candidates(category: NearbyCategory, candidates: list[Candidate]) -> list[Candidate]:
+    if category is not NearbyCategory.HOSPITAL:
+        return candidates
+
+    return [
+        candidate
+        for candidate in candidates
+        if not any(term in candidate.name.casefold() for term in _NOT_EMERGENCY_MEDICAL_TERMS)
+    ]
 
 
 def _to_place(

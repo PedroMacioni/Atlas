@@ -267,6 +267,61 @@ async def test_sem_google_a_tomtom_responde_sem_nota(client):
 
 
 @respx.mock
+async def test_tomtom_emergencia_descarta_servico_de_saude_que_nao_e_hospital(client):
+    payload = {
+        "results": [
+            {
+                "type": "POI",
+                "id": "vigilancia",
+                "poi": {"name": "Vigilância Alimentar", "categorySet": [{"id": 9663}]},
+                "position": {"lat": -22.87, "lon": -47.05},
+            },
+            {
+                "type": "POI",
+                "id": "hospital",
+                "poi": {"name": "Hospital Municipal", "categorySet": [{"id": 7321001}]},
+                "position": {"lat": -22.88, "lon": -47.06},
+            },
+            {
+                "type": "POI",
+                "id": "pronto-socorro",
+                "poi": {"name": "Pronto-Socorro Central", "categorySet": [{"id": 9956}]},
+                "position": {"lat": -22.89, "lon": -47.07},
+            },
+        ]
+    }
+    tomtom = respx.get(**TOMTOM_NEARBY).mock(return_value=httpx.Response(200, json=payload))
+    respx.get(**OSRM_TABLE).mock(return_value=httpx.Response(500))
+
+    result = await build(client, google=False, tomtom=True).search(NearbyCategory.HOSPITAL, ORIGIN)
+
+    assert [place.name for place in result.places] == ["Hospital Municipal", "Pronto-Socorro Central"]
+    assert tomtom.calls.last.request.url.params["categorySet"] == "7321,9956"
+
+
+@respx.mock
+async def test_emergencia_descarta_nome_inadequado_e_tenta_a_reserva(client):
+    invalid_google = {
+        "places": [
+            {
+                "id": "vigilancia",
+                "displayName": {"text": "Vigilância Sanitária"},
+                "location": {"latitude": -22.8620, "longitude": -47.0455},
+                "businessStatus": "OPERATIONAL",
+            }
+        ]
+    }
+    respx.post(GOOGLE_URL).mock(return_value=httpx.Response(200, json=invalid_google))
+    respx.post(OVERPASS).mock(return_value=httpx.Response(200, json=OVERPASS_OK))
+    respx.get(**OSRM_TABLE).mock(return_value=httpx.Response(500))
+
+    result = await build(client).search(NearbyCategory.HOSPITAL, ORIGIN)
+
+    assert result.source == "openstreetmap"
+    assert [place.name for place in result.places] == ["Hospital Municipal", "Hospital Regional"]
+
+
+@respx.mock
 async def test_google_fora_cai_na_tomtom_e_diz_por_que(client):
     respx.post(GOOGLE_URL).mock(return_value=httpx.Response(403, text="billing"))
     respx.get(**TOMTOM_NEARBY).mock(return_value=httpx.Response(200, json=TOMTOM_OK))

@@ -67,7 +67,7 @@ export function VoiceMapControl({
           {listening ? <Animated.View style={[styles.pulse, pulseStyle]} /> : null}
           <MaterialCommunityIcons
             name="microphone"
-            size={22}
+            size={28}
             color={listening ? colors.danger : colors.primary}
           />
         </View>
@@ -94,13 +94,13 @@ export function VoiceMapControl({
 
 const styles = StyleSheet.create({
   container: {
-    height: 44,
+    height: 56,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     ...shadows.raised,
   },
   collapsed: {
-    width: 44,
+    width: 56,
   },
   expanded: {
     width: 252,
@@ -116,8 +116,8 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   iconSlot: {
-    width: 44,
-    height: 44,
+    width: 56,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
@@ -128,8 +128,8 @@ const styles = StyleSheet.create({
   },
   pulse: {
     position: 'absolute',
-    width: 30,
-    height: 30,
+    width: 36,
+    height: 36,
     borderRadius: radius.pill,
     backgroundColor: colors.danger,
   },
