@@ -14,6 +14,7 @@ import MapView, { Marker, Polyline, type EdgePadding, type Region } from 'react-
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
 import { Text } from '@/components/ui/text';
 import { ATLAS_MAP_STYLE } from '@/features/map/constants/map-style';
+import { NAVIGATION_CONFIG, ROUTE_COLORS } from '@/features/map/constants/navigation';
 import type { Coordinate, NamedCoordinate } from '@/features/map/types/coordinate';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -49,10 +50,20 @@ export type AtlasMapProps = {
   /** Desenha o marcador de destino. */
   showsDestinationMarker?: boolean;
   /**
-   * `route` enquadra o trajeto inteiro; `user` acompanha a posição atual,
-   * reposicionando a câmera a cada leitura nova.
+   * `route` enquadra o trajeto inteiro; `user` acompanha a posição atual;
+   * `navigation` ativa câmera 3D inclinada com rotação baseada no heading.
    */
-  focus?: 'route' | 'user';
+  focus?: 'route' | 'user' | 'navigation';
+  /**
+   * Heading do GPS em graus (0-360). Usado no modo `navigation` para
+   * rotacionar o mapa na direção do movimento.
+   */
+  userHeading?: number | null;
+  /**
+   * Índice do ponto atual na rota. Usado no modo `navigation` para
+   * dividir a polyline em trecho percorrido (opaco) e pendente (vibrante).
+   */
+  routeProgressIndex?: number;
   /**
    * `card` arredonda os cantos, para o mapa que convive com outros elementos.
    * `full` encosta nas bordas, para a navegação — onde o mapa é a tela, e não
@@ -136,12 +147,14 @@ export function AtlasMap({
   edgePadding,
   stops,
   interactive = true,
+  userHeading,
+  routeProgressIndex = 0,
 }: AtlasMapProps) {
   const mapRef = useRef<MapView>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
   const initialRegion = useMemo(() => {
-    if (focus === 'user' && currentLocation) {
+    if ((focus === 'user' || focus === 'navigation') && currentLocation) {
       return {
         ...currentLocation,
         latitudeDelta: FOLLOW_DELTA,
@@ -150,6 +163,17 @@ export function AtlasMap({
     }
     return buildInitialRegion(origin, destination);
   }, [focus, currentLocation, origin, destination]);
+
+  // Segmentos da rota para modo navigation (percorrido vs pendente)
+  const completedCoords = useMemo(() => {
+    if (focus !== 'navigation' || routeCoordinates.length < 2) return [];
+    return routeCoordinates.slice(0, routeProgressIndex + 1);
+  }, [focus, routeCoordinates, routeProgressIndex]);
+
+  const pendingCoords = useMemo(() => {
+    if (focus !== 'navigation' || routeCoordinates.length < 2) return [];
+    return routeCoordinates.slice(routeProgressIndex);
+  }, [focus, routeCoordinates, routeProgressIndex]);
 
   const fitRoute = useCallback(() => {
     const points = routeCoordinates.length >= 2 ? routeCoordinates : [origin, destination];
@@ -213,6 +237,32 @@ export function AtlasMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude]);
 
+  /**
+   * Modo navegação 3D: câmera inclinada e rotacionada conforme heading.
+   *
+   * Usa `animateCamera` ao invés de `animateToRegion` para controlar
+   * pitch (inclinação) e heading (rotação) da câmera.
+   */
+  useEffect(() => {
+    if (focus !== 'navigation' || !isMapReady || !currentLocation) {
+      return;
+    }
+
+    mapRef.current?.animateCamera(
+      {
+        center: {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+        },
+        pitch: NAVIGATION_CONFIG.PITCH,
+        heading: userHeading ?? 0,
+        zoom: NAVIGATION_CONFIG.ZOOM,
+      },
+      { duration: NAVIGATION_CONFIG.ANIMATION_MS }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude, userHeading]);
+
   return (
     <View style={[styles.container, shape === 'card' ? styles.card : styles.full]}>
       <MapView
@@ -232,7 +282,29 @@ export function AtlasMap({
         loadingEnabled
         loadingBackgroundColor={colors.surfaceMuted}
         loadingIndicatorColor={colors.primary}>
-        {routeCoordinates.length >= 2 ? (
+        {/* Modo navigation: duas polylines (percorrido + pendente) */}
+        {focus === 'navigation' && completedCoords.length >= 2 ? (
+          <Polyline
+            coordinates={completedCoords}
+            strokeColor={ROUTE_COLORS.completed}
+            strokeWidth={6}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
+
+        {focus === 'navigation' && pendingCoords.length >= 2 ? (
+          <Polyline
+            coordinates={pendingCoords}
+            strokeColor={ROUTE_COLORS.pending}
+            strokeWidth={6}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
+
+        {/* Modos route/user: polyline única */}
+        {focus !== 'navigation' && routeCoordinates.length >= 2 ? (
           <Polyline
             coordinates={routeCoordinates}
             strokeColor={colors.primary}
