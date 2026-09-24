@@ -7,6 +7,7 @@
  */
 
 import type { Coordinate } from '@/features/map/types/coordinate';
+import { calculateHeading } from '@/features/map/utils/geo';
 import { buildCumulativeDistances, distanceBetween, projectOnSegment } from '@/utils/geo';
 
 /**
@@ -44,6 +45,15 @@ export type TripProgress = {
   snappedPoint: Coordinate;
   /** Índice do vértice onde a busca parou, para continuar dali na próxima. */
   nearestIndex: number;
+  /**
+   * Direção da rua em que se está, em graus — o rumo do trecho de rota sob a
+   * posição, não o do aparelho.
+   *
+   * É o que faz a seta apontar para onde a via segue, como nos aplicativos de
+   * navegação. O heading do GPS oscila com o carro parado e some em
+   * velocidade baixa; o da rota é estável e sempre existe.
+   */
+  courseDegrees: number | null;
   /** Distância entre a posição real e a rota, em metros. */
   offRouteMeters: number;
   /** `true` quando o usuário está longe o bastante para o progresso não valer. */
@@ -136,6 +146,9 @@ export function computeTripProgress({
     fraction,
     snappedPoint: best.point,
     nearestIndex: best.index,
+    // Vértices de rota ficam a poucos metros um do outro: o mínimo padrão de
+    // 5 m descartaria a maioria dos segmentos.
+    courseDegrees: calculateHeading(coordinates[best.index], coordinates[best.index + 1], 0),
     offRouteMeters: best.distanceMeters,
     isOffRoute: best.distanceMeters > OFF_ROUTE_THRESHOLD_METERS,
     hasArrived: distanceBetween(position, destination) <= ARRIVAL_THRESHOLD_METERS,

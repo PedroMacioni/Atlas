@@ -87,6 +87,16 @@ export default function RootLayout() {
               sheetGrabberVisible: true,
             }}
           />
+          {/* As 6 variáveis da demonstração, por cima da viagem em andamento. */}
+          <Stack.Screen
+            name="trip-scenario"
+            options={{
+              headerShown: false,
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.9],
+              sheetGrabberVisible: true,
+            }}
+          />
           <Stack.Screen name="history/[id]" options={{ title: 'Resumo da viagem' }} />
           {/*
             Emergência sobe em folha, por cima de qualquer tela — inclusive da

@@ -8,7 +8,7 @@ import {
   useState,
   type Ref,
 } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, type EdgePadding, type Region } from 'react-native-maps';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/text';
 import { ATLAS_MAP_STYLE } from '@/features/map/constants/map-style';
 import { NAVIGATION_CONFIG, ROUTE_COLORS } from '@/features/map/constants/navigation';
 import type { Coordinate, NamedCoordinate } from '@/features/map/types/coordinate';
+import { findNearestPointOnRoute } from '@/features/map/utils/route-progress';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -57,8 +58,11 @@ export type AtlasMapProps = {
    */
   focus?: 'route' | 'user' | 'navigation';
   /**
-   * Heading do GPS em graus (0-360). Usado no modo `navigation` para
-   * rotacionar o mapa na direção do movimento.
+   * Direção do movimento em graus (0-360), a partir do norte. No modo
+   * `navigation` ela gira a câmera e a seta do usuário.
+   *
+   * Quem chama prefere o rumo da rota ao do aparelho: o do aparelho oscila
+   * com o carro parado e some em velocidade baixa.
    */
   userHeading?: number | null;
   /**
@@ -183,10 +187,40 @@ export function AtlasMap({
     return routeCoordinates.slice(0, routeProgressIndex + 1);
   }, [focus, routeCoordinates, routeProgressIndex]);
 
+  /**
+   * Onde a parada aceita cai na rota.
+   *
+   * A rota já passa por ela — foi recalculada com a parada como ponto
+   * intermediário —, então basta achar o vértice mais próximo para saber onde
+   * o desvio termina. `null` quando não há parada.
+   */
+  const stopOnRoute = useMemo(() => {
+    const stop = stops?.[0];
+
+    if (focus !== 'navigation' || !stop || routeCoordinates.length < 2) {
+      return null;
+    }
+
+    return findNearestPointOnRoute(stop, routeCoordinates).index;
+    // Fora das dependências fica o progresso: ele muda a cada leitura, e
+    // varrer a rota inteira quatro vezes por segundo para achar um ponto que
+    // não saiu do lugar seria desperdício.
+  }, [focus, stops, routeCoordinates]);
+
+  /** Some assim que a parada fica para trás: o desvio acabou. */
+  const stopIndex = stopOnRoute !== null && stopOnRoute > routeProgressIndex ? stopOnRoute : null;
+
+  /** Do ponto atual até a parada, quando há uma. */
+  const detourCoords = useMemo(() => {
+    if (stopIndex === null) return [];
+    return routeCoordinates.slice(routeProgressIndex, stopIndex + 1);
+  }, [routeCoordinates, routeProgressIndex, stopIndex]);
+
+  /** O que falta até o destino — depois da parada, se houver. */
   const pendingCoords = useMemo(() => {
     if (focus !== 'navigation' || routeCoordinates.length < 2) return [];
-    return routeCoordinates.slice(routeProgressIndex);
-  }, [focus, routeCoordinates, routeProgressIndex]);
+    return routeCoordinates.slice(stopIndex ?? routeProgressIndex);
+  }, [focus, routeCoordinates, routeProgressIndex, stopIndex]);
 
   const fitRoute = useCallback(() => {
     const points = routeCoordinates.length >= 2 ? routeCoordinates : [origin, destination];
@@ -212,31 +246,43 @@ export function AtlasMap({
     );
   }, [currentLocation]);
 
+  /**
+   * A câmera de navegação: inclinada, girada com o movimento e centrada um
+   * pouco **à frente** de quem dirige, para a estrada ocupar a tela e o carro
+   * ficar na parte de baixo.
+   */
+  const navigationCamera = useCallback(
+    (at: Coordinate) => {
+      const headingRad = (userHeading ?? 0) * (Math.PI / 180);
+      const metersPerDegreeLat = 111320;
+      const metersPerDegreeLng = 111320 * Math.cos((at.latitude * Math.PI) / 180);
+      const offsetLat =
+        (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLat) * Math.cos(headingRad);
+      const offsetLng =
+        (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLng) * Math.sin(headingRad);
+
+      return {
+        center: {
+          latitude: at.latitude + offsetLat,
+          longitude: at.longitude + offsetLng,
+        },
+        pitch: NAVIGATION_CONFIG.PITCH,
+        heading: userHeading ?? 0,
+        zoom: NAVIGATION_CONFIG.ZOOM,
+      };
+    },
+    [userHeading],
+  );
+
   const goToNavigation = useCallback(() => {
     if (!currentLocation) {
       return;
     }
 
-    // Calcula o deslocamento para efeito terceira pessoa
-    const headingRad = (userHeading ?? 0) * (Math.PI / 180);
-    const metersPerDegreeLat = 111320;
-    const metersPerDegreeLng = 111320 * Math.cos(currentLocation.latitude * Math.PI / 180);
-    const offsetLat = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLat) * Math.cos(headingRad);
-    const offsetLng = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLng) * Math.sin(headingRad);
-
-    mapRef.current?.animateCamera(
-      {
-        center: {
-          latitude: currentLocation.latitude + offsetLat,
-          longitude: currentLocation.longitude + offsetLng,
-        },
-        pitch: NAVIGATION_CONFIG.PITCH,
-        heading: userHeading ?? 0,
-        zoom: NAVIGATION_CONFIG.ZOOM,
-      },
-      { duration: NAVIGATION_CONFIG.ANIMATION_MS },
-    );
-  }, [currentLocation, userHeading]);
+    mapRef.current?.animateCamera(navigationCamera(currentLocation), {
+      duration: NAVIGATION_CONFIG.ANIMATION_MS,
+    });
+  }, [currentLocation, navigationCamera]);
 
   useImperativeHandle(ref, () => ({ fitRoute, centerOnUser, goToNavigation }), [fitRoute, centerOnUser, goToNavigation]);
 
@@ -277,45 +323,49 @@ export function AtlasMap({
   }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude]);
 
   /**
-   * Modo navegação 3D: câmera inclinada e rotacionada conforme heading.
+   * Acompanhamento em modo navegação.
    *
-   * Usa `animateCamera` ao invés de `animateToRegion` para controlar
-   * pitch (inclinação) e heading (rotação) da câmera.
+   * Duas coisas separadas, e é a diferença entre elas que tirava a fluidez:
    *
-   * O centro da câmera é deslocado "à frente" do usuário na direção do
-   * heading, criando um efeito de terceira pessoa onde o usuário aparece
-   * na parte inferior da tela e a estrada é visível à frente.
+   * - **A primeira posição não se anima.** Ela costuma estar longe do
+   *   enquadramento inicial — no modo de demonstração, 58 km adiante — e
+   *   animar até lá é uma viagem de câmera sobre o mapa inteiro, carregando
+   *   telas de todo o caminho. `setCamera` põe a câmera no lugar de uma vez.
+   * - **Depois, a animação dura o que durou o intervalo.** Cada leitura anima
+   *   pelo tempo que separou as duas últimas, então a câmera ainda está
+   *   chegando quando a próxima chega, e o movimento não tem buraco. Uma
+   *   duração fixa, menor que o intervalo, é o que faz o mapa andar aos
+   *   trancos.
    */
+  const hasCenteredOnUser = useRef(false);
+  const lastCameraMoveAt = useRef<number | null>(null);
+
   useEffect(() => {
     if (focus !== 'navigation' || !isMapReady || !currentLocation) {
       return;
     }
 
-    // Calcula o deslocamento em graus a partir de metros
-    // 1 grau de latitude ≈ 111320 metros
-    // 1 grau de longitude ≈ 111320 * cos(latitude) metros
-    const headingRad = (userHeading ?? 0) * (Math.PI / 180);
-    const metersPerDegreeLat = 111320;
-    const metersPerDegreeLng = 111320 * Math.cos(currentLocation.latitude * Math.PI / 180);
+    const camera = navigationCamera(currentLocation);
+    const now = Date.now();
+    const sinceLastMove = lastCameraMoveAt.current === null ? null : now - lastCameraMoveAt.current;
+    lastCameraMoveAt.current = now;
 
-    // Desloca a câmera "à frente" do usuário na direção do heading
-    const offsetLat = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLat) * Math.cos(headingRad);
-    const offsetLng = (NAVIGATION_CONFIG.CAMERA_AHEAD_OFFSET / metersPerDegreeLng) * Math.sin(headingRad);
+    if (!hasCenteredOnUser.current) {
+      hasCenteredOnUser.current = true;
+      mapRef.current?.setCamera(camera);
+      return;
+    }
 
-    mapRef.current?.animateCamera(
-      {
-        center: {
-          latitude: currentLocation.latitude + offsetLat,
-          longitude: currentLocation.longitude + offsetLng,
-        },
-        pitch: NAVIGATION_CONFIG.PITCH,
-        heading: userHeading ?? 0,
-        zoom: NAVIGATION_CONFIG.ZOOM,
-      },
-      { duration: NAVIGATION_CONFIG.ANIMATION_MS }
-    );
+    mapRef.current?.animateCamera(camera, {
+      duration: Math.min(
+        NAVIGATION_CONFIG.FOLLOW_MAX_MS,
+        Math.max(NAVIGATION_CONFIG.FOLLOW_MIN_MS, sinceLastMove ?? NAVIGATION_CONFIG.ANIMATION_MS),
+      ),
+    });
+    // `currentLocation` inteiro fora das dependências é deliberado: as duas
+    // coordenadas já cobrem tudo que o efeito lê.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude, userHeading]);
+  }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude, navigationCamera]);
 
   return (
     <View style={[styles.container, shape === 'card' ? styles.card : styles.full]}>
@@ -341,6 +391,16 @@ export function AtlasMap({
           <Polyline
             coordinates={completedCoords}
             strokeColor={ROUTE_COLORS.completed}
+            strokeWidth={6}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
+
+        {detourCoords.length >= 2 ? (
+          <Polyline
+            coordinates={detourCoords}
+            strokeColor={ROUTE_COLORS.detour}
             strokeWidth={6}
             lineCap="round"
             lineJoin="round"
@@ -396,21 +456,22 @@ export function AtlasMap({
         ))}
 
         {/*
-          Modo navegação: seta customizada que rotaciona conforme o heading.
-          Substitui o ponto azul nativo para dar o efeito visual do Waze.
+          Modo navegação: seta customizada no lugar do ponto azul nativo.
+
+          A rotação é uma só, pela prop `rotation` do marcador, e em graus a
+          partir do norte **do mapa** — que é o que `flat` significa: o
+          marcador está deitado sobre o mapa e gira com ele. Girar também a
+          View por CSS somaria o giro da câmera ao do marcador, e a seta
+          apontaria para qualquer lado menos o da rua.
         */}
         {focus === 'navigation' && currentLocation ? (
           <Marker
             coordinate={currentLocation}
             anchor={{ x: 0.5, y: 0.5 }}
             flat
-            rotation={Platform.OS === 'ios' ? 0 : (userHeading ?? 0)}
+            rotation={userHeading ?? 0}
             tracksViewChanges={false}>
-            <View
-              style={[
-                styles.arrowContainer,
-                Platform.OS === 'ios' && { transform: [{ rotate: `${userHeading ?? 0}deg` }] },
-              ]}>
+            <View style={styles.arrowContainer}>
               <MaterialCommunityIcons name="navigation" size={32} color={colors.primary} />
             </View>
           </Marker>

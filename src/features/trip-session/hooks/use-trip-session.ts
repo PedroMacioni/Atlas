@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { TrackedPosition } from '@/features/location/services/location-tracking-service';
-import type { NamedCoordinate } from '@/features/map/types/coordinate';
+import type { Coordinate, NamedCoordinate } from '@/features/map/types/coordinate';
 import {
   addStop,
   describeTripError,
@@ -26,9 +26,22 @@ export type TripSessionStatus =
   | 'active'
   | 'error';
 
+/**
+ * O trajeto e o instante do fim, quando quem encerra sabe mais do que o
+ * acumulado do GPS — é o caso da viagem de demonstração, que conclui o
+ * percurso inteiro de uma vez.
+ */
+export type FinishOverride = {
+  distanceMeters: number;
+  path: Coordinate[];
+  endedAt?: string;
+};
+
 export type TripSession = {
   status: TripSessionStatus;
   tripId: string | null;
+  /** Quando a API abriu a viagem, em ISO 8601. */
+  startedAt: string | null;
   error: string | null;
   /** Nova tentativa de abrir a viagem depois de uma falha. */
   retry: () => void;
@@ -41,7 +54,7 @@ export type TripSession = {
    * Encerra e devolve o id da viagem para abrir o resumo. Lança se a API
    * recusar; sem viagem registrada, devolve `null` e a tela só sai.
    */
-  finish: (reason: EndReason) => Promise<string | null>;
+  finish: (reason: EndReason, override?: FinishOverride) => Promise<string | null>;
   /** Distância percorrida até aqui, medida pelo GPS. */
   traveledMeters: number;
 };
@@ -68,6 +81,7 @@ export function useTripSession({
   const available = isTripHistoryAvailable();
 
   const [tripId, setTripId] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -98,6 +112,7 @@ export function useTripSession({
       .then((trip) => {
         if (active) {
           setTripId(trip.id);
+          setStartedAt(trip.startedAt);
         }
       })
       .catch((cause: unknown) => {
@@ -142,16 +157,17 @@ export function useTripSession({
   }, [tripId, currentLocation]);
 
   const finish = useCallback(
-    async (reason: EndReason) => {
+    async (reason: EndReason, override?: FinishOverride) => {
       if (!tripId) {
         return null;
       }
 
       const trip = await finishTrip(tripId, {
         endReason: reason,
-        distanceMeters: track.value.distanceMeters,
-        path: track.value.points,
-        location: currentLocation,
+        distanceMeters: override?.distanceMeters ?? track.value.distanceMeters,
+        path: override?.path ?? track.value.points,
+        endedAt: override?.endedAt,
+        location: override ? override.path[override.path.length - 1] : currentLocation,
       });
 
       return trip.id;
@@ -162,6 +178,7 @@ export function useTripSession({
   return {
     status,
     tripId,
+    startedAt,
     error,
     retry,
     registerStop,

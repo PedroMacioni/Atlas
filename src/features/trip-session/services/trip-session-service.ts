@@ -79,6 +79,11 @@ export type FinishTripParams = {
   distanceMeters: number;
   path: Coordinate[];
   location?: Coordinate | null;
+  /**
+   * Quando a viagem terminou. Omitido, a API usa o relógio dela — que é o
+   * certo para uma viagem de verdade, encerrada no instante do toque.
+   */
+  endedAt?: string;
 };
 
 export function finishTrip(tripId: string, params: FinishTripParams) {

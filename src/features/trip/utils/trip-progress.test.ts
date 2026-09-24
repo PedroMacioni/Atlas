@@ -112,4 +112,19 @@ describe('computeTripProgress', () => {
     expect(progress?.isOffRoute).toBe(false);
     expect(progress?.nearestIndex).toBe(0);
   });
+  it('devolve o rumo da rua, e não o do aparelho', () => {
+    // O trajeto corre para o leste: a seta tem que apontar para 90°.
+    const progress = progressAt({ latitude: -22.9, longitude: -47.07 });
+
+    expect(progress?.courseDegrees).toBeCloseTo(90, 0);
+  });
+
+  it('gruda a posição na rota, para a seta não cair na calçada', () => {
+    // 20 m ao sul do trajeto: dentro da tolerância, ainda em rota.
+    const progress = progressAt({ latitude: -22.90018, longitude: -47.07 });
+
+    expect(progress?.isOffRoute).toBe(false);
+    expect(progress?.snappedPoint.latitude).toBeCloseTo(-22.9, 5);
+    expect(progress?.snappedPoint.longitude).toBeCloseTo(-47.07, 5);
+  });
 });

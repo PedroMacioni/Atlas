@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,16 @@ import { describeSceneError } from '@/features/camera/services/scene-service';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
+import {
+  DEMO_DRIVE_DESTINATION,
+  DEMO_DRIVE_ORIGIN,
+} from '@/features/demo/constants/demo-drive';
+import { useDemoDrive } from '@/features/demo/hooks/use-demo-drive';
+import {
+  getDemoScenario,
+  resetDemoScenario,
+  setDemoScenario,
+} from '@/features/demo/state/demo-scenario';
 import { useLocationTracking } from '@/features/location/hooks/use-location-tracking';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
 import { ManeuverBanner } from '@/features/trip/components/maneuver-banner';
@@ -28,13 +38,17 @@ import { DECISION_CATEGORY } from '@/features/nearby/services/nearby-service';
 import type { NearbyPlace } from '@/features/nearby/types/nearby';
 import { RecommendationCard } from '@/features/recommendation/components/recommendation-card';
 import { useRecommendations } from '@/features/recommendation/hooks/use-recommendations';
-import { useTripSession } from '@/features/trip-session/hooks/use-trip-session';
+import {
+  useTripSession,
+  type FinishOverride,
+} from '@/features/trip-session/hooks/use-trip-session';
 import { IMAGE_CLASS_LABELS } from '@/features/trip-session/constants/journal-labels';
 import {
   describeTripError,
   recordEvent,
 } from '@/features/trip-session/services/trip-session-service';
 import type { EndReason } from '@/features/trip-session/types/trip';
+import type { RouteResult } from '@/features/routing/types/route-result';
 import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
 import { VoiceIndicator } from '@/features/voice/components/voice-indicator';
 import {
@@ -86,11 +100,33 @@ export default function TripScreen() {
   const mapRef = useRef<AtlasMapHandle>(null);
   const cameraRef = useRef<SceneCameraHandle>(null);
 
-  const destination = useTripDestination();
-  const tracking = useLocationTracking();
-  const origin = useTripOrigin(tracking.position?.coordinate ?? null, tracking.isStarting);
+  /*
+    Modo de demonstração (`atlas://trip?demo=1`): o trajeto é o de sempre —
+    origem, destino e rota vêm da mesma API —, mas a posição não vem do GPS.
+    Um ponto caminha sobre a rota, já na metade dela, e a tela inteira acredita
+    nele. É o que permite mostrar a viagem em andamento sem dirigir 110 km.
+  */
+  const { demo: demoParam } = useLocalSearchParams<{ demo?: string }>();
+  const isDemo = demoParam === '1';
 
-  const session = useTripSession({ origin, destination, position: tracking.position });
+  const chosenDestination = useTripDestination();
+  const destination = isDemo ? DEMO_DRIVE_DESTINATION : chosenDestination;
+
+  const tracking = useLocationTracking(!isDemo);
+  const gpsOrigin = useTripOrigin(tracking.position?.coordinate ?? null, tracking.isStarting);
+  const origin = isDemo ? DEMO_DRIVE_ORIGIN : gpsOrigin;
+
+  /*
+    A rota chega à demonstração por um estado, e não direto de `useTripRoute`:
+    a posição simulada nasce da rota, e a rota — por causa do desvio — nasce da
+    posição. Um render de atraso desfaz o laço.
+  */
+  const [demoRoute, setDemoRoute] = useState<RouteResult | null>(null);
+  const demoDrive = useDemoDrive(isDemo, demoRoute);
+
+  const position = isDemo ? demoDrive.position : tracking.position;
+
+  const session = useTripSession({ origin, destination, position });
 
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -104,7 +140,7 @@ export default function TripScreen() {
     Parada no caminho — de uma recomendação aceita ou de um hospital escolhido
     na emergência. Ao alcançá-la, vira parada no diário com o nome do lugar.
   */
-  const detour = useDetour(tracking.position?.coordinate ?? null, (reached) => {
+  const detour = useDetour(position?.coordinate ?? null, (reached) => {
     session
       .registerStop({ name: reached.name, category: reached.category, reason: reached.reason })
       .then(() => flash(`Parada registrada: ${reached.name}.`))
@@ -112,7 +148,47 @@ export default function TripScreen() {
   });
 
   const trip = useTripRoute(detour.routeOrigin ?? origin, destination, detour.waypoints);
-  const progress = useTripProgress(trip.route, tracking.position?.coordinate ?? null);
+  const progress = useTripProgress(trip.route, position?.coordinate ?? null);
+
+  /*
+    Derivar durante a renderização, e não num efeito: é o padrão do resto da
+    viagem, e evita um quadro com o carro na rota antiga.
+
+    Só a rota pronta entra. Enquanto o desvio é calculado, `trip.route` volta a
+    ser nulo por alguns segundos, e adotar esse nulo faria o carro desaparecer
+    do mapa no meio da demonstração — ele continua andando no trajeto anterior
+    até o novo chegar.
+  */
+  if (isDemo && trip.route && demoRoute !== trip.route) {
+    setDemoRoute(trip.route);
+  }
+
+  // Cada demonstração começa do cenário do escopo, e não do que ficou da
+  // anterior.
+  useEffect(() => {
+    if (isDemo) {
+      resetDemoScenario();
+    }
+  }, [isDemo]);
+
+  /*
+    A distância que o modelo vê começa sendo a que o carro simulado já andou —
+    é o que torna as 6 variáveis coerentes com o que está na tela. Depois disso
+    ela é de quem mexe na folha de condições.
+  */
+  const demoDistanceSynced = useRef(false);
+
+  useEffect(() => {
+    if (!isDemo || demoDistanceSynced.current || demoDrive.traveledMeters <= 0) {
+      return;
+    }
+
+    demoDistanceSynced.current = true;
+    setDemoScenario({
+      ...getDemoScenario(),
+      distanceKm: Math.round(demoDrive.traveledMeters / 1_000),
+    });
+  }, [isDemo, demoDrive.traveledMeters]);
 
   // Os 3 locais para uma recomendação aceita (RF-19).
   const stopOptions = useNearbySearch();
@@ -120,14 +196,26 @@ export default function TripScreen() {
 
   const recommendations = useRecommendations({
     tripId: session.tripId,
-    traveledMeters: session.traveledMeters,
-    location: tracking.position?.coordinate ?? null,
+    // Na demonstração quem sabe a distância é o carro simulado: o diário da
+    // sessão só soma o que o GPS andou, e o GPS não andou.
+    traveledMeters: isDemo ? demoDrive.traveledMeters : session.traveledMeters,
+    location: position?.coordinate ?? null,
   });
+
+  /**
+   * Pede a avaliação ao Random Forest.
+   *
+   * Na demonstração vão junto as condições da folha de cenário — uma hora de
+   * estrada, cansaço na voz —, e a API responde com o modelo de verdade sobre
+   * variáveis escolhidas à mão. As condições são lidas no momento do toque,
+   * que é quando elas valem.
+   */
+  const askRecommendation = () => recommendations.ask(isDemo ? getDemoScenario() : undefined);
 
   const scene = useSceneReadings({
     tripId: session.tripId,
     camera: cameraRef,
-    location: tracking.position?.coordinate ?? null,
+    location: position?.coordinate ?? null,
   });
 
   const [isFollowing, setIsFollowing] = useState(true);
@@ -150,8 +238,21 @@ export default function TripScreen() {
     return findNextManeuver(trip.route.steps, progress?.traveledMeters ?? 0);
   }, [trip.route, progress]);
 
-  const hasPosition = tracking.position !== null;
+  const hasPosition = position !== null;
   const hasArrived = progress?.hasArrived ?? false;
+
+  /*
+    O que o mapa desenha como "você" (RF-07).
+
+    Em rota, é a posição **projetada sobre o trajeto**, e não a leitura crua do
+    GPS: é o que mantém a seta em cima da via em vez de na calçada ou na
+    pista contrária. E a direção é a da rua em que se está, não a do aparelho,
+    que treme com o carro parado e some em velocidade baixa. Fora da rota as
+    duas coisas voltam a ser as do GPS — ali a rota não tem o que dizer.
+  */
+  const onRoute = progress !== null && !progress.isOffRoute;
+  const mapLocation = onRoute ? progress.snappedPoint : (position?.coordinate ?? null);
+  const mapHeading = (onRoute ? progress.courseDegrees : null) ?? position?.heading ?? null;
 
   // Sem posição, os totais do trajeto são a melhor verdade disponível.
   const remainingMeters = progress?.remainingMeters ?? trip.route?.distanceMeters ?? 0;
@@ -164,7 +265,7 @@ export default function TripScreen() {
    * API, uma falha ao salvar não prende ninguém na tela: oferece tentar de
    * novo ou sair sem o resumo.
    */
-  const endTrip = async (reason: EndReason) => {
+  const endTrip = async (reason: EndReason, override?: FinishOverride) => {
     if (isEnding) {
       return;
     }
@@ -172,7 +273,7 @@ export default function TripScreen() {
     setIsEnding(true);
 
     try {
-      const tripId = await session.finish(reason);
+      const tripId = await session.finish(reason, override);
 
       if (tripId) {
         router.replace({ pathname: '/history/[id]', params: { id: tripId } });
@@ -183,9 +284,38 @@ export default function TripScreen() {
       setIsEnding(false);
       Alert.alert('Não foi possível salvar a viagem', describeTripError(cause), [
         { text: 'Sair sem salvar', style: 'destructive', onPress: () => router.back() },
-        { text: 'Tentar de novo', onPress: () => endTrip(reason) },
+        { text: 'Tentar de novo', onPress: () => endTrip(reason, override) },
       ]);
     }
+  };
+
+  /**
+   * "Cheguei": conclui a demonstração como se o trajeto inteiro tivesse sido
+   * dirigido.
+   *
+   * O resumo precisa de três coisas que o carro simulado sabe e o diário da
+   * sessão não: o caminho completo — incluindo os trechos anteriores a cada
+   * desvio —, a distância somada sobre ele, e um fim de viagem coerente com o
+   * tempo que a rota leva, em vez dos poucos minutos que a demonstração
+   * passou aberta.
+   */
+  const concludeDemoTrip = () => {
+    const complete = demoDrive.completeTrip();
+
+    if (complete.path.length < 2) {
+      flash('A rota ainda não chegou.');
+      return;
+    }
+
+    const endedAt = session.startedAt
+      ? new Date(Date.parse(session.startedAt) + complete.durationSeconds * 1_000).toISOString()
+      : undefined;
+
+    endTrip('arrival', {
+      distanceMeters: complete.distanceMeters,
+      path: complete.path,
+      endedAt,
+    });
   };
 
   /** "Parar" pede confirmação: encerrar é definitivo e gera o resumo (RF-25). */
@@ -219,7 +349,7 @@ export default function TripScreen() {
   }, [hasArrived]);
 
   const openEmergency = () => {
-    const here = tracking.position?.coordinate;
+    const here = position?.coordinate;
 
     router.push({
       pathname: '/emergency',
@@ -241,7 +371,7 @@ export default function TripScreen() {
   const answerRecommendation = (accepted: boolean) => {
     const current = recommendations.current;
     const decision = current?.decision;
-    const here = tracking.position?.coordinate ?? null;
+    const here = position?.coordinate ?? null;
 
     recommendations.answer(accepted).catch(() => {});
 
@@ -284,7 +414,7 @@ export default function TripScreen() {
     await recordEvent(session.tripId, {
       kind: 'tourist_spot',
       command: 'Ponto turístico registrado',
-      location: tracking.position?.coordinate ?? null,
+      location: position?.coordinate ?? null,
     });
     flash('Ponto turístico registrado no diário.');
   };
@@ -325,10 +455,10 @@ export default function TripScreen() {
 
   const tripVoice = useTripVoice({
     registerStop: () => session.registerStop(),
-    askRecommendation: recommendations.ask,
+    askRecommendation,
     registerTouristSpot,
     findStop: (category) => {
-      const here = tracking.position?.coordinate;
+      const here = position?.coordinate;
       if (!here) {
         flash('Sem localização para buscar lugares por perto.');
         return;
@@ -353,7 +483,7 @@ export default function TripScreen() {
         tripId: session.tripId,
         transcript,
         audioUri,
-        location: tracking.position?.coordinate ?? null,
+        location: position?.coordinate ?? null,
       })
         .then((result) => {
           const notice = describeEmotion(result);
@@ -365,7 +495,7 @@ export default function TripScreen() {
           recordEvent(session.tripId!, {
             kind: 'command',
             command: transcript,
-            location: tracking.position?.coordinate ?? null,
+            location: position?.coordinate ?? null,
           }).catch(() => {});
         });
     },
@@ -388,7 +518,7 @@ export default function TripScreen() {
         if (action === 'toggle-wake') {
           wake.toggle();
         } else if (action === 'ask-recommendation') {
-          recommendations.ask();
+          askRecommendation();
         } else if (action === 'register-stop') {
           registerStop();
         } else {
@@ -398,7 +528,7 @@ export default function TripScreen() {
     // As funções são lidas quando a ação chega; reinscrever a cada render não
     // melhora a entrega e pode trocar o listener enquanto o sheet fecha.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wake.toggle, recommendations.ask, registerStop, confirmEnd],
+    [wake.toggle, askRecommendation, registerStop, confirmEnd],
   );
 
   // As 3 opções de uma parada pedida por voz: lidas e escolhidas por voz.
@@ -500,15 +630,18 @@ export default function TripScreen() {
         ref={mapRef}
         shape="full"
         edgePadding={MAP_EDGE_PADDING}
-        currentLocation={tracking.position?.coordinate ?? null}
+        currentLocation={mapLocation}
         origin={origin ?? DEMO_ORIGIN}
         destination={destination}
         routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
         stops={detour.waypoints}
-        showsUserLocation={hasPosition && !isFollowing}
+        // O ponto azul nativo é o do GPS de verdade: na demonstração ele
+        // apareceria onde o aparelho está, longe da seta, como se houvesse
+        // dois "você" no mapa.
+        showsUserLocation={!isDemo && hasPosition && !isFollowing}
         showsOriginMarker={!hasPosition}
         focus={isFollowing ? 'navigation' : 'route'}
-        userHeading={tracking.position?.heading ?? null}
+        userHeading={mapHeading}
         routeProgressIndex={progress?.nearestIndex ?? 0}
       />
 
@@ -640,6 +773,35 @@ export default function TripScreen() {
               />
             ) : null}
 
+            {/*
+              Controles da demonstração: as condições que o Random Forest vai
+              ver, e o pause — para a tela ficar parada na hora da foto.
+            */}
+            {isDemo ? (
+              <>
+                <FloatingIconButton
+                  size="lg"
+                  icon="flask-outline"
+                  accessibilityLabel="Ajustar as condições da demonstração"
+                  onPress={() => router.push('/trip-scenario')}
+                />
+                <FloatingIconButton
+                  size="lg"
+                  icon="flag-checkered"
+                  accessibilityLabel="Concluir a viagem e ver o resumo"
+                  onPress={concludeDemoTrip}
+                />
+                <FloatingIconButton
+                  size="lg"
+                  icon={demoDrive.isPaused ? 'play' : 'pause'}
+                  accessibilityLabel={
+                    demoDrive.isPaused ? 'Retomar a viagem simulada' : 'Pausar a viagem simulada'
+                  }
+                  onPress={demoDrive.togglePause}
+                />
+              </>
+            ) : null}
+
             {/* Só num development build: no Expo Go não há reconhecimento de fala. */}
             {tripVoice.available ? (
               <FloatingIconButton
@@ -691,7 +853,7 @@ export default function TripScreen() {
           remainingSeconds={remainingSeconds}
           remainingMeters={remainingMeters}
           bottomInset={insets.bottom}
-          leading={<SpeedBadge metersPerSecond={tracking.position?.speed ?? null} />}
+          leading={<SpeedBadge metersPerSecond={position?.speed ?? null} />}
           onEndTrip={confirmEnd}
         />
       </View>

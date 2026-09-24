@@ -10,6 +10,7 @@ import type {
   Recommendation,
   RecommendationResponse,
   RecommendationTrigger,
+  SimulationOverrides,
 } from '@/features/recommendation/types/recommendation';
 
 /**
@@ -35,8 +36,14 @@ export type RecommendationsState = {
   assistance: boolean;
   isAsking: boolean;
   error: string | null;
-  /** "Atlas, preciso abastecer ou descansar" — sempre responde. */
-  ask: () => void;
+  /**
+   * "Atlas, preciso abastecer ou descansar" — sempre responde.
+   *
+   * Com `simulation`, as variáveis informadas substituem as reais e a
+   * avaliação é registrada como simulação: é o que a viagem de demonstração
+   * usa para perguntar "e se eu estivesse há uma hora na estrada?".
+   */
+  ask: (simulation?: SimulationOverrides) => void;
   /** Aceita ou recusa a recomendação atual. */
   answer: (accepted: boolean) => Promise<void>;
   dismissAssistance: () => void;
@@ -74,7 +81,7 @@ export function useRecommendations({
   }, []);
 
   const evaluate = useCallback(
-    async (trigger: RecommendationTrigger) => {
+    async (trigger: RecommendationTrigger, simulation?: SimulationOverrides) => {
       if (!tripId) {
         return;
       }
@@ -83,6 +90,7 @@ export function useRecommendations({
         trigger,
         distanceMeters: traveledMeters,
         location: location ?? undefined,
+        simulation,
       });
       handle(response);
     },
@@ -112,14 +120,17 @@ export function useRecommendations({
     return () => clearInterval(intervalId);
   }, [tripId]);
 
-  const ask = useCallback(() => {
+  const ask = useCallback(
+    (simulation?: SimulationOverrides) => {
     setIsAsking(true);
     setError(null);
 
-    evaluate('manual')
+    evaluate(simulation ? 'simulation' : 'manual', simulation)
       .catch((cause: unknown) => setError(describeRecommendationError(cause)))
       .finally(() => setIsAsking(false));
-  }, [evaluate]);
+    },
+    [evaluate],
+  );
 
   const answer = useCallback(
     async (accepted: boolean) => {

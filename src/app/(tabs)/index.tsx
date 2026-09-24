@@ -83,6 +83,19 @@ export default function HomeScreen() {
               onLongPress={wake.available ? wake.toggle : undefined}
             />
           ) : null}
+          {/*
+            Viagem de demonstração: Taquaral, em Campinas, até a São Paulo
+            Expo, já na metade do caminho. É o que abre a tela de viagem em
+            andamento sem precisar dirigir — para a apresentação, e para
+            conferir na mão o que só apareceria depois de horas de estrada.
+          */}
+          <FloatingIconButton
+            size="lg"
+            icon="flask-outline"
+            accessibilityLabel="Iniciar viagem de demonstração"
+            onPress={() => router.push('/trip?demo=1')}
+          />
+
           <FloatingIconButton
             size="lg"
             icon="alarm-light"

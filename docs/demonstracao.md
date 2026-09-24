@@ -25,6 +25,37 @@ Cada cenário indica os critérios de aceite que ele demonstra.
 
 ---
 
+## Viagem de demonstração (o botão do frasco)
+
+Para mostrar — ou fotografar para o slide — a viagem **em andamento** sem
+dirigir 116 km:
+
+1. Na tela inicial, tocar no ícone de **frasco** (ao lado da emergência).
+2. A viagem abre de **Parque Taquaral, Campinas** até a **São Paulo Expo**,
+   com o carro já na **metade do caminho** — o mapa mostra o trecho andado, o
+   que falta, a próxima manobra e o horário de chegada.
+3. O carro anda sozinho a 100 km/h. O botão de **pause**, sobre o mapa,
+   congela a cena na hora da foto.
+4. O botão do **frasco**, na mesma coluna, abre as **condições**: as 6
+   variáveis do Random Forest, com 1 h de viagem, 1 h sem parada e cansaço na
+   voz como ponto de partida.
+5. **Pedir recomendação ao Atlas** manda essas condições ao modelo de verdade,
+   e a resposta aparece **no mapa**, sobre a viagem.
+6. O botão da **bandeira quadriculada** conclui a viagem como se o trajeto
+   inteiro tivesse sido dirigido: abre o resumo com o caminho completo
+   desenhado no mapa, os 116 km, 1h37 de duração e as paradas que houverem.
+
+> Com 1 h de estrada o modelo responde **CONTINUAR** — é o que ele aprendeu, e
+> uma hora não cansa ninguém. Para o **DESCANSAR** do Cenário 3, suba "tempo de
+> viagem" e "tempo sem parada" para 2 h ou mais, ou escolha o cenário pronto
+> **Cenário 3 do escopo** no alto da folha.
+
+A posição é simulada; todo o resto é real — a rota vem da API de rotas, a
+viagem é registrada no diário e a recomendação sai do modelo treinado, marcada
+como simulação para nunca entrar no dataset real.
+
+---
+
 ## Cenário 1 — Destino manual (CA-01, CA-03, CA-05, CA-15)
 
 1. Abrir o Atlas e mostrar as duas pílulas do topo: localização e IA.

@@ -17,7 +17,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "O Atlas transforma sua fala em comandos, como \"registrar parada\" ou \"encerrar viagem\".",
-        "NSMicrophoneUsageDescription": "O Atlas usa o microfone para ouvir seus comandos de voz durante a viagem."
+        "NSMicrophoneUsageDescription": "O Atlas usa o microfone para ouvir seus comandos de voz durante a viagem.",
+        "NSPhotoLibraryUsageDescription": "O Atlas não abre sua galeria: as fotos da viagem são tiradas na hora pela câmera. O aviso aparece porque o módulo de câmera declara esse acesso."
       },
       "bundleIdentifier": "com.atlascopiloto.app"
     },
