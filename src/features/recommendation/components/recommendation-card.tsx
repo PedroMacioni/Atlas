@@ -37,7 +37,7 @@ export function RecommendationCard({ recommendation, onAccept, onDecline }: Reco
   const visual = DECISION_VISUALS[recommendation.decision];
 
   return (
-    <View style={[styles.card, shadows.raised]}>
+    <View style={[styles.card, shadows.raised]} testID="recommendation-card">
       <View style={styles.header}>
         <IconBadge name={visual.icon} color={visual.color} />
         <View style={styles.titles}>
@@ -56,7 +56,7 @@ export function RecommendationCard({ recommendation, onAccept, onDecline }: Reco
             <SecondaryButton label="Agora não" onPress={onDecline} />
           </View>
           <View style={styles.action}>
-            <PrimaryButton label="Aceitar" showChevron={false} onPress={onAccept} />
+            <PrimaryButton label="Aceitar" showChevron={false} onPress={onAccept} testID="accept-button" />
           </View>
         </View>
       ) : (
