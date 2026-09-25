@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
 import { SearchField } from '@/components/ui/search-field';
 import { StatusMessage } from '@/components/ui/status-message';
+import { DEV_MODE } from '@/config/flags';
 import { useCurrentLocation } from '@/features/location/hooks/use-current-location';
 import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-map';
 import { DEMO_DESTINATION, DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
@@ -96,13 +97,18 @@ export default function HomeScreen() {
             onPress={() => router.push('/trip?demo=1')}
           />
 
-          {/* Modo apresentação: demo guiado com 7 atos para gravação de vídeo */}
-          <FloatingIconButton
-            size="lg"
-            icon="presentation-play"
-            accessibilityLabel="Iniciar modo apresentação"
-            onPress={() => router.push('/presentation-destination')}
-          />
+          {/*
+            Modo apresentação: demo guiado com 7 atos para gravação de vídeo.
+            Só existe com `EXPO_PUBLIC_DEV_MODE` ligada.
+          */}
+          {DEV_MODE ? (
+            <FloatingIconButton
+              size="lg"
+              icon="presentation-play"
+              accessibilityLabel="Iniciar modo apresentação"
+              onPress={() => router.push('/presentation-destination')}
+            />
+          ) : null}
 
           <FloatingIconButton
             size="lg"

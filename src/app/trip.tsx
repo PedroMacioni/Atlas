@@ -10,6 +10,7 @@ import { describeSceneError } from '@/features/camera/services/scene-service';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
+import { DEV_MODE } from '@/config/flags';
 import {
   DEMO_DRIVE_DESTINATION,
   DEMO_DRIVE_ORIGIN,
@@ -120,7 +121,8 @@ export default function TripScreen() {
     skipIntro?: string;
   }>();
   const isDemo = demoParam === '1';
-  const isPresentation = presentationParam === '1';
+  // Sem `EXPO_PUBLIC_DEV_MODE`, o parâmetro é ignorado mesmo vindo de deep link.
+  const isPresentation = DEV_MODE && presentationParam === '1';
   const skipIntro = skipIntroParam === '1';
   const presentationState = usePresentationState();
 

@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,14 +7,20 @@ import { PlaceRow } from '@/components/ui/place-row';
 import { SearchField } from '@/components/ui/search-field';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Text } from '@/components/ui/text';
+import { DEV_MODE } from '@/config/flags';
 import { DEMO_DRIVE_DESTINATION } from '@/features/demo/constants/demo-drive';
 import { IntroScreen } from '@/features/presentation/components/intro-screen';
 import { CaptionBar } from '@/features/presentation/components/caption-bar';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
+/** Fora do `EXPO_PUBLIC_DEV_MODE`, a rota não existe: volta para o início. */
+export default function PresentationDestinationRoute() {
+  return DEV_MODE ? <PresentationDestinationScreen /> : <Redirect href="/" />;
+}
+
 /** A primeira cena da gravação: splash do Atlas, depois seleção de destino. */
-export default function PresentationDestinationScreen() {
+function PresentationDestinationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const started = useRef(false);
