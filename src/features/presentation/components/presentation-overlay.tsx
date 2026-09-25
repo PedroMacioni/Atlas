@@ -130,9 +130,9 @@ export function PresentationOverlay({
       {/* Spotlight overlay for highlighting elements */}
       <SpotlightOverlay active={spotlightTarget !== null}>{null}</SpotlightOverlay>
 
-      {/* Caption bar at top */}
+      {/* Caption bar centered vertically */}
       {currentAct !== 1 && (
-        <View style={[styles.captionContainer, { top: insets.top + spacing.sm }]}>
+        <View style={styles.captionContainer}>
           <CaptionBar text={caption} />
         </View>
       )}
@@ -165,6 +165,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    top: '40%',
     zIndex: 60,
   },
   gestureArea: {
