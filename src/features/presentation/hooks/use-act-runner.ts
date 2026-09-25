@@ -9,7 +9,6 @@ export type ActCallbacks = {
   onDemoPause?: () => void;
   onTriggerRecommendation?: () => void;
   onSimulateTap?: (target: string) => void;
-  onTapEffect?: (x: number, y: number) => void;
   onAutoType?: (text: string, field: string) => void;
   onNavigate?: (to: string) => void;
   onCompleteTrip?: () => void;
@@ -79,12 +78,12 @@ async function executeStep(step: ActStep, callbacks: ActCallbacks): Promise<void
       callbacks.onCompleteTrip?.();
       break;
 
-    case 'tap-effect':
-      callbacks.onTapEffect?.(step.x, step.y);
+    case 'press-element':
+      setPresentationState({ pressedElement: step.target });
       break;
 
     case 'show-listening':
-      callbacks.onShowListening?.(step.visible);
+      setPresentationState({ showListening: step.visible });
       break;
   }
 }

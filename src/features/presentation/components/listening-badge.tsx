@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,10 +10,10 @@ import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 
 /**
- * Badge compacto "Atento — é só dizer Atlas".
+ * Badge compacto "Atento".
  *
- * Aparece ao lado do velocímetro no canto superior esquerdo para indicar
- * que o modo de escuta contínua está ativo.
+ * Aparece ao lado do velocímetro (à direita) no canto superior esquerdo
+ * para indicar que o modo de escuta contínua está ativo.
  */
 export function ListeningBadge() {
   const insets = useSafeAreaInsets();
@@ -25,12 +25,12 @@ export function ListeningBadge() {
       style={[
         styles.container,
         shadows.raised,
-        { top: insets.top + 130 }, // Abaixo da velocidade
+        { top: insets.top + 95 }, // Mesma altura da velocidade
       ]}
     >
-      <MaterialCommunityIcons name="ear-hearing" size={16} color={colors.primary} />
-      <Text variant="label" color="primary">
-        Atento — é só dizer Atlas
+      <MaterialCommunityIcons name="ear-hearing" size={14} color={colors.primary} />
+      <Text variant="caption" color="primary">
+        Atento
       </Text>
     </Animated.View>
   );
@@ -39,13 +39,13 @@ export function ListeningBadge() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: spacing.md,
+    left: 85, // À direita do velocímetro
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     borderRadius: radius.pill,
     zIndex: 100,
   },

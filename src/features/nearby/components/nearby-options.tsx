@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { StatusMessage } from '@/components/ui/status-message';
 import { Text } from '@/components/ui/text';
 import type { NearbyPlace, NearbyResponse } from '@/features/nearby/types/nearby';
+import { usePresentationState } from '@/features/presentation/state/presentation-state';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -38,6 +39,8 @@ export function NearbyOptions({
   onSelect,
   actionLabel = 'Ir para',
 }: NearbyOptionsProps) {
+  const { pressedElement } = usePresentationState();
+
   if (error) {
     return <StatusMessage tone="error" message={error} onRetry={onRetry} />;
   }
@@ -57,15 +60,22 @@ export function NearbyOptions({
   const withoutRating = result.source !== 'google-places';
 
   return (
-    <View style={styles.list}>
-      {result.places.map((place, index) => (
-        <Pressable
-          key={place.id}
-          testID={`place-row-${index}`}
-          accessibilityRole="button"
-          accessibilityLabel={`${actionLabel} ${place.name}`}
-          onPress={() => onSelect(place)}
-          style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <View style={styles.list} testID="nearby-options">
+      {result.places.map((place, index) => {
+        const testID = `place-row-${index}`;
+        const isPresentationPressed = pressedElement === testID;
+
+        return (
+          <Pressable
+            key={place.id}
+            testID={testID}
+            accessibilityRole="button"
+            accessibilityLabel={`${actionLabel} ${place.name}`}
+            onPress={() => onSelect(place)}
+            style={({ pressed }) => [
+              styles.row,
+              (pressed || isPresentationPressed) && styles.pressed,
+            ]}>
           <View style={styles.rank}>
             <Text variant="body" color="primary">
               {index + 1}
@@ -95,7 +105,8 @@ export function NearbyOptions({
 
           <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />
         </Pressable>
-      ))}
+        );
+      })}
 
       {withoutRating ? (
         <Text variant="label" color="textSecondary">
@@ -148,6 +159,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+    transform: [{ scale: 0.98 }],
+    backgroundColor: colors.primarySoft,
   },
   rank: {
     width: 32,

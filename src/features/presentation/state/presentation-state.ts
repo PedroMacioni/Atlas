@@ -5,6 +5,10 @@ export type PresentationState = {
   isPaused: boolean;
   caption: string | null;
   spotlightTarget: string | null;
+  /** Elemento que deve mostrar estado "pressionado" (afundado). */
+  pressedElement: string | null;
+  /** Mostra o badge de escuta ativa. */
+  showListening: boolean;
 };
 
 const INITIAL_STATE: PresentationState = {
@@ -12,6 +16,8 @@ const INITIAL_STATE: PresentationState = {
   isPaused: false,
   caption: null,
   spotlightTarget: null,
+  pressedElement: null,
+  showListening: false,
 };
 
 let state: PresentationState = { ...INITIAL_STATE };

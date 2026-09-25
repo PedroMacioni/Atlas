@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 import type { IconName } from '@/components/ui/icon-badge';
+import { usePresentationState } from '@/features/presentation/state/presentation-state';
 import { colors, dangerGradient, primaryGradient } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -48,6 +49,9 @@ export function PrimaryButton({
   tone = 'primary',
   testID,
 }: PrimaryButtonProps) {
+  const { pressedElement } = usePresentationState();
+  const isPresentationPressed = testID !== undefined && pressedElement === testID;
+
   const handlePress = () => {
     if (haptics && Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
@@ -68,7 +72,7 @@ export function PrimaryButton({
       style={({ pressed }) => [
         styles.pressable,
         shadows.raised,
-        pressed && styles.pressed,
+        (pressed || isPresentationPressed) && styles.pressed,
         disabled && styles.disabled,
       ]}>
       <LinearGradient
@@ -120,8 +124,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   pressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.99 }],
+    opacity: 0.85,
+    transform: [{ scale: 0.95 }],
   },
   disabled: {
     opacity: 0.45,
