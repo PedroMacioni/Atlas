@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -9,12 +9,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useEffect } from 'react';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { Text } from '@/components/ui/text';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { SPRING_CONFIG } from '../animations/spring-entrance';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const appIcon = require('../../../../assets/images/icon.png');
 
 export type IntroScreenProps = {
   visible: boolean;
@@ -64,7 +66,7 @@ export function IntroScreen({ visible }: IntroScreenProps) {
     >
       <View style={styles.content}>
         <Animated.View style={[styles.logoContainer, logoStyle]}>
-          <MaterialCommunityIcons name="compass-rose" size={80} color={colors.primary} />
+          <Image source={appIcon} style={styles.logo} />
         </Animated.View>
 
         <Animated.View style={titleStyle}>
@@ -96,12 +98,17 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 30,
-    backgroundColor: colors.primarySoft,
+    width: 140,
+    height: 140,
+    borderRadius: 35,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
+    overflow: 'hidden',
+  },
+  logo: {
+    width: 140,
+    height: 140,
+    borderRadius: 35,
   },
 });
