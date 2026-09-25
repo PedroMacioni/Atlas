@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: '40%',
+    bottom: 180,
     zIndex: 60,
   },
   gestureArea: {
