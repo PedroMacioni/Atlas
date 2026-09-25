@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 
 import type { Act, ActStep, HapticStyle } from '../constants/acts';
@@ -22,122 +22,119 @@ const HAPTIC_MAP: Record<HapticStyle, (() => Promise<void>) | null> = {
   none: null,
 };
 
-export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks: ActCallbacks) {
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stepIndexRef = useRef(0);
-  const isRunningRef = useRef(false);
-  const actIdRef = useRef<number | undefined>(undefined);
+async function executeStep(step: ActStep, callbacks: ActCallbacks): Promise<void> {
+  switch (step.type) {
+    case 'wait':
+      return new Promise((resolve) => {
+        setTimeout(resolve, step.ms);
+      });
 
-  const clearCurrentTimeout = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  }, []);
+    case 'caption':
+      setPresentationState({ caption: step.text });
+      break;
 
-  const executeStep = useCallback(
-    async (step: ActStep): Promise<void> => {
-      switch (step.type) {
-        case 'wait':
-          return new Promise((resolve) => {
-            timeoutRef.current = setTimeout(resolve, step.ms);
-          });
+    case 'spotlight':
+      setPresentationState({ spotlightTarget: step.target });
+      break;
 
-        case 'caption':
-          setPresentationState({ caption: step.text });
-          break;
-
-        case 'spotlight':
-          setPresentationState({ spotlightTarget: step.target });
-          break;
-
-        case 'haptic': {
-          const hapticFn = HAPTIC_MAP[step.style];
-          if (hapticFn) await hapticFn();
-          break;
+    case 'haptic': {
+      const hapticFn = HAPTIC_MAP[step.style];
+      if (hapticFn) {
+        try {
+          await hapticFn();
+        } catch {
+          // Haptics may fail on simulator
         }
-
-        case 'demo-resume':
-          callbacks.onDemoResume?.();
-          break;
-
-        case 'demo-pause':
-          callbacks.onDemoPause?.();
-          break;
-
-        case 'trigger-recommendation':
-          callbacks.onTriggerRecommendation?.();
-          break;
-
-        case 'simulate-tap':
-          callbacks.onSimulateTap?.(step.target);
-          break;
-
-        case 'auto-type':
-          callbacks.onAutoType?.(step.text, step.field);
-          break;
-
-        case 'navigate':
-          callbacks.onNavigate?.(step.to);
-          break;
-
-        case 'complete-trip':
-          callbacks.onCompleteTrip?.();
-          break;
       }
-    },
-    [callbacks]
-  );
-
-  const runSequence = useCallback(async () => {
-    if (!act || isPaused || isRunningRef.current) return;
-
-    isRunningRef.current = true;
-
-    for (let i = stepIndexRef.current; i < act.sequence.length; i++) {
-      if (isPaused || actIdRef.current !== act.id) {
-        stepIndexRef.current = i;
-        isRunningRef.current = false;
-        return;
-      }
-
-      try {
-        await executeStep(act.sequence[i]);
-      } catch {
-        // Step failed, continue to next
-      }
-      stepIndexRef.current = i + 1;
+      break;
     }
 
-    isRunningRef.current = false;
-    callbacks.onActComplete?.();
-  }, [act, isPaused, executeStep, callbacks]);
+    case 'demo-resume':
+      callbacks.onDemoResume?.();
+      break;
 
-  // Reset and start when act changes
+    case 'demo-pause':
+      callbacks.onDemoPause?.();
+      break;
+
+    case 'trigger-recommendation':
+      callbacks.onTriggerRecommendation?.();
+      break;
+
+    case 'simulate-tap':
+      callbacks.onSimulateTap?.(step.target);
+      break;
+
+    case 'auto-type':
+      callbacks.onAutoType?.(step.text, step.field);
+      break;
+
+    case 'navigate':
+      callbacks.onNavigate?.(step.to);
+      break;
+
+    case 'complete-trip':
+      callbacks.onCompleteTrip?.();
+      break;
+  }
+}
+
+export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks: ActCallbacks) {
+  const lastActIdRef = useRef<number | undefined>(undefined);
+  const callbacksRef = useRef(callbacks);
+  const isPausedRef = useRef(isPaused);
+  const abortRef = useRef(false);
+
+  // Keep refs in sync
+  callbacksRef.current = callbacks;
+  isPausedRef.current = isPaused;
+
   useEffect(() => {
     if (!act) return;
 
-    // Act changed
-    if (actIdRef.current !== act.id) {
-      clearCurrentTimeout();
-      stepIndexRef.current = 0;
-      isRunningRef.current = false;
-      actIdRef.current = act.id;
-      runSequence();
-    }
+    // Only run when act changes
+    if (lastActIdRef.current === act.id) return;
+    lastActIdRef.current = act.id;
 
-    return clearCurrentTimeout;
-  }, [act, clearCurrentTimeout, runSequence]);
+    // Abort previous sequence
+    abortRef.current = true;
 
-  // Resume when unpaused
-  useEffect(() => {
-    if (!isPaused && act && stepIndexRef.current > 0 && !isRunningRef.current) {
-      runSequence();
-    }
-  }, [isPaused, act, runSequence]);
+    const runSequence = async () => {
+      // Small delay to let abort propagate
+      await new Promise((r) => setTimeout(r, 10));
+      abortRef.current = false;
+
+      for (const step of act.sequence) {
+        // Check abort before each step
+        if (abortRef.current) return;
+
+        // Wait while paused
+        while (isPausedRef.current) {
+          await new Promise((r) => setTimeout(r, 100));
+          if (abortRef.current) return;
+        }
+
+        try {
+          await executeStep(step, callbacksRef.current);
+        } catch {
+          // Step failed, continue
+        }
+      }
+
+      // Sequence complete - auto advance
+      if (!abortRef.current) {
+        callbacksRef.current.onActComplete?.();
+      }
+    };
+
+    runSequence();
+
+    return () => {
+      abortRef.current = true;
+    };
+  }, [act]);
 
   return {
-    isRunning: isRunningRef.current,
-    currentStep: stepIndexRef.current,
+    isRunning: true,
   };
 }
