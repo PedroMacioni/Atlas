@@ -5,7 +5,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
 import { CaptionBar } from './caption-bar';
-import { ControlBar } from './control-bar';
 import { IntroScreen } from './intro-screen';
 import { SpotlightOverlay } from './spotlight-overlay';
 import { usePresentation } from '../hooks/use-presentation';
@@ -142,15 +141,7 @@ export function PresentationOverlay({
         <View style={styles.gestureArea} />
       </GestureDetector>
 
-      {/* Control bar at bottom */}
-      <ControlBar
-        currentAct={currentAct}
-        totalActs={totalActs}
-        isPaused={isPaused}
-        onPrev={prevAct}
-        onNext={nextAct}
-        onTogglePause={togglePause}
-      />
+      {/* Control bar hidden for recording - tap to advance, swipe right to go back */}
     </View>
   );
 }
