@@ -12,6 +12,7 @@ import { useActRunner, type ActCallbacks } from '../hooks/use-act-runner';
 import { resetPresentation } from '../state/presentation-state';
 import type { DemoDrive } from '@/features/demo/hooks/use-demo-drive';
 import { setDemoScenario } from '@/features/demo/state/demo-scenario';
+import { requestTripAction } from '@/features/trip/state/trip-action-request';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing } from '@/theme/spacing';
 
@@ -84,9 +85,13 @@ export function PresentationOverlay({
         } else if (target.startsWith('place-row-')) {
           // No modo apresentação, usa uma parada fixa próxima
           onSetNearbyStop();
+        } else if (target === 'toggle-wake') {
+          // Ativa a escuta contínua e fecha o menu
+          requestTripAction('toggle-wake');
+          router.back();
         }
       },
-      [onAcceptRecommendation, onSetNearbyStop]
+      [onAcceptRecommendation, onSetNearbyStop, router]
     ),
 
     onNavigate: useCallback(

@@ -98,15 +98,18 @@ export const ACTS: Act[] = [
   {
     id: 6,
     name: 'Interação por Voz',
-    duration: 8000,
+    duration: 10000,
     caption: 'Controle por voz — mãos no volante, olhos na estrada',
     haptic: 'light',
     sequence: [
       { type: 'demo-pause' },
       { type: 'caption', text: 'Controle por voz — mãos no volante, olhos na estrada' },
-      { type: 'spotlight', target: 'voice-indicator' },
       { type: 'haptic', style: 'light' },
-      { type: 'wait', ms: 7500 },
+      { type: 'wait', ms: 1000 },
+      { type: 'navigate', to: '/trip-actions?watching=0' },
+      { type: 'wait', ms: 4000 },
+      { type: 'simulate-tap', target: 'toggle-wake' },
+      { type: 'wait', ms: 4000 },
     ],
   },
   {
