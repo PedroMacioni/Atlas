@@ -61,6 +61,7 @@ export function NearbyOptions({
       {result.places.map((place, index) => (
         <Pressable
           key={place.id}
+          testID={`place-row-${index}`}
           accessibilityRole="button"
           accessibilityLabel={`${actionLabel} ${place.name}`}
           onPress={() => onSelect(place)}
