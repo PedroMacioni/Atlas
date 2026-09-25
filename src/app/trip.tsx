@@ -879,6 +879,30 @@ export default function TripScreen() {
               chooseStop(places[index]);
             }
           }}
+          onSetNearbyStop={() => {
+            // Calcula uma parada ~800m à frente da posição atual
+            const here = position?.coordinate;
+            if (!here || !destination) return;
+
+            // Direção para o destino (normalizada)
+            const dLat = destination.latitude - here.latitude;
+            const dLng = destination.longitude - here.longitude;
+            const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+            // ~800m em graus (aproximadamente 0.0072 graus)
+            const offset = 0.0072;
+            const stopLat = here.latitude + (dLat / dist) * offset;
+            const stopLng = here.longitude + (dLng / dist) * offset;
+
+            detour.start({
+              name: 'Posto Shell Bandeirantes',
+              latitude: stopLat,
+              longitude: stopLng,
+              category: 'descanso',
+              reason: 'Recomendação do Atlas: Descansar',
+            });
+            stopOptions.clear();
+          }}
           onCompleteTrip={concludeDemoTrip}
         />
       )}

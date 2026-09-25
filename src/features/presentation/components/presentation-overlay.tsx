@@ -20,6 +20,8 @@ export type PresentationOverlayProps = {
   onTriggerRecommendation: () => void;
   onAcceptRecommendation: () => void;
   onSelectPlace: (index: number) => void;
+  /** Define uma parada próxima para a apresentação (500m à frente). */
+  onSetNearbyStop: () => void;
   onCompleteTrip: () => void;
 };
 
@@ -28,6 +30,7 @@ export function PresentationOverlay({
   onTriggerRecommendation,
   onAcceptRecommendation,
   onSelectPlace,
+  onSetNearbyStop,
   onCompleteTrip,
 }: PresentationOverlayProps) {
   const router = useRouter();
@@ -79,11 +82,11 @@ export function PresentationOverlay({
         if (target === 'accept-button') {
           onAcceptRecommendation();
         } else if (target.startsWith('place-row-')) {
-          const index = parseInt(target.replace('place-row-', ''), 10);
-          onSelectPlace(index);
+          // No modo apresentação, usa uma parada fixa próxima
+          onSetNearbyStop();
         }
       },
-      [onAcceptRecommendation, onSelectPlace]
+      [onAcceptRecommendation, onSetNearbyStop]
     ),
 
     onNavigate: useCallback(
