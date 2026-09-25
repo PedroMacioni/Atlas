@@ -28,6 +28,8 @@ export type PrimaryButtonProps = {
    * sombra. Um chapado claro ao lado de um com gradiente não se lê como par.
    */
   tone?: 'primary' | 'danger';
+  /** Identificador para testes automatizados. */
+  testID?: string;
 };
 
 /**
@@ -44,6 +46,7 @@ export function PrimaryButton({
   disabled = false,
   haptics = true,
   tone = 'primary',
+  testID,
 }: PrimaryButtonProps) {
   const handlePress = () => {
     if (haptics && Platform.OS !== 'web') {
@@ -56,6 +59,7 @@ export function PrimaryButton({
 
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}

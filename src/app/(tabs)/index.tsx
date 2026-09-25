@@ -96,6 +96,14 @@ export default function HomeScreen() {
             onPress={() => router.push('/trip?demo=1')}
           />
 
+          {/* Modo apresentação: demo guiado com 7 atos para gravação de vídeo */}
+          <FloatingIconButton
+            size="lg"
+            icon="presentation-play"
+            accessibilityLabel="Iniciar modo apresentação"
+            onPress={() => router.push('/trip?presentation=1')}
+          />
+
           <FloatingIconButton
             size="lg"
             icon="alarm-light"
