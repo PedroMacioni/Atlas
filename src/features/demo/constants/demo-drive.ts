@@ -27,6 +27,9 @@ export const DEMO_DRIVE_DESTINATION: NamedCoordinate = {
   name: 'São Paulo Expo',
 };
 
+/** Nome exibido em todas as etapas da parada criada para a apresentação. */
+export const PRESENTATION_STOP_NAME = 'Graal Jaguariúna';
+
 /** Onde o carro aparece quando a tela abre: metade do caminho andado. */
 export const DEMO_START_FRACTION = 0.5;
 
@@ -36,7 +39,7 @@ export const DEMO_SPEED_METERS_PER_SECOND = 27.8;
 /**
  * Cadência do avanço.
  *
- * Três passos por segundo, de pouco mais de oito metros cada. Um passo por
+ * Dez passos por segundo, de pouco menos de três metros cada. Um passo por
  * segundo faria o carro pular 28 m de cada vez, e é essa distância — não a
  * velocidade — que se vê como tranco no mapa.
  *
@@ -45,7 +48,7 @@ export const DEMO_SPEED_METERS_PER_SECOND = 27.8;
  * Com passos menores que isso, a viagem simulada terminaria com distância
  * zero e nenhum caminho no resumo.
  */
-export const DEMO_TICK_MS = 300;
+export const DEMO_TICK_MS = 100;
 
 /**
  * As condições que o modelo vê quando a recomendação é pedida no modo de

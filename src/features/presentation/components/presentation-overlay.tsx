@@ -7,30 +7,37 @@ import { runOnJS } from 'react-native-reanimated';
 import { CaptionBar } from './caption-bar';
 import { IntroScreen } from './intro-screen';
 import { SpotlightOverlay } from './spotlight-overlay';
-import { ListeningBadge } from './listening-badge';
+import { StopArrival } from './stop-arrival';
 import { usePresentation } from '../hooks/use-presentation';
 import { useActRunner, type ActCallbacks } from '../hooks/use-act-runner';
-import { resetPresentation, usePresentationState } from '../state/presentation-state';
+import { resetPresentation, setPresentationState } from '../state/presentation-state';
 import type { DemoDrive } from '@/features/demo/hooks/use-demo-drive';
 import { setDemoScenario } from '@/features/demo/state/demo-scenario';
 import { requestTripAction } from '@/features/trip/state/trip-action-request';
 
 export type PresentationOverlayProps = {
   demoDrive: DemoDrive;
+  stopReached: boolean;
   onTriggerRecommendation: () => void;
   onAcceptRecommendation: () => void;
   onSelectPlace: (index: number) => void;
-  /** Define uma parada próxima para a apresentação (500m à frente). */
+  /** Define a parada simulada próxima para a apresentação. */
   onSetNearbyStop: () => void;
-  onCompleteTrip: () => void;
+  onCompleteTrip: () => Promise<void>;
+  onDemoVoice: () => Promise<void>;
+  /** Ato inicial. Quando o splash já foi mostrado, começa em 2. */
+  initialAct?: number;
 };
 
 export function PresentationOverlay({
   demoDrive,
+  stopReached,
   onTriggerRecommendation,
   onAcceptRecommendation,
   onSetNearbyStop,
   onCompleteTrip,
+  onDemoVoice,
+  initialAct = 1,
 }: PresentationOverlayProps) {
   const router = useRouter();
   const {
@@ -44,15 +51,17 @@ export function PresentationOverlay({
     prevAct,
   } = usePresentation();
 
-  const { showListening } = usePresentationState();
-
-  // Reset presentation state on mount
+  // Reset presentation state on mount. Quando initialAct > 1, o splash já foi
+  // mostrado na tela anterior e começamos direto no ato indicado.
   useEffect(() => {
     resetPresentation();
+    if (initialAct > 1) {
+      setPresentationState({ currentAct: initialAct });
+    }
     return () => {
       resetPresentation();
     };
-  }, []);
+  }, [initialAct]);
 
   const callbacks: ActCallbacks = {
     onDemoResume: useCallback(() => {
@@ -100,6 +109,8 @@ export function PresentationOverlay({
     ),
 
     onCompleteTrip,
+    onDemoVoice,
+    hasReachedStop: useCallback(() => stopReached, [stopReached]),
 
     onActComplete: useCallback(() => {
       // Auto-advance to next act after sequence completes
@@ -109,7 +120,8 @@ export function PresentationOverlay({
     }, [currentAct, totalActs, nextAct]),
   };
 
-  useActRunner(currentActData, isPaused, callbacks);
+  // Keep the introduction visible until the route has produced a demo position.
+  useActRunner(demoDrive.position ? currentActData : undefined, isPaused, callbacks);
 
   // Tap anywhere to advance
   const tapGesture = Gesture.Tap().onEnd(() => {
@@ -135,13 +147,12 @@ export function PresentationOverlay({
       {/* Spotlight overlay - darkens everything except highlighted elements */}
       <SpotlightOverlay active={spotlightTarget !== null}>{null}</SpotlightOverlay>
 
-      {/* Listening indicator - ao lado da velocidade */}
-      {showListening && <ListeningBadge />}
+      {currentAct === 7 && stopReached ? <StopArrival /> : null}
 
       {/* Caption bar centered vertically */}
-      {currentAct !== 1 && (
+      {currentAct !== 1 && currentAct !== 5 && currentAct !== 7 && (
         <View style={styles.captionContainer}>
-          <CaptionBar text={caption} />
+          <CaptionBar key={currentAct} text={caption} title={currentActData?.name ?? ''} step={currentAct} total={totalActs} />
         </View>
       )}
 

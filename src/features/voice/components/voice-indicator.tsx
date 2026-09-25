@@ -2,6 +2,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
+import { usePresentationState } from '@/features/presentation/state/presentation-state';
 import type { Voice } from '@/features/voice/hooks/use-voice';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -16,6 +17,20 @@ import { spacing } from '@/theme/spacing';
  * Falando, a faixa some: a voz já é o sinal.
  */
 export function VoiceIndicator({ voice }: { voice: Pick<Voice, 'state' | 'partial' | 'error'> }) {
+  const { demoVoiceText } = usePresentationState();
+
+  // Modo apresentação: mostra o texto simulado de voz
+  if (demoVoiceText) {
+    return (
+      <View style={[styles.bar, shadows.raised]}>
+        <MaterialCommunityIcons name="microphone" size={22} color={colors.danger} />
+        <Text variant="body" numberOfLines={2} style={styles.text}>
+          {demoVoiceText}
+        </Text>
+      </View>
+    );
+  }
+
   if (voice.state === 'listening') {
     return (
       <View style={[styles.bar, shadows.raised]}>

@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,24 +27,27 @@ import { formatDistance } from '@/utils/distance';
  */
 export default function TripSummaryScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, presentation } = useLocalSearchParams<{ id: string; presentation?: string }>();
   const detail = useTripDetail(id);
 
   return (
-    <ScrollView
-      style={styles.screen}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
-      {detail.error ? (
-        <StatusMessage tone="error" message={detail.error} onRetry={detail.reload} />
-      ) : null}
+    <>
+      <Stack.Screen options={{ title: presentation === '1' ? 'Trajeto final' : 'Resumo da viagem' }} />
+      <ScrollView
+        style={styles.screen}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
+        {detail.error ? (
+          <StatusMessage tone="error" message={detail.error} onRetry={detail.reload} />
+        ) : null}
 
-      {detail.data ? (
-        <Summary trip={detail.data} />
-      ) : detail.isLoading ? (
-        <StatusMessage tone="info" message="Carregando o resumo…" busy />
-      ) : null}
-    </ScrollView>
+        {detail.data ? (
+          <Summary trip={detail.data} />
+        ) : detail.isLoading ? (
+          <StatusMessage tone="info" message="Carregando o resumo…" busy />
+        ) : null}
+      </ScrollView>
+    </>
   );
 }
 

@@ -15,7 +15,6 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { SPRING_CONFIG } from '../animations/spring-entrance';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const appIcon = require('../../../../assets/images/icon.png');
 
 export type IntroScreenProps = {

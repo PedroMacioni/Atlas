@@ -35,8 +35,8 @@ describe('presentation state operations', () => {
     expect(getPresentationState().currentAct).toBe(2);
   });
 
-  it('ACTS has 7 entries for bounds checking', () => {
-    expect(ACTS.length).toBe(7);
+  it('ACTS has 10 entries for bounds checking', () => {
+    expect(ACTS.length).toBe(10);
   });
 
   it('toggles isPaused', () => {

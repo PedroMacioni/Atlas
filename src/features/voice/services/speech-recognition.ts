@@ -72,6 +72,7 @@ const COMMAND_HINTS = [
   'registrar parada',
   'registrar ponto turístico',
   'preciso abastecer ou descansar',
+  'quanto falta para chegar',
   'encerrar viagem',
   'adicionar parada',
   'emergência',

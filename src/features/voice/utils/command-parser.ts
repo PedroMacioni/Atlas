@@ -19,6 +19,7 @@ export type VoiceCommand =
   /** "Quero ir para a Faculdade Anhanguera" — um lugar pelo nome (RF-05). */
   | { type: 'go_place'; query: string }
   | { type: 'register_stop' }
+  | { type: 'trip_status' }
   /** "Preciso abastecer ou descansar" — pede avaliação ao Random Forest. */
   | { type: 'need_rest_or_fuel' }
   | { type: 'register_tourist_spot' }
@@ -150,6 +151,10 @@ export function parseCommand(raw: string, expecting: Expectation = 'command'): V
 
   if (/\b(encerr|termin|finaliz|acab)[a-z]* (a |minha )?viagem\b/.test(text)) {
     return { type: 'end_trip' };
+  }
+
+  if (/\b(quanto falta|tempo restante|distancia restante)\b/.test(text)) {
+    return { type: 'trip_status' };
   }
 
   if (/\bponto turistico\b/.test(text) && /\b(registr|marc|anot|salv)/.test(text)) {

@@ -11,8 +11,10 @@ export type ActCallbacks = {
   onSimulateTap?: (target: string) => void;
   onAutoType?: (text: string, field: string) => void;
   onNavigate?: (to: string) => void;
-  onCompleteTrip?: () => void;
+  onCompleteTrip?: () => Promise<void> | void;
+  onDemoVoice?: () => Promise<void>;
   onShowListening?: (visible: boolean) => void;
+  hasReachedStop?: () => boolean;
   onActComplete?: () => void;
 };
 
@@ -25,11 +27,6 @@ const HAPTIC_MAP: Record<HapticStyle, (() => Promise<void>) | null> = {
 
 async function executeStep(step: ActStep, callbacks: ActCallbacks): Promise<void> {
   switch (step.type) {
-    case 'wait':
-      return new Promise((resolve) => {
-        setTimeout(resolve, step.ms);
-      });
-
     case 'caption':
       setPresentationState({ caption: step.text });
       break;
@@ -75,7 +72,11 @@ async function executeStep(step: ActStep, callbacks: ActCallbacks): Promise<void
       break;
 
     case 'complete-trip':
-      callbacks.onCompleteTrip?.();
+      await callbacks.onCompleteTrip?.();
+      break;
+
+    case 'demo-voice':
+      await callbacks.onDemoVoice?.();
       break;
 
     case 'press-element':
@@ -85,43 +86,54 @@ async function executeStep(step: ActStep, callbacks: ActCallbacks): Promise<void
     case 'show-listening':
       setPresentationState({ showListening: step.visible });
       break;
+
+    case 'demo-voice-text':
+      setPresentationState({ demoVoiceText: step.text });
+      break;
   }
 }
 
 export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks: ActCallbacks) {
-  const lastActIdRef = useRef<number | undefined>(undefined);
   const callbacksRef = useRef(callbacks);
   const isPausedRef = useRef(isPaused);
-  const abortRef = useRef(false);
 
-  // Keep refs in sync
-  callbacksRef.current = callbacks;
-  isPausedRef.current = isPaused;
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+    isPausedRef.current = isPaused;
+  }, [callbacks, isPaused]);
 
   useEffect(() => {
     if (!act) return;
 
-    // Only run when act changes
-    if (lastActIdRef.current === act.id) return;
-    lastActIdRef.current = act.id;
+    // Each act owns its cancellation flag. A later act cannot revive an old wait.
+    let cancelled = false;
 
-    // Abort previous sequence
-    abortRef.current = true;
+    const wait = async (durationMs: number) => {
+      let remaining = durationMs;
+      while (!cancelled && (remaining > 0 || isPausedRef.current)) {
+        const startedAt = Date.now();
+        await new Promise<void>((resolve) => setTimeout(resolve, Math.min(remaining || 50, 50)));
+        if (!isPausedRef.current) {
+          remaining -= Date.now() - startedAt;
+        }
+      }
+    };
 
     const runSequence = async () => {
-      // Small delay to let abort propagate
-      await new Promise((r) => setTimeout(r, 10));
-      abortRef.current = false;
-
       for (const step of act.sequence) {
-        // Check abort before each step
-        if (abortRef.current) return;
-
-        // Wait while paused
-        while (isPausedRef.current) {
-          await new Promise((r) => setTimeout(r, 100));
-          if (abortRef.current) return;
+        if (cancelled) return;
+        if (step.type === 'wait') {
+          await wait(step.ms);
+          continue;
         }
+        if (step.type === 'wait-for-stop') {
+          while (!cancelled && !callbacksRef.current.hasReachedStop?.()) {
+            await wait(100);
+          }
+          continue;
+        }
+        await wait(0);
+        if (cancelled) return;
 
         try {
           await executeStep(step, callbacksRef.current);
@@ -131,7 +143,7 @@ export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks:
       }
 
       // Sequence complete - auto advance
-      if (!abortRef.current) {
+      if (!cancelled) {
         callbacksRef.current.onActComplete?.();
       }
     };
@@ -139,7 +151,7 @@ export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks:
     runSequence();
 
     return () => {
-      abortRef.current = true;
+      cancelled = true;
     };
   }, [act]);
 

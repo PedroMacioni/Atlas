@@ -36,6 +36,7 @@ const NO_WAYPOINTS: Coordinate[] = [];
 
 export type DetourControl = {
   detour: DetourRequest | null;
+  reached: DetourRequest | null;
   /** Origem da rota a usar no lugar da origem da viagem, ou `null`. */
   routeOrigin: NamedCoordinate | null;
   /** Paradas para a rota — estável entre renderizações. */
@@ -97,7 +98,7 @@ export function useDetour(
 
   const start = useCallback(
     (detour: DetourRequest) => {
-      setState((current) => ({ ...current, detour, routeOrigin: here }));
+      setState((current) => ({ ...current, detour, routeOrigin: here, reached: null }));
     },
     // `here` muda a cada leitura; o que vale é a posição no toque.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,5 +113,5 @@ export function useDetour(
   const detour = state.detour;
   const waypoints = useMemo(() => (detour ? [detour] : NO_WAYPOINTS), [detour]);
 
-  return { detour, routeOrigin: state.routeOrigin, waypoints, start, cancel };
+  return { detour, reached: state.reached, routeOrigin: state.routeOrigin, waypoints, start, cancel };
 }

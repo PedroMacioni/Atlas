@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IconName } from '@/components/ui/icon-badge';
 import { Text } from '@/components/ui/text';
+import { usePresentationState } from '@/features/presentation/state/presentation-state';
 import { requestTripAction, type TripActionRequest } from '@/features/trip/state/trip-action-request';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -16,19 +17,23 @@ type ActionItem = {
   title: string;
   subtitle: string;
   danger?: boolean;
+  /** ID para o efeito de pressionado da apresentação. */
+  testID?: string;
 };
 
 export default function TripActionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { watching } = useLocalSearchParams<{ watching?: string }>();
+  const { pressedElement } = usePresentationState();
 
   const actions: ActionItem[] = [
     {
       action: 'toggle-wake',
       icon: watching === '1' ? 'ear-hearing' : 'ear-hearing-off',
       title: watching === '1' ? 'Desativar escuta contínua' : 'Ativar escuta contínua',
-      subtitle: 'Use “Atlas” para chamar a assistência por voz.',
+      subtitle: 'Use "Atlas" para chamar a assistência por voz.',
+      testID: 'toggle-wake-option',
     },
     {
       action: 'ask-recommendation',
@@ -63,17 +68,20 @@ export default function TripActionsScreen() {
           Ações da viagem
         </Text>
 
-        {actions.map((item) => (
+        {actions.map((item) => {
+          const isPresentationPressed = item.testID !== undefined && pressedElement === item.testID;
+          return (
           <Pressable
             key={item.action}
             accessibilityRole="button"
             accessibilityLabel={item.title}
             accessibilityHint={item.subtitle}
+            testID={item.testID}
             onPress={() => choose(item.action)}
             style={({ pressed }) => [
               styles.option,
               item.danger && styles.optionDanger,
-              pressed && styles.pressed,
+              (pressed || isPresentationPressed) && styles.pressed,
             ]}>
             <View style={[styles.icon, item.danger && styles.iconDanger]}>
               <MaterialCommunityIcons
@@ -92,7 +100,8 @@ export default function TripActionsScreen() {
             </View>
             <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textSecondary} />
           </Pressable>
-        ))}
+          );
+        })}
       </View>
     </View>
   );

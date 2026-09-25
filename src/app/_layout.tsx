@@ -72,6 +72,10 @@ export default function RootLayout() {
             name="destination"
             options={{ title: 'Definir destino', headerStyle: { backgroundColor: colors.surfaceMuted } }}
           />
+          <Stack.Screen
+            name="presentation-destination"
+            options={{ headerShown: false }}
+          />
           {/*
             A viagem esconde o cabeçalho: o mapa encosta nas quatro bordas e a
             tela traz o próprio botão de voltar, sobre o mapa. Um cabeçalho ali

@@ -101,7 +101,7 @@ export default function HomeScreen() {
             size="lg"
             icon="presentation-play"
             accessibilityLabel="Iniciar modo apresentação"
-            onPress={() => router.push('/trip?presentation=1')}
+            onPress={() => router.push('/presentation-destination')}
           />
 
           <FloatingIconButton

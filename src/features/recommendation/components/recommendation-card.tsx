@@ -22,6 +22,7 @@ export const DECISION_VISUALS: Record<Decision, { icon: IconName; color: ColorTo
 
 export type RecommendationCardProps = {
   recommendation: Recommendation;
+  suggestedStopName?: string;
   onAccept: () => void;
   onDecline: () => void;
 };
@@ -33,7 +34,7 @@ export type RecommendationCardProps = {
  * mexe na rota pede confirmação — **Aceitar** ou **Agora não** —, e o Atlas
  * nunca muda o trajeto sozinho (CA-10). CONTINUAR não pede nada: só "Ok".
  */
-export function RecommendationCard({ recommendation, onAccept, onDecline }: RecommendationCardProps) {
+export function RecommendationCard({ recommendation, suggestedStopName, onAccept, onDecline }: RecommendationCardProps) {
   const visual = DECISION_VISUALS[recommendation.decision];
 
   return (
@@ -49,6 +50,13 @@ export function RecommendationCard({ recommendation, onAccept, onDecline }: Reco
       </View>
 
       <Text variant="bodySoft">{recommendation.justification.replace(/^Recomendação: [^.]+\. /, '')}</Text>
+
+      {suggestedStopName ? (
+        <View style={styles.suggestedStop}>
+          <Text variant="label" color="textSecondary">PARADA DA SIMULAÇÃO</Text>
+          <Text variant="body" numberOfLines={1}>{suggestedStopName}</Text>
+        </View>
+      ) : null}
 
       {recommendation.requiresConfirmation ? (
         <View style={styles.actions}>
@@ -85,6 +93,12 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  suggestedStop: {
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    gap: 2,
   },
   action: {
     flex: 1,

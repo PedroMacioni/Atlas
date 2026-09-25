@@ -9,6 +9,8 @@ export type PresentationState = {
   pressedElement: string | null;
   /** Mostra o badge de escuta ativa. */
   showListening: boolean;
+  /** Texto simulado de entrada de voz para a apresentação. */
+  demoVoiceText: string | null;
 };
 
 const INITIAL_STATE: PresentationState = {
@@ -18,6 +20,7 @@ const INITIAL_STATE: PresentationState = {
   spotlightTarget: null,
   pressedElement: null,
   showListening: false,
+  demoVoiceText: null,
 };
 
 let state: PresentationState = { ...INITIAL_STATE };

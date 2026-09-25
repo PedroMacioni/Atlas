@@ -2,6 +2,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Pressable, StyleSheet } from 'react-native';
 
 import type { IconName } from '@/components/ui/icon-badge';
+import { usePresentationState } from '@/features/presentation/state/presentation-state';
 import { colors, type ColorToken } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -26,6 +27,8 @@ export type FloatingIconButtonProps = {
   /** Ação secundária, por toque longo — descrita em `accessibilityHint`. */
   onLongPress?: () => void;
   accessibilityHint?: string;
+  /** Identificador para o efeito de pressionado da apresentação. */
+  testID?: string;
 };
 
 const SIZES = {
@@ -49,8 +52,11 @@ export function FloatingIconButton({
   size = 'md',
   onLongPress,
   accessibilityHint,
+  testID,
 }: FloatingIconButtonProps) {
   const { box, icon: iconSize } = SIZES[size];
+  const { pressedElement } = usePresentationState();
+  const isPresentationPressed = testID !== undefined && pressedElement === testID;
 
   return (
     <Pressable
@@ -59,11 +65,12 @@ export function FloatingIconButton({
       accessibilityHint={accessibilityHint}
       onPress={onPress}
       onLongPress={onLongPress}
+      testID={testID}
       style={({ pressed }) => [
         styles.button,
         { width: box, height: box },
         shadows.raised,
-        pressed && styles.pressed,
+        (pressed || isPresentationPressed) && styles.pressed,
       ]}>
       <MaterialCommunityIcons name={icon} size={iconSize} color={colors[iconColor]} />
     </Pressable>

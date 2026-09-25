@@ -26,6 +26,8 @@ export function useGlowPulse() {
     if (isActive.current) return;
     isActive.current = true;
 
+    // Reanimated shared values are intentionally mutable outside render.
+    // eslint-disable-next-line react-hooks/immutability
     glowOpacity.value = withRepeat(
       withSequence(
         withTiming(0.6, { duration: PULSE_DURATION }),
@@ -39,6 +41,7 @@ export function useGlowPulse() {
   const stopPulse = useCallback(() => {
     isActive.current = false;
     cancelAnimation(glowOpacity);
+    // eslint-disable-next-line react-hooks/immutability
     glowOpacity.value = withTiming(0, { duration: 200 });
   }, [glowOpacity]);
 

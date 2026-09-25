@@ -29,6 +29,7 @@ describe('parseCommand', () => {
     expect(parseCommand('atlas registrar ponto turistico').type).toBe('register_tourist_spot');
     expect(parseCommand('preciso abastecer ou descansar').type).toBe('need_rest_or_fuel');
     expect(parseCommand('encerrar viagem').type).toBe('end_trip');
+    expect(parseCommand('Atlas, quanto falta para chegar?').type).toBe('trip_status');
   });
 
   it('cansaço pede uma avaliação ao Random Forest', () => {

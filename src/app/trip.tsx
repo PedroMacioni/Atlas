@@ -13,8 +13,11 @@ import { Text } from '@/components/ui/text';
 import {
   DEMO_DRIVE_DESTINATION,
   DEMO_DRIVE_ORIGIN,
+  DEMO_SPEED_METERS_PER_SECOND,
+  PRESENTATION_STOP_NAME,
 } from '@/features/demo/constants/demo-drive';
 import { useDemoDrive } from '@/features/demo/hooks/use-demo-drive';
+import { pointAlongRoute } from '@/features/demo/utils/route-point';
 import {
   getDemoScenario,
   resetDemoScenario,
@@ -25,6 +28,7 @@ import { AtlasMap, type AtlasMapHandle } from '@/features/map/components/atlas-m
 import { ManeuverBanner } from '@/features/trip/components/maneuver-banner';
 import { SpeedBadge } from '@/features/trip/components/speed-badge';
 import { TripBottomSheet } from '@/features/trip/components/trip-bottom-sheet';
+import { TripStatusCard } from '@/features/trip/components/trip-status-card';
 import { useDetour } from '@/features/trip/hooks/use-detour';
 import { subscribeTripActions } from '@/features/trip/state/trip-action-request';
 import { DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
@@ -35,7 +39,7 @@ import { useTripRoute } from '@/features/trip/hooks/use-trip-route';
 import { NearbyOptions } from '@/features/nearby/components/nearby-options';
 import { useNearbySearch } from '@/features/nearby/hooks/use-nearby-search';
 import { DECISION_CATEGORY } from '@/features/nearby/services/nearby-service';
-import type { NearbyPlace } from '@/features/nearby/types/nearby';
+import type { NearbyPlace, NearbyResponse } from '@/features/nearby/types/nearby';
 import { RecommendationCard } from '@/features/recommendation/components/recommendation-card';
 import { useRecommendations } from '@/features/recommendation/hooks/use-recommendations';
 import {
@@ -50,6 +54,7 @@ import {
 import type { EndReason } from '@/features/trip-session/types/trip';
 import type { RouteResult } from '@/features/routing/types/route-result';
 import { findNextManeuver } from '@/features/trip/utils/next-maneuver';
+import { buildRouteGeometry } from '@/features/trip/utils/trip-progress';
 import { VoiceIndicator } from '@/features/voice/components/voice-indicator';
 import {
   describeEmotion,
@@ -59,6 +64,8 @@ import { useTripVoice } from '@/features/voice/hooks/use-trip-voice';
 import { useWakeWord } from '@/features/voice/hooks/use-wake-word';
 import { chooseOptionByVoice, confirmByVoice } from '@/features/voice/utils/voice-dialogs';
 import { PresentationOverlay } from '@/features/presentation';
+import { setPresentationState, usePresentationState } from '@/features/presentation/state/presentation-state';
+import { WakeStatusCard } from '@/features/voice/components/wake-status-card';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -107,12 +114,15 @@ export default function TripScreen() {
     Um ponto caminha sobre a rota, já na metade dela, e a tela inteira acredita
     nele. É o que permite mostrar a viagem em andamento sem dirigir 110 km.
   */
-  const { demo: demoParam, presentation: presentationParam } = useLocalSearchParams<{
+  const { demo: demoParam, presentation: presentationParam, skipIntro: skipIntroParam } = useLocalSearchParams<{
     demo?: string;
     presentation?: string;
+    skipIntro?: string;
   }>();
   const isDemo = demoParam === '1';
   const isPresentation = presentationParam === '1';
+  const skipIntro = skipIntroParam === '1';
+  const presentationState = usePresentationState();
 
   // Presentation mode implies demo mode
   const effectiveDemo = isDemo || isPresentation;
@@ -156,7 +166,8 @@ export default function TripScreen() {
   });
 
   const trip = useTripRoute(detour.routeOrigin ?? origin, destination, detour.waypoints);
-  const progress = useTripProgress(trip.route, position?.coordinate ?? null);
+  const progressRoute = effectiveDemo ? (trip.route ?? demoRoute) : trip.route;
+  const progress = useTripProgress(progressRoute, position?.coordinate ?? null);
 
   /*
     Derivar durante a renderização, e não num efeito: é o padrão do resto da
@@ -196,10 +207,11 @@ export default function TripScreen() {
       ...getDemoScenario(),
       distanceKm: Math.round(demoDrive.traveledMeters / 1_000),
     });
-  }, [isDemo, demoDrive.traveledMeters]);
+  }, [effectiveDemo, demoDrive.traveledMeters]);
 
   // Os 3 locais para uma recomendação aceita (RF-19).
   const stopOptions = useNearbySearch();
+  const [presentationStopOptions, setPresentationStopOptions] = useState(false);
   const [stopReason, setStopReason] = useState('');
 
   const recommendations = useRecommendations({
@@ -263,8 +275,10 @@ export default function TripScreen() {
   const mapHeading = (onRoute ? progress.courseDegrees : null) ?? position?.heading ?? null;
 
   // Sem posição, os totais do trajeto são a melhor verdade disponível.
-  const remainingMeters = progress?.remainingMeters ?? trip.route?.distanceMeters ?? 0;
-  const remainingSeconds = progress?.remainingSeconds ?? trip.route?.durationSeconds ?? 0;
+  const remainingMeters = progress?.remainingMeters ?? progressRoute?.distanceMeters ?? 0;
+  const remainingSeconds = effectiveDemo
+    ? Math.round(remainingMeters / DEMO_SPEED_METERS_PER_SECOND)
+    : progress?.remainingSeconds ?? trip.route?.durationSeconds ?? 0;
 
   /**
    * Encerra a viagem e abre o resumo.
@@ -284,7 +298,10 @@ export default function TripScreen() {
       const tripId = await session.finish(reason, override);
 
       if (tripId) {
-        router.replace({ pathname: '/history/[id]', params: { id: tripId } });
+        router.replace({
+          pathname: '/history/[id]',
+          params: { id: tripId, ...(isPresentation ? { presentation: '1' } : {}) },
+        });
       } else {
         router.back();
       }
@@ -307,7 +324,7 @@ export default function TripScreen() {
    * tempo que a rota leva, em vez dos poucos minutos que a demonstração
    * passou aberta.
    */
-  const concludeDemoTrip = () => {
+  const concludeDemoTrip = async () => {
     const complete = demoDrive.completeTrip();
 
     if (complete.path.length < 2) {
@@ -319,7 +336,7 @@ export default function TripScreen() {
       ? new Date(Date.parse(session.startedAt) + complete.durationSeconds * 1_000).toISOString()
       : undefined;
 
-    endTrip('arrival', {
+    await endTrip('arrival', {
       distanceMeters: complete.distanceMeters,
       path: complete.path,
       endedAt,
@@ -386,7 +403,11 @@ export default function TripScreen() {
     const category = decision ? DECISION_CATEGORY[decision] : undefined;
     if (accepted && category && here) {
       setStopReason(`Recomendação do Atlas: ${current?.label}`);
-      stopOptions.search(category, here);
+      if (isPresentation) {
+        setPresentationStopOptions(true);
+      } else {
+        stopOptions.search(category, here);
+      }
     }
 
     if (accepted && decision === 'registrar_ponto_turistico') {
@@ -461,9 +482,19 @@ export default function TripScreen() {
   */
   const readOptionsByVoice = useRef(false);
 
+  const describeTripProgress = () => {
+    if (!trip.route) return 'Ainda estou calculando a rota.';
+    const distance = remainingMeters >= 1_000
+      ? `${(remainingMeters / 1_000).toFixed(1).replace('.', ',')} quilômetros`
+      : `${Math.round(remainingMeters / 50) * 50} metros`;
+    const minutes = Math.max(1, Math.round(remainingSeconds / 60));
+    return `Faltam cerca de ${distance} e ${minutes} minutos até ${destination.name}.`;
+  };
+
   const tripVoice = useTripVoice({
     registerStop: () => session.registerStop(),
     askRecommendation,
+    describeTripProgress,
     registerTouristSpot,
     findStop: (category) => {
       const here = position?.coordinate;
@@ -632,6 +663,47 @@ export default function TripScreen() {
     });
   };
 
+  const presentationStopGeometry = useMemo(
+    () => progressRoute ? buildRouteGeometry(progressRoute.coordinates) : null,
+    [progressRoute],
+  );
+  const presentationStopCoordinate = (() => {
+    if (!presentationStopGeometry || !progress) return null;
+    return pointAlongRoute(
+      presentationStopGeometry.coordinates,
+      presentationStopGeometry.cumulative,
+      Math.min(progress.traveledMeters + 350, presentationStopGeometry.totalMeters),
+    )?.coordinate ?? null;
+  })();
+
+  const presentationNearbyResult: NearbyResponse | null = presentationStopCoordinate ? {
+    category: 'descanso',
+    source: 'presentation',
+    fallbackReason: null,
+    places: [{
+      id: 'presentation-stop',
+      name: PRESENTATION_STOP_NAME,
+      address: 'No trajeto, a cerca de 350 m',
+      ...presentationStopCoordinate,
+      distanceMeters: 350,
+      durationSeconds: Math.round(350 / DEMO_SPEED_METERS_PER_SECOND),
+      byRoad: true,
+      rating: null,
+      ratingCount: null,
+    }],
+  } : null;
+
+  const choosePresentationStop = () => {
+    if (!presentationStopCoordinate) return;
+    detour.start({
+      name: PRESENTATION_STOP_NAME,
+      ...presentationStopCoordinate,
+      category: 'descanso',
+      reason: 'Recomendação do Atlas: Descansar',
+    });
+    setPresentationStopOptions(false);
+  };
+
   return (
     <View style={styles.screen}>
       <AtlasMap
@@ -651,6 +723,7 @@ export default function TripScreen() {
         focus={isFollowing ? 'navigation' : 'route'}
         userHeading={mapHeading}
         routeProgressIndex={progress?.nearestIndex ?? 0}
+        routeProgressPoint={onRoute ? progress?.snappedPoint : null}
       />
 
       {/* Camada de controles. `box-none` deixa o arrasto do mapa passar. */}
@@ -676,17 +749,29 @@ export default function TripScreen() {
               )}
             </View>
 
-            {/* Velocidade no canto superior esquerdo */}
+            {/* Velocidade e status no canto superior esquerdo */}
             <View style={styles.speedContainer}>
               <SpeedBadge metersPerSecond={position?.speed ?? null} />
+              {recommendations.isAsking || wake.watching || (isPresentation && presentationState.showListening) ? (
+                <WakeStatusCard consulting={recommendations.isAsking} />
+              ) : trip.isLoading ? (
+                <TripStatusCard icon="routes" title="Calculando rota" busy />
+              ) : detour.detour ? (
+                <TripStatusCard
+                  icon="map-marker-path"
+                  title="Parada no caminho"
+                  subtitle={detour.detour.name}
+                  onCancel={detour.cancel}
+                />
+              ) : notice ? (
+                <TripStatusCard icon="check-circle" title={notice} />
+              ) : null}
             </View>
           </View>
 
-          {/* Avisos empilham sob a faixa, sem empurrar o mapa. */}
+          {/* Avisos de erro empilham sob a faixa */}
           {trip.error ? (
             <StatusMessage tone="error" message={trip.error} onRetry={trip.retry} floating />
-          ) : trip.isLoading ? (
-            <StatusMessage tone="info" message="Calculando rota..." busy floating />
           ) : null}
 
           {tracking.isStarting ? (
@@ -713,15 +798,7 @@ export default function TripScreen() {
 
           <VoiceIndicator voice={tripVoice} />
 
-          {notice ? <StatusMessage tone="info" message={notice} floating /> : null}
-
-          {wake.watching ? (
-            <StatusMessage
-              tone="info"
-              message={wake.heard || 'Atento — é só dizer "Atlas".'}
-              floating
-            />
-          ) : wake.error ? (
+          {wake.error ? (
             <StatusMessage tone="error" message={wake.error} floating />
           ) : null}
 
@@ -729,40 +806,32 @@ export default function TripScreen() {
             <View style={isPresentation && styles.spotlight}>
               <RecommendationCard
                 recommendation={recommendations.current}
+                suggestedStopName={isPresentation && DECISION_CATEGORY[recommendations.current.decision] ? PRESENTATION_STOP_NAME : undefined}
                 onAccept={() => answerRecommendation(true)}
                 onDecline={() => answerRecommendation(false)}
               />
             </View>
           ) : null}
 
-          {stopOptions.category ? (
+          {stopOptions.category || presentationStopOptions ? (
             <View style={[styles.panel, shadows.raised, isPresentation && styles.spotlight]}>
               <Text variant="heading">Onde parar?</Text>
+              {isPresentation && presentationStopOptions ? (
+                <Text variant="bodySoft">Escolha uma parada para incluir no trajeto.</Text>
+              ) : null}
               <NearbyOptions
-                result={stopOptions.result}
-                isLoading={stopOptions.isLoading}
-                error={stopOptions.error}
+                result={presentationStopOptions ? presentationNearbyResult : stopOptions.result}
+                isLoading={presentationStopOptions ? !presentationNearbyResult : stopOptions.isLoading}
+                error={presentationStopOptions ? null : stopOptions.error}
                 onRetry={stopOptions.retry}
-                onSelect={chooseStop}
+                onSelect={presentationStopOptions ? choosePresentationStop : chooseStop}
                 actionLabel="Parar em"
               />
-              <SecondaryButton label="Agora não" onPress={stopOptions.clear} />
+              <SecondaryButton label="Agora não" onPress={presentationStopOptions ? () => setPresentationStopOptions(false) : stopOptions.clear} />
             </View>
           ) : null}
 
-          {detour.detour ? (
-            <StatusMessage
-              tone="info"
-              message={`Parada no caminho: ${detour.detour.name}`}
-              onRetry={detour.cancel}
-              retryLabel="Cancelar parada"
-              floating
-            />
-          ) : null}
-
-          {recommendations.isAsking ? (
-            <StatusMessage tone="info" message="Consultando o Atlas..." busy floating />
-          ) : recommendations.error ? (
+          {recommendations.error ? (
             <StatusMessage tone="error" message={recommendations.error} floating />
           ) : null}
 
@@ -847,6 +916,7 @@ export default function TripScreen() {
               size="lg"
               icon="dots-horizontal"
               accessibilityLabel="Abrir ações da viagem"
+              testID="trip-actions-button"
               onPress={() =>
                 router.push({ pathname: '/trip-actions', params: { watching: wake.watching ? '1' : '0' } })
               }
@@ -875,6 +945,7 @@ export default function TripScreen() {
       {isPresentation && (
         <PresentationOverlay
           demoDrive={demoDrive}
+          stopReached={detour.reached !== null}
           onTriggerRecommendation={askRecommendation}
           onAcceptRecommendation={() => answerRecommendation(true)}
           onSelectPlace={(index) => {
@@ -883,31 +954,13 @@ export default function TripScreen() {
               chooseStop(places[index]);
             }
           }}
-          onSetNearbyStop={() => {
-            // Calcula uma parada ~800m à frente da posição atual
-            const here = position?.coordinate;
-            if (!here || !destination) return;
-
-            // Direção para o destino (normalizada)
-            const dLat = destination.latitude - here.latitude;
-            const dLng = destination.longitude - here.longitude;
-            const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-
-            // ~800m em graus (aproximadamente 0.0072 graus)
-            const offset = 0.0072;
-            const stopLat = here.latitude + (dLat / dist) * offset;
-            const stopLng = here.longitude + (dLng / dist) * offset;
-
-            detour.start({
-              name: 'Posto Shell Bandeirantes',
-              latitude: stopLat,
-              longitude: stopLng,
-              category: 'descanso',
-              reason: 'Recomendação do Atlas: Descansar',
-            });
-            stopOptions.clear();
-          }}
+          onSetNearbyStop={choosePresentationStop}
           onCompleteTrip={concludeDemoTrip}
+          onDemoVoice={() => {
+            setPresentationState({ caption: `Atlas: ${describeTripProgress()}` });
+            return tripVoice.demoCommand('quanto falta para chegar');
+          }}
+          initialAct={skipIntro ? 2 : 1}
         />
       )}
     </View>
@@ -942,7 +995,10 @@ const styles = StyleSheet.create({
   },
   /** Velocidade no canto superior esquerdo, abaixo da faixa de direção. */
   speedContainer: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   /** Alinha o controle de câmera à direita, sob a faixa de instrução. */
   mapActions: {

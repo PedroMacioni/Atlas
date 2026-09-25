@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   DEMO_SPEED_METERS_PER_SECOND,
@@ -74,6 +74,7 @@ export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoD
 
   const [progress, setProgress] = useState<DemoProgress | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const lastTickAt = useRef<number | null>(null);
 
   // Largada e reprojeção acontecem na renderização em que a rota muda — o
   // mesmo padrão de derivar estado que `use-trip-origin` usa, e não um efeito,
@@ -97,21 +98,27 @@ export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoD
       return;
     }
 
-    const step = (DEMO_SPEED_METERS_PER_SECOND * DEMO_TICK_MS) / 1_000;
+    lastTickAt.current = Date.now();
 
     const intervalId = setInterval(() => {
+      const now = Date.now();
+      const elapsedMs = Math.min(now - (lastTickAt.current ?? now), 250);
+      lastTickAt.current = now;
       setProgress((current) =>
         current
           ? {
               ...current,
-              meters: Math.min(current.route.distanceMeters, current.meters + step),
-              timestamp: Date.now(),
+              meters: Math.min(current.route.distanceMeters, current.meters + DEMO_SPEED_METERS_PER_SECOND * elapsedMs / 1_000),
+              timestamp: now,
             }
           : current,
       );
     }, DEMO_TICK_MS);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      lastTickAt.current = null;
+    };
   }, [enabled, isPaused, hasStarted, totalMeters]);
 
   const togglePause = useCallback(() => setIsPaused((paused) => !paused), []);
@@ -143,11 +150,12 @@ export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoD
 
   const completeTrip = useCallback(() => {
     const path = progress ? [...progress.traveled, ...progress.route.coordinates] : [];
+    const distanceMeters = path.length > 1 ? buildRouteGeometry(path).totalMeters : 0;
 
     return {
       path,
-      distanceMeters: path.length > 1 ? buildRouteGeometry(path).totalMeters : 0,
-      durationSeconds: progress?.route.durationSeconds ?? 0,
+      distanceMeters,
+      durationSeconds: Math.round(distanceMeters / DEMO_SPEED_METERS_PER_SECOND),
     };
   }, [progress]);
 

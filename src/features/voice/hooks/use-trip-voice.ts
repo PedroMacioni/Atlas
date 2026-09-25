@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type { NearbyCategory } from '@/features/nearby/types/nearby';
 import { useVoice, type Voice } from '@/features/voice/hooks/use-voice';
@@ -19,6 +19,7 @@ export type TripVoiceActions = {
   registerStop: () => Promise<void>;
   /** "Preciso abastecer ou descansar": pede avaliação ao Random Forest. */
   askRecommendation: () => void;
+  describeTripProgress: () => string;
   registerTouristSpot: () => Promise<void>;
   /** Busca as 3 opções de uma categoria — elas serão lidas em voz alta. */
   findStop: (category: NearbyCategory) => void;
@@ -39,11 +40,13 @@ export type TripVoice = Voice & {
    * comando depois de "Atlas", ele é executado; sem nada, o Atlas escuta.
    */
   resume: (rest: string) => void;
+  /** Runs a scripted command through the same parser without recording fake speech. */
+  demoCommand: (command: string) => Promise<void>;
 };
 
 const HELP =
   'Você pode dizer: registrar parada, preciso abastecer ou descansar, ' +
-  'quero um posto, registrar ponto turístico, emergência, ou encerrar viagem.';
+  'quero um posto, quanto falta, registrar ponto turístico, emergência, ou encerrar viagem.';
 
 /**
  * Comandos de voz durante a viagem (RF-11, RF-12, §3.1).
@@ -55,9 +58,15 @@ const HELP =
 export function useTripVoice(actions: TripVoiceActions): TripVoice {
   const voice = useVoice();
   const { say, listen, state, finish } = voice;
+  const actionsRef = useRef(actions);
+
+  useEffect(() => {
+    actionsRef.current = actions;
+  }, [actions]);
 
   const run = useCallback(
-    async (heardAlready?: string) => {
+    async (heardAlready?: string, record = true) => {
+      const currentActions = actionsRef.current;
       let spoken = heardAlready ?? '';
 
       if (!spoken) {
@@ -74,10 +83,10 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
 
         // O comando falado vai para o diário com o áudio — é dele que sai a
         // emoção. O que a vigília ouviu de passagem não tem áudio guardado.
-        actions.recordCommand(heard.transcript, heard.audioUri);
+        if (record) currentActions.recordCommand(heard.transcript, heard.audioUri);
         spoken = heard.transcript;
       } else {
-        actions.recordCommand(spoken, null);
+        if (record) currentActions.recordCommand(spoken, null);
       }
 
       const command = parseCommand(spoken);
@@ -85,7 +94,7 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
       switch (command.type) {
         case 'register_stop':
           try {
-            await actions.registerStop();
+            await currentActions.registerStop();
             await say('Parada registrada.');
           } catch (cause) {
             await say(cause instanceof Error ? cause.message : 'Não consegui registrar a parada.');
@@ -94,12 +103,16 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
 
         case 'need_rest_or_fuel':
           await say('Vou avaliar a sua viagem.');
-          actions.askRecommendation();
+          currentActions.askRecommendation();
+          return;
+
+        case 'trip_status':
+          await say(currentActions.describeTripProgress());
           return;
 
         case 'register_tourist_spot':
           try {
-            await actions.registerTouristSpot();
+            await currentActions.registerTouristSpot();
             await say('Ponto turístico registrado.');
           } catch {
             await say('Não consegui registrar o ponto turístico.');
@@ -109,23 +122,23 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
         case 'go_category':
         case 'add_stop':
           await say(`Vou buscar ${CATEGORY_SPEECH[command.category]} perto de você.`);
-          actions.findStop(command.category);
+          currentActions.findStop(command.category);
           return;
 
         case 'emergency':
           await say('Abrindo a emergência.');
-          actions.openEmergency();
+          currentActions.openEmergency();
           return;
 
         case 'unwell':
           await say('Vou mostrar os hospitais mais próximos e os números de emergência.');
-          actions.openEmergency();
+          currentActions.openEmergency();
           return;
 
         case 'end_trip': {
-          const confirmed = await confirmByVoice(voice, 'Quer encerrar a viagem?');
+          const confirmed = await confirmByVoice({ say, listen }, 'Quer encerrar a viagem?');
           if (confirmed) {
-            actions.endTrip();
+            currentActions.endTrip();
           } else if (confirmed === false) {
             await say('Tudo bem, seguimos viagem.');
           }
@@ -143,8 +156,6 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
           await say(`Não entendi. ${HELP}`);
       }
     },
-    // `actions` é recriado a cada renderização; lido no momento do comando.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [listen, say],
   );
 
@@ -167,5 +178,7 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
     [state, run],
   );
 
-  return { ...voice, onMicPress, resume };
+  const demoCommand = useCallback((command: string) => run(command, false), [run]);
+
+  return { ...voice, onMicPress, resume, demoCommand };
 }

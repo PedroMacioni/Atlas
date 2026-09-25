@@ -108,7 +108,7 @@ export function NearbyOptions({
         );
       })}
 
-      {withoutRating ? (
+      {withoutRating && result.source !== 'presentation' ? (
         <Text variant="label" color="textSecondary">
           Fonte: {sourceLabel}, sem nota
           {result.fallbackReason ? ` (${result.fallbackReason})` : ''}.

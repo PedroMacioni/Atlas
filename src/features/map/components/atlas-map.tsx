@@ -9,13 +9,14 @@ import {
   type Ref,
 } from 'react';
 import { StyleSheet, View } from 'react-native';
-import MapView, { Marker, Polyline, type EdgePadding, type Region } from 'react-native-maps';
+import MapView, { AnimatedRegion, Marker, Polyline, type EdgePadding, type Region } from 'react-native-maps';
 
 import { FloatingIconButton } from '@/components/ui/floating-icon-button';
 import { Text } from '@/components/ui/text';
 import { ATLAS_MAP_STYLE } from '@/features/map/constants/map-style';
 import { NAVIGATION_CONFIG, ROUTE_COLORS } from '@/features/map/constants/navigation';
 import type { Coordinate, NamedCoordinate } from '@/features/map/types/coordinate';
+import { navigationSegments } from '@/features/map/utils/navigation-segments';
 import { findNearestPointOnRoute } from '@/features/map/utils/route-progress';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -70,6 +71,7 @@ export type AtlasMapProps = {
    * dividir a polyline em trecho percorrido (opaco) e pendente (vibrante).
    */
   routeProgressIndex?: number;
+  routeProgressPoint?: Coordinate | null;
   /**
    * `card` arredonda os cantos, para o mapa que convive com outros elementos.
    * `full` encosta nas bordas, para a navegação — onde o mapa é a tela, e não
@@ -155,9 +157,34 @@ export function AtlasMap({
   interactive = true,
   userHeading,
   routeProgressIndex = 0,
+  routeProgressPoint,
 }: AtlasMapProps) {
   const mapRef = useRef<MapView>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [animatedUserLocation] = useState(() => new AnimatedRegion({ ...(currentLocation ?? origin), latitudeDelta: 0, longitudeDelta: 0 }));
+  const hasAnimatedUserLocation = useRef(false);
+
+  useEffect(() => {
+    if (focus !== 'navigation' || !currentLocation) {
+      hasAnimatedUserLocation.current = false;
+      return;
+    }
+
+    if (!hasAnimatedUserLocation.current) {
+      animatedUserLocation.setValue({ ...currentLocation, latitudeDelta: 0, longitudeDelta: 0 });
+      hasAnimatedUserLocation.current = true;
+      return;
+    }
+
+    animatedUserLocation.timing({
+      latitude: currentLocation.latitude,
+      longitude: currentLocation.longitude,
+      latitudeDelta: 0,
+      longitudeDelta: 0,
+      duration: 110,
+      useNativeDriver: false,
+    } as Parameters<AnimatedRegion['timing']>[0]).start();
+  }, [focus, currentLocation, animatedUserLocation]);
 
   const initialRegion = useMemo(() => {
     // Modo navegação: começa próximo ao usuário ou à origem
@@ -180,12 +207,6 @@ export function AtlasMap({
     // Modo rota: enquadra origem e destino
     return buildInitialRegion(origin, destination);
   }, [focus, currentLocation, origin, destination]);
-
-  // Segmentos da rota para modo navigation (percorrido vs pendente)
-  const completedCoords = useMemo(() => {
-    if (focus !== 'navigation' || routeCoordinates.length < 2) return [];
-    return routeCoordinates.slice(0, routeProgressIndex + 1);
-  }, [focus, routeCoordinates, routeProgressIndex]);
 
   /**
    * Onde a parada aceita cai na rota.
@@ -210,17 +231,18 @@ export function AtlasMap({
   /** Some assim que a parada fica para trás: o desvio acabou. */
   const stopIndex = stopOnRoute !== null && stopOnRoute > routeProgressIndex ? stopOnRoute : null;
 
-  /** Do ponto atual até a parada, quando há uma. */
-  const detourCoords = useMemo(() => {
-    if (stopIndex === null) return [];
-    return routeCoordinates.slice(routeProgressIndex, stopIndex + 1);
-  }, [routeCoordinates, routeProgressIndex, stopIndex]);
-
-  /** O que falta até o destino — depois da parada, se houver. */
-  const pendingCoords = useMemo(() => {
-    if (focus !== 'navigation' || routeCoordinates.length < 2) return [];
-    return routeCoordinates.slice(stopIndex ?? routeProgressIndex);
-  }, [focus, routeCoordinates, routeProgressIndex, stopIndex]);
+  /** Trechos percorrido, até a parada e até o destino, cortados na posição do carro. */
+  const segments = useMemo(() => {
+    if (focus !== 'navigation' || routeCoordinates.length < 2) {
+      return { completed: [], detour: [], pending: [] };
+    }
+    return navigationSegments(
+      routeCoordinates,
+      routeProgressIndex,
+      routeProgressPoint ?? routeCoordinates[routeProgressIndex],
+      stopIndex,
+    );
+  }, [focus, routeCoordinates, routeProgressIndex, routeProgressPoint, stopIndex]);
 
   const fitRoute = useCallback(() => {
     const points = routeCoordinates.length >= 2 ? routeCoordinates : [origin, destination];
@@ -357,10 +379,7 @@ export function AtlasMap({
     }
 
     mapRef.current?.animateCamera(camera, {
-      duration: Math.min(
-        NAVIGATION_CONFIG.FOLLOW_MAX_MS,
-        Math.max(NAVIGATION_CONFIG.FOLLOW_MIN_MS, sinceLastMove ?? NAVIGATION_CONFIG.ANIMATION_MS),
-      ),
+      duration: Math.min(180, Math.max(90, sinceLastMove ?? 110)),
     });
     // `currentLocation` inteiro fora das dependências é deliberado: as duas
     // coordenadas já cobrem tudo que o efeito lê.
@@ -387,9 +406,9 @@ export function AtlasMap({
         loadingBackgroundColor={colors.surfaceMuted}
         loadingIndicatorColor={colors.primary}>
         {/* Modo navigation: duas polylines (percorrido + pendente) */}
-        {focus === 'navigation' && completedCoords.length >= 2 ? (
+        {focus === 'navigation' && segments.completed.length >= 2 ? (
           <Polyline
-            coordinates={completedCoords}
+            coordinates={segments.completed}
             strokeColor={ROUTE_COLORS.completed}
             strokeWidth={6}
             lineCap="round"
@@ -397,9 +416,9 @@ export function AtlasMap({
           />
         ) : null}
 
-        {detourCoords.length >= 2 ? (
+        {segments.detour.length >= 2 ? (
           <Polyline
-            coordinates={detourCoords}
+            coordinates={segments.detour}
             strokeColor={ROUTE_COLORS.detour}
             strokeWidth={6}
             lineCap="round"
@@ -407,9 +426,9 @@ export function AtlasMap({
           />
         ) : null}
 
-        {focus === 'navigation' && pendingCoords.length >= 2 ? (
+        {focus === 'navigation' && segments.pending.length >= 2 ? (
           <Polyline
-            coordinates={pendingCoords}
+            coordinates={segments.pending}
             strokeColor={ROUTE_COLORS.pending}
             strokeWidth={6}
             lineCap="round"
@@ -465,8 +484,8 @@ export function AtlasMap({
           apontaria para qualquer lado menos o da rua.
         */}
         {focus === 'navigation' && currentLocation ? (
-          <Marker
-            coordinate={currentLocation}
+          <Marker.Animated
+            coordinate={animatedUserLocation as unknown as Coordinate}
             anchor={{ x: 0.5, y: 0.5 }}
             flat
             rotation={userHeading ?? 0}
@@ -474,7 +493,7 @@ export function AtlasMap({
             <View style={styles.arrowContainer}>
               <MaterialCommunityIcons name="navigation" size={32} color={colors.primary} />
             </View>
-          </Marker>
+          </Marker.Animated>
         ) : null}
 
         {/*

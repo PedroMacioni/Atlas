@@ -1,8 +1,8 @@
-import type { SharedValue } from 'react-native-reanimated';
 import {
   interpolate,
   useAnimatedStyle,
   withSpring,
+  type SharedValue,
   type WithSpringConfig,
 } from 'react-native-reanimated';
 
