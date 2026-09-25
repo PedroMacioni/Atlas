@@ -3,13 +3,13 @@ import * as Location from 'expo-location';
 import type { Coordinate } from '@/features/map/types/coordinate';
 
 /**
- * Acesso à localização do dispositivo.
+ * Localização do aparelho (uma leitura só).
  *
- * Nesta fase pedimos apenas permissão de *foreground*. Localização em segundo
- * plano exige justificativa nas lojas e não é necessária para o MVP.
+ * Pedimos permissão só com o app aberto (foreground); localização em segundo
+ * plano não é necessária.
  *
- * O serviço nunca lança: toda falha vira um resultado tipado, para que a tela
- * continue funcional (o mapa segue visível) mesmo sem GPS.
+ * Esta função nunca lança erro: toda falha vira um resultado, para a tela
+ * continuar funcionando mesmo sem GPS.
  */
 export type LocationOutcome =
   | { status: 'granted'; coordinate: Coordinate }

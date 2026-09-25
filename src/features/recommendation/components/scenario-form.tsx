@@ -13,11 +13,8 @@ import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 
 /**
- * As 6 variáveis do Random Forest, editáveis à mão.
- *
- * Um formulário só: ele serve tanto ao simulador quanto à viagem de
- * demonstração, que fazem exatamente as mesmas perguntas — e duas cópias das
- * mesmas perguntas é como elas saem do lugar uma da outra.
+ * Formulário com as 6 variáveis do Random Forest, editáveis à mão. Usado no
+ * simulador e na viagem de demonstração.
  */
 
 export type Scenario = Required<Omit<SimulationOverrides, 'emotionConfidence'>> & {
@@ -110,8 +107,7 @@ export type ScenarioFormProps = {
 
 export function ScenarioForm({ scenario, onChange, showPresets = true }: ScenarioFormProps) {
   const update = (changes: Partial<Scenario>) => {
-    // Mexer à mão deixa de ser "tensão forte com 95%": a confiança só vale
-    // enquanto a emoção for a do cenário pronto.
+    // Ao mexer na emoção, a confiança do cenário pronto deixa de valer.
     onChange({
       ...scenario,
       ...changes,

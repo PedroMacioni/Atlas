@@ -28,8 +28,8 @@ type VoiceMapControlProps = {
 };
 
 /**
- * Atalho de voz para o mapa. Durante a escuta ele se abre para a esquerda e
- * revela a fala reconhecida, mas volta ao ícone assim que a conversa termina.
+ * Botão de voz sobre o mapa. Ao ouvir, abre para a esquerda e mostra a fala
+ * reconhecida; depois volta a ser só o ícone.
  */
 export function VoiceMapControl({
   state,

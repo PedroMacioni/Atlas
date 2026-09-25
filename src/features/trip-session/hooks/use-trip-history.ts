@@ -16,16 +16,16 @@ type LoadState<T> = {
 };
 
 export type LoadResult<T> = LoadState<T> & {
-  /** `false` quando não há API configurada — não há histórico para buscar. */
+  /** `false` quando não há API configurada (não existe histórico para buscar). */
   isAvailable: boolean;
   reload: () => void;
 };
 
 /**
- * Carrega algo do histórico toda vez que a tela ganha foco.
+ * Carrega dados do histórico toda vez que a tela ganha foco.
  *
- * Foco, e não montagem: a aba Histórico continua montada enquanto o usuário
- * faz uma viagem nova, e ao voltar ela precisa aparecer na lista.
+ * Foco, e não só ao abrir: a aba Histórico continua aberta enquanto o usuário
+ * faz uma viagem nova, e ao voltar a viagem nova precisa aparecer.
  */
 function useFocusedLoad<T>(load: (signal: AbortSignal) => Promise<T>, key: string): LoadResult<T> {
   const isAvailable = isTripHistoryAvailable();
@@ -53,7 +53,7 @@ function useFocusedLoad<T>(load: (signal: AbortSignal) => Promise<T>, key: strin
         });
 
       return () => controller.abort();
-      // `load` muda de identidade a cada render; `key` é o que a define.
+      // `load` muda a cada render; quem define a busca é `key`.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAvailable, key, attempt]),
   );

@@ -19,11 +19,10 @@ import { formatDateTime } from '@/utils/date-time';
 import { formatDistance } from '@/utils/distance';
 
 /**
- * Resumo da viagem (RF-26) e detalhe do histórico (RF-29) — a mesma tela.
+ * Resumo da viagem (RF-26) e detalhe do histórico (RF-29): a mesma tela.
  *
- * Aberta ao encerrar uma viagem e ao tocar num card do histórico. Mostra os
- * indicadores de §7.2, o mapa do trajeto percorrido com as paradas, e o
- * diário de bordo em linha do tempo.
+ * Abre ao encerrar uma viagem e ao tocar num card do histórico. Mostra os
+ * números do resumo (§7.2), o mapa do trajeto percorrido e o diário de bordo.
  */
 export default function TripSummaryScreen() {
   const insets = useSafeAreaInsets();
@@ -69,8 +68,7 @@ function Summary({ trip }: { trip: TripDetail }) {
           currentLocation={null}
           origin={{ ...trip.origin, name: trip.originName }}
           destination={{ ...trip.destination, name: trip.destinationName }}
-          // O trajeto percorrido, e não a rota planejada: é o que o escopo
-          // chama de "mapa do trajeto percorrido".
+          // Desenha o trajeto percorrido de verdade, e não a rota planejada.
           routeCoordinates={hasPath ? trip.path : []}
           stops={trip.stops.map((stop) => stop.location)}
           showsUserLocation={false}

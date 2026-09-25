@@ -1,29 +1,14 @@
 import type { Place } from '@/features/destination/types/place';
 
 /**
- * Lugares de demonstração, com coordenadas reais.
+ * Lugares de exemplo, com coordenadas reais.
  *
- * Substituem o Google Places nesta fase. São suficientes para exercitar a
- * busca, os filtros e o cálculo de rota de ponta a ponta — quem escolher um
- * destino aqui recebe uma rota verdadeira, não um valor simulado.
- *
- * Quando o Places entrar, esta constante vira o resultado vazio inicial e a
- * lista passa a vir da API; a tela não muda.
- *
- * A ordem do array é a ordem exibida — `filterPlaces` preserva a sequência
- * original. No banco o mesmo papel cabe à coluna `priority`, porque lá as
- * linhas não têm ordem própria.
+ * São usados quando a API não está configurada (ou falha). A ordem da lista é
+ * a ordem mostrada na tela.
  */
 export const DEMO_PLACES: Place[] = [
   {
-    /**
-     * Destino recorrente, e por isso o primeiro da lista.
-     *
-     * A coordenada foi conferida em duas fontes: o OpenStreetMap mapeia o
-     * campus pelo acesso da Rodovia Miguel Noel Nascentes Burnier, e o ViaCEP
-     * confirma que o CEP 13087-018 — o mesmo que o OSM devolve — é a Rua Luiz
-     * Otávio, no Parque Taquaral.
-     */
+    /** Destino usado com frequência, por isso vem primeiro. */
     id: 'anhanguera-taquaral',
     name: 'Faculdade Anhanguera',
     address: 'R. Luiz Otávio, 1313 — Taquaral, Campinas, SP',
@@ -33,11 +18,7 @@ export const DEMO_PLACES: Place[] = [
     longitude: -47.0451977,
   },
   {
-    /**
-     * Avenida, e não rua: o CEP 13070-173 é da Av. Marechal Rondon. A
-     * coordenada é o ponto de endereço da Esri, conferido por geocodificação
-     * reversa no OpenStreetMap — o OSM não tem o número 700 marcado.
-     */
+    /** Avenida, e não rua: o CEP 13070-173 é da Av. Marechal Rondon. */
     id: 'marechal-rondon-700',
     name: 'Marechal Rondon, 700',
     address: 'Av. Mal. Rondon, 700 — Jardim Chapadão, Campinas, SP',

@@ -17,10 +17,7 @@ export type StatusPillProps = {
   titleColor?: ColorToken;
 };
 
-/**
- * Pílula de contexto do topo das telas — localização atual, estado da viagem,
- * estado da conexão.
- */
+/** Pílula de status (ex.: estado da conexão). Obs.: hoje nenhuma tela usa este componente. */
 export function StatusPill({
   title,
   subtitle,

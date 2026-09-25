@@ -13,17 +13,17 @@ import { speak, stopSpeaking } from '@/features/voice/services/speech-output';
 export type VoiceState = 'idle' | 'listening' | 'speaking';
 
 export type Voice = {
-  /** `false` no Expo Go — o microfone não aparece. A voz de saída funciona. */
+  /** `false` no Expo Go (não tem reconhecimento de fala). A voz de saída funciona. */
   available: boolean;
   state: VoiceState;
-  /** O que está sendo dito agora, antes do resultado final. */
+  /** O texto parcial enquanto a pessoa fala. */
   partial: string;
   error: string | null;
-  /** Fala e resolve quando terminou de falar. */
+  /** Fala o texto e só termina quando a fala acaba. */
   say: (text: string) => Promise<void>;
   /** Ouve uma fala. `null` quando falhou ou foi cancelada. */
   listen: (options?: Omit<ListenOptions, 'onPartial'>) => Promise<Heard | null>;
-  /** Encerra a escuta aproveitando o que foi dito (toque no microfone de novo). */
+  /** Para de ouvir aproveitando o que já foi dito. */
   finish: () => void;
   cancel: () => void;
 };
@@ -31,8 +31,8 @@ export type Voice = {
 /**
  * Estado da conversa por voz de uma tela.
  *
- * Fala e escuta nunca se sobrepõem: `say` resolve quando a fala termina, e só
- * então quem conduz a conversa chama `listen`. Sair da tela cancela as duas.
+ * Falar e ouvir nunca acontecem juntos: `say` só termina quando a fala acaba,
+ * e só depois a conversa chama `listen`. Sair da tela cancela os dois.
  */
 export function useVoice(): Voice {
   const [state, setState] = useState<VoiceState>('idle');

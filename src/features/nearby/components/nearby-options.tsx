@@ -17,19 +17,15 @@ export type NearbyOptionsProps = {
   error: string | null;
   onRetry: () => void;
   onSelect: (place: NearbyPlace) => void;
-  /** Rótulo da ação de cada linha, para leitores de tela. */
+  /** Texto da ação de cada linha, para leitores de tela. */
   actionLabel?: string;
 };
 
 /**
- * As opções próximas (RF-08) — 3, ou 10 na tela de destino: nome, distância,
- * tempo estimado e nota.
+ * Lista de lugares próximos (RF-08): nome, distância, tempo e nota.
  *
- * Usada nas três portas que levam a um lugar: a categoria na tela de destino,
- * o hospital da emergência e o local de uma recomendação aceita.
- *
- * Quando a lista veio da reserva do OpenStreetMap, a tela diz isso — e diz
- * que não há nota, em vez de mostrar um espaço vazio que pareceria defeito.
+ * Usada na tela de destino, na emergência (hospitais) e depois de aceitar
+ * uma recomendação. Quando a lista vem de uma fonte sem nota, a tela avisa.
  */
 export function NearbyOptions({
   result,
@@ -55,7 +51,7 @@ export function NearbyOptions({
     );
   }
 
-  // Só o Google tem nota; das outras fontes, a tela diz de onde vieram.
+  // Só o Google tem nota; para as outras fontes, a tela diz de onde vieram.
   const sourceLabel = SOURCE_LABELS[result.source] ?? result.source;
   const withoutRating = result.source !== 'google-places';
 

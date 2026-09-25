@@ -18,7 +18,7 @@ export type RouteState = RouteSnapshot & {
 const PENDING: RouteSnapshot = { isLoading: true, route: null, error: null };
 const GENERIC_ERROR = 'Não foi possível calcular a rota.';
 
-/** Identifica de forma estável a consulta que deve estar em andamento. */
+/** Identifica a consulta que deve estar em andamento. */
 function buildRequestKey(
   origin: Coordinate | null,
   destination: Coordinate,
@@ -34,20 +34,17 @@ function buildRequestKey(
 const NO_WAYPOINTS: Coordinate[] = [];
 
 /**
- * Calcula a rota entre dois pontos e mantém o estado da consulta.
+ * Calcula a rota e guarda o estado da consulta.
  *
- * `origin` nulo significa que a origem ainda está sendo resolvida — a
- * localização do aparelho, por exemplo. Nesse caso nenhuma requisição é feita
- * e o estado permanece pendente, para não gastar uma consulta com uma origem
- * provisória e ter que refazê-la um instante depois.
+ * `origin` nulo = origem ainda carregando: nada é pedido até ela chegar.
  *
- * Cancela a requisição em andamento quando a tela é desmontada ou quando uma
- * nova tentativa é disparada, evitando atualização de estado fora da árvore.
+ * A consulta anterior é cancelada quando a tela fecha ou quando uma nova
+ * tentativa começa.
  */
 export function useTripRoute(
   origin: Coordinate | null,
   destination: Coordinate,
-  /** Paradas no caminho — um desvio aceito. Precisa ser estável entre renders. */
+  /** Paradas no caminho (um desvio aceito). Precisa ser a mesma lista entre renders. */
   waypoints: Coordinate[] = NO_WAYPOINTS,
 ): RouteState {
   const [attempt, setAttempt] = useState(0);
@@ -56,9 +53,7 @@ export function useTripRoute(
   const requestKey = buildRequestKey(origin, destination, waypoints, attempt);
   const [renderedKey, setRenderedKey] = useState(requestKey);
 
-  // Quando origem, destino ou tentativa mudam, o resultado anterior deixa de
-  // valer imediatamente. Ajustar o estado durante a renderização é o padrão
-  // recomendado pelo React para derivar estado de props que mudaram.
+  // Quando origem, destino ou tentativa mudam, o resultado anterior deixa de valer na hora.
   if (renderedKey !== requestKey) {
     setRenderedKey(requestKey);
     setSnapshot(PENDING);

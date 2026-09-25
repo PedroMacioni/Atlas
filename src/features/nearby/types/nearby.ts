@@ -2,11 +2,10 @@ import type { IconName } from '@/components/ui/icon-badge';
 import type { ColorToken } from '@/theme/colors';
 
 /**
- * Opções próximas — o formato de `GET /v1/nearby`.
+ * Lugares próximos: formato de `GET /v1/nearby`.
  *
- * As 5 categorias visuais do escopo (RF-07) e duas que só as recomendações
- * usam (§4.7): DESCANSAR busca posto ou hotel, FAZER UMA PARADA busca um local
- * de pausa.
+ * As 5 categorias da tela (RF-07) e duas usadas só pelas recomendações (§4.7):
+ * `descanso` (posto ou hotel) e `parada` (lugar para pausa).
  */
 export type NearbyCategory =
   | 'posto'
@@ -40,7 +39,7 @@ export type NearbyResponse = {
   places: NearbyPlace[];
 };
 
-/** As categorias visuais do escopo, na ordem em que aparecem (RF-07). */
+/** As categorias mostradas na tela, na ordem (RF-07). */
 export const SCOPE_CATEGORIES: {
   id: NearbyCategory;
   label: string;

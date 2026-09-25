@@ -15,9 +15,9 @@ export type SearchFieldProps = {
   onVoicePress?: () => void;
   /** Chamado quando o campo recebe foco, por exemplo para abrir a tela de busca. */
   onFocus?: () => void;
-  /** Transforma o campo em uma porta de entrada sem receber foco/teclado. */
+  /** Transforma o campo num botão que abre a busca, sem abrir o teclado. */
   onPress?: () => void;
-  /** Atenua o microfone, para quando a captura de voz ainda não existe. */
+  /** Deixa o microfone apagado (ex.: sem reconhecimento de fala). */
   voiceDisabled?: boolean;
   autoFocus?: boolean;
   /** `floating` integra a busca a uma superfície visual, como um mapa. */
@@ -25,10 +25,8 @@ export type SearchFieldProps = {
 };
 
 /**
- * Campo de busca com lupa à esquerda e microfone à direita.
- *
- * O botão de limpar aparece sozinho quando há texto, ocupando o lugar do
- * microfone — dois botões no mesmo canto competiriam pelo toque.
+ * Campo de busca com lupa à esquerda e microfone à direita. O botão de limpar
+ * aparece no lugar do microfone quando há texto.
  */
 export function SearchField({
   value,
@@ -121,10 +119,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    /**
-     * A fonte vem da escala tipográfica; `TextInput` não passa pelo
-     * componente `Text`, então a variante é aplicada aqui na mão.
-     */
+    /** O `TextInput` não usa o componente `Text`, então a fonte é aplicada aqui. */
     ...textVariants.body,
     fontFamily: fontFamily.medium,
     color: colors.text,

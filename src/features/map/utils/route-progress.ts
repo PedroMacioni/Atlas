@@ -45,21 +45,6 @@ export function findNearestPointOnRoute(
 }
 
 /**
- * Calcula a distância total restante na rota a partir de um índice.
- */
-export function calculateDistanceToEnd(route: Coordinate[], fromIndex: number): number {
-  if (route.length === 0 || fromIndex >= route.length - 1) {
-    return 0;
-  }
-
-  let total = 0;
-  for (let i = fromIndex; i < route.length - 1; i++) {
-    total += haversineDistance(route[i], route[i + 1]);
-  }
-  return total;
-}
-
-/**
  * Calcula a distância de um ponto a um segmento de reta.
  */
 function distanceToSegment(point: Coordinate, segStart: Coordinate, segEnd: Coordinate): number {

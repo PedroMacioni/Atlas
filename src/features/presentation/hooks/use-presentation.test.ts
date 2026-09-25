@@ -6,7 +6,7 @@ import {
 } from '../state/presentation-state';
 import { ACTS } from '../constants/acts';
 
-// Mock expo-haptics
+// Substitui o módulo de vibração (não existe fora do celular).
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(),
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },

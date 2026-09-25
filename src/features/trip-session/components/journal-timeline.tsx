@@ -20,9 +20,8 @@ export type JournalTimelineProps = {
 /**
  * Diário de bordo em linha do tempo (§7.1).
  *
- * Cada evento mostra o que o escopo pede quando existir: horário, comando,
- * emoção com confiança, classe da imagem, decisão e o motivo dela, e as
- * coordenadas. Campo vazio não vira linha vazia — some.
+ * Cada evento mostra o que tiver: horário, comando, emoção, classe da imagem,
+ * decisão, motivo e coordenadas. Campos vazios não aparecem.
  */
 export function JournalTimeline({ events }: JournalTimelineProps) {
   if (events.length === 0) {

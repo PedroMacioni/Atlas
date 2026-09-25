@@ -11,7 +11,7 @@ export type CardProps = ViewProps & {
   padded?: boolean;
 };
 
-/** Superfície arredondada com elevação suave — a base de todo o layout. */
+/** Caixa arredondada com sombra suave: a base do layout. */
 export function Card({ tone = 'surface', padded = true, style, ...rest }: CardProps) {
   return (
     <View

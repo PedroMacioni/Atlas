@@ -1,11 +1,8 @@
 /**
- * As palavras da instrução de manobra, em português.
+ * Textos das instruções de manobra, em português.
  *
- * Esta é a camada de apresentação da navegação: o provider entrega tipo,
- * modificador e nome da via, e é aqui que isso vira "Vire à direita na Rua
- * Barreto Leme". A separação não é cerimônia — o mesmo dado precisa virar
- * frase curta na faixa, frase falada quando houver voz, e outro idioma quando
- * houver tradução.
+ * O serviço de rotas entrega tipo, direção e nome da rua; aqui isso vira
+ * "Vire à direita na Rua Barreto Leme".
  */
 
 import type {
@@ -14,7 +11,7 @@ import type {
   RouteStep,
 } from '@/features/routing/types/route-result';
 
-/** Ícone do MaterialCommunityIcons que representa a manobra. */
+/** Ícone (MaterialCommunityIcons) de cada manobra. */
 export type ManeuverIcon =
   | 'arrow-up'
   | 'arrow-top-right'
@@ -48,12 +45,7 @@ const DIRECTION_ICONS: Record<ManeuverModifier, ManeuverIcon> = {
   uturn: 'arrow-u-left-top',
 };
 
-/**
- * O verbo de cada tipo de manobra.
- *
- * `null` significa que o tipo não tem verbo próprio e usa o do modificador —
- * `turn` é o caso: quem manda é o lado.
- */
+/** Verbo de cada tipo de manobra. `null` = usa o verbo da direção (caso do `turn`). */
 const TYPE_VERBS: Record<ManeuverType, string | null> = {
   depart: 'Siga',
   arrive: 'Chegue ao destino',
@@ -79,10 +71,8 @@ export type ManeuverPresentation = {
 /**
  * Monta a instrução de uma manobra.
  *
- * O nome da via entra como "na <via>" e é omitido quando o provider não o
- * informou — acontece em alças de acesso e retornos, que muitas vezes não têm
- * nome no mapa. "Pegue a saída" é uma instrução completa; "Pegue a saída na"
- * seria uma frase quebrada na cara do motorista.
+ * O nome da rua entra como "na <rua>" e é omitido quando não existe (alças e
+ * retornos sem nome), para não sair uma frase quebrada.
  */
 export function describeManeuver(step: RouteStep): ManeuverPresentation {
   const icon = maneuverIcon(step);
@@ -98,16 +88,11 @@ export function describeManeuver(step: RouteStep): ManeuverPresentation {
 }
 
 /**
- * A ação, sem o nome da via.
+ * A ação, sem o nome da rua.
  *
- * Os dois primeiros casos existem porque a combinação crua de tipo e
- * modificador produz português torto:
- *
- * - `turn` + `straight` daria "Vire em frente", que ninguém diz. Quando o
- *   OSRM manda seguir reto, o verbo é "siga" — e isso acontece de verdade, em
- *   cruzamento onde a via muda de nome sem curva.
- * - `uturn` daria "Continue o retorno". O retorno tem verbo próprio, e ele
- *   vence o verbo do tipo.
+ * Dois casos especiais para o português não sair torto:
+ * - `turn` + `straight` daria "Vire em frente": usamos "Siga em frente";
+ * - retorno (`uturn`) tem verbo próprio: "Faça o retorno".
  */
 function verbPhrase(step: RouteStep): string {
   if (step.modifier === 'uturn') {
@@ -121,7 +106,7 @@ function verbPhrase(step: RouteStep): string {
   const verb = TYPE_VERBS[step.type];
   const direction = step.modifier ? DIRECTION_WORDS[step.modifier] : '';
 
-  // `turn` não tem verbo próprio: a frase nasce do lado.
+  // `turn` não tem verbo próprio: a frase começa pela direção.
   return verb ? [verb, direction].filter(Boolean).join(' ') : `Vire ${direction}`.trim();
 }
 
@@ -146,12 +131,10 @@ function maneuverIcon(step: RouteStep): ManeuverIcon {
 }
 
 /**
- * Distância até a manobra, na precisão que serve ao motorista.
+ * Distância até a manobra, arredondada para o motorista.
  *
- * Diferente de `formatDistance`: aqui a leitura é feita em movimento, então os
- * degraus são grossos de propósito. "Em 320 m" e "Em 340 m" são a mesma
- * informação para quem está dirigindo, e um número que muda a cada segundo
- * pede atenção que deveria estar na rua.
+ * Os degraus são grandes de propósito ("Em 300 m", "Em 350 m"): um número que
+ * muda a cada segundo tira a atenção da rua.
  */
 export function formatManeuverDistance(meters: number): string {
   if (!Number.isFinite(meters) || meters < 0) {
@@ -163,7 +146,7 @@ export function formatManeuverDistance(meters: number): string {
   }
 
   if (meters < 1000) {
-    // Degraus de 50 m: o suficiente para dar noção, sem piscar.
+    // Degraus de 50 m.
     return `Em ${Math.round(meters / 50) * 50} m`;
   }
 

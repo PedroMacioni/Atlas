@@ -1,10 +1,9 @@
 import type { Place, PlaceCategory } from '@/features/destination/types/place';
 
 /**
- * Remove acentos e caixa para que "sao paulo" encontre "São Paulo".
+ * Tira acentos e maiúsculas, para "sao paulo" achar "São Paulo".
  *
- * `normalize('NFD')` separa a letra do acento e o intervalo `̀-ͯ`
- * descarta os acentos soltos.
+ * `normalize('NFD')` separa a letra do acento, e o `replace` remove os acentos.
  */
 function normalize(value: string): string {
   return value
@@ -23,13 +22,10 @@ export type FilterPlacesParams = {
 };
 
 /**
- * Filtra lugares por texto e categoria.
+ * Filtra lugares por texto e categoria (usado na lista local).
  *
- * Função pura, sem dependência de React ou de rede — é onde a busca de fato
- * acontece nesta fase, e pode ser testada isoladamente.
- *
- * A categoria `saved` é especial: filtra pela marcação do usuário em vez da
- * categoria do lugar, porque um posto salvo continua sendo um posto.
+ * A categoria `saved` é especial: filtra pela marcação do usuário, porque um
+ * posto salvo continua sendo um posto.
  */
 export function filterPlaces({ places, query, category }: FilterPlacesParams): Place[] {
   const term = normalize(query);

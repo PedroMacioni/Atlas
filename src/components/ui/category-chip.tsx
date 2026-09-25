@@ -20,10 +20,8 @@ export type CategoryChipProps = {
 };
 
 /**
- * Bloco quadrado de categoria — posto, comida, estacionamento, salvos.
- *
- * Serve tanto como filtro acionável (busca de destino) quanto como vitrine
- * inerte, quando a capacidade por trás dele ainda não existe.
+ * Bloco quadrado de categoria (posto, restaurante, hotel...). Pode ser um
+ * filtro clicável ou só visual.
  */
 export function CategoryChip({
   icon,
@@ -62,9 +60,7 @@ export function CategoryChip({
 
 const styles = StyleSheet.create({
   container: {
-    // Larguras iguais, quantos chips houver na linha: com base zero, o
-    // espaço é repartido por igual e um rótulo longo ("Restaurante") não
-    // empurra os vizinhos.
+    // Todos os blocos da linha com a mesma largura, mesmo com rótulos longos.
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 0,

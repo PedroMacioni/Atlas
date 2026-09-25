@@ -13,39 +13,29 @@ import type {
 import { HttpError, fetchJson } from '@/utils/http';
 
 /**
- * Provider de rotas baseado no servidor público de demonstração do OSRM.
+ * Serviço de rotas que chama direto o servidor público do OSRM.
  *
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │ ATENÇÃO — SOLUÇÃO TEMPORÁRIA DE DESENVOLVIMENTO                      │
- * │                                                                      │
- * │ `router.project-osrm.org` é mantido pelo projeto OSRM apenas como    │
- * │ demonstração. Não possui SLA, não permite uso comercial, aplica      │
- * │ limites de requisição não documentados e pode sair do ar sem aviso.  │
- * │                                                                      │
- * │ Serve para validar o fluxo mapa + rota nesta primeira fase. Antes de │
- * │ qualquer distribuição, troque por Google Routes, Mapbox Directions   │
- * │ ou uma instância própria do OSRM — basta escrever outro RouteProvider│
- * │ e registrá-lo em `src/features/routing/services/route-service.ts`.   │
- * └──────────────────────────────────────────────────────────────────────┘
+ * É usado quando a API do Atlas não está configurada.
+ *
+ * ATENÇÃO: `router.project-osrm.org` é só para demonstração: sem garantia,
+ * sem uso comercial e com limite de uso. Para um produto real, troque por
+ * outro serviço criando um novo `RouteProvider` em `route-service.ts`.
  *
  * @see https://project-osrm.org/docs/v5.24.0/api/
  */
 const OSRM_BASE_URL = 'https://router.project-osrm.org';
 
-/** Perfil de deslocamento. O servidor público expõe apenas `driving`. */
+/** O servidor público só tem o perfil de carro (`driving`). */
 const OSRM_PROFILE = 'driving';
 
 /**
- * Distância máxima entre o ponto pedido e a via onde o OSRM vai encaixá-lo.
- *
- * Sem o limite o encaixe é ilimitado: um ponto no mar aberto recebe a estrada
- * mais próxima do continente, e a resposta vem com `code: Ok` e uma rota que
- * começa a mais de mil quilômetros de onde se apontou. É o mesmo valor que o
- * backend usa.
+ * Distância máxima entre o ponto pedido e a rua mais próxima. Sem isso, um
+ * ponto no mar seria "encaixado" numa estrada a centenas de km. Mesmo valor
+ * usado no backend.
  */
 const SNAP_RADIUS_METERS = 10_000;
 
-/** Formato da resposta do endpoint `/route/v1`, na parte que consumimos. */
+/** Resposta do `/route/v1` do OSRM (só a parte que usamos). */
 type OsrmRouteResponse = {
   code: string;
   message?: string;
@@ -72,12 +62,8 @@ type OsrmRouteResponse = {
 };
 
 /**
- * Vocabulário do OSRM traduzido para o do Atlas.
- *
- * Esta tabela existe também no backend, em `providers/osrm.py`, e a
- * duplicação é deliberada: este provider é o caminho **sem** backend, e
- * precisa se sustentar sozinho. Quando a API do Atlas passar a ser o único
- * provider de produção, é este arquivo que sai — não a tabela do servidor.
+ * Vocabulário do OSRM convertido para o do Atlas. A mesma tabela existe no
+ * backend (`providers/osrm.py`), porque este arquivo funciona sem o backend.
  */
 const MANEUVER_TYPES: Record<string, ManeuverType> = {
   depart: 'depart',
@@ -112,16 +98,14 @@ const MANEUVER_MODIFIERS: Record<string, ManeuverModifier> = {
 function buildRouteUrl(points: Coordinate[]): string {
   const path = points.map((point) => `${point.longitude},${point.latitude}`).join(';');
 
-  // `geometries=geojson` evita ter que decodificar polyline codificada nesta fase.
+  // `geometries=geojson` evita decodificar a polyline compactada.
   const query = new URLSearchParams({
     overview: 'full',
     geometries: 'geojson',
     alternatives: 'false',
-    // As manobras alimentam a faixa de instrução da viagem. Sem isto o OSRM
-    // devolve a geometria sem `legs[].steps`, e `parseSteps` — que existe e
-    // funciona — não tem o que ler: a faixa some sem nenhum erro aparecer.
+    // Pede as manobras, usadas na faixa de instrução da viagem.
     steps: 'true',
-    // Um raio por ponto, na ordem em que aparecem na URL.
+    // Um raio de encaixe por ponto, na mesma ordem da URL.
     radiuses: points.map(() => SNAP_RADIUS_METERS).join(';'),
   });
 
@@ -144,7 +128,7 @@ function toHumanMessage(error: unknown): string {
   return 'Falha inesperada ao consultar o serviço de rotas.';
 }
 
-/** Valida o corpo da resposta antes de confiar nele. */
+/** Valida a resposta antes de usar. */
 function parseRoute(payload: OsrmRouteResponse): RouteResult {
   if (payload.code !== 'Ok') {
     throw new RouteError(
@@ -181,15 +165,11 @@ function parseRoute(payload: OsrmRouteResponse): RouteResult {
 }
 
 /**
- * Converte os passos do OSRM em manobras posicionadas sobre a rota.
+ * Converte os passos do OSRM em manobras posicionadas na rota.
  *
- * O OSRM descreve cada passo com a manobra no **início** dele e a distância
- * que ele cobre até a próxima. Aqui isso vira distância acumulada desde a
- * partida, que é o formato que a tela usa: o que falta até a manobra é uma
- * subtração do quanto já se percorreu.
- *
- * Manobra nunca derruba uma rota — formato inesperado devolve lista vazia, e a
- * tela simplesmente não mostra a faixa de instrução.
+ * O OSRM informa a manobra no início de cada passo e a distância até o
+ * próximo. Aqui isso vira "distância desde a partida": o que falta até a
+ * manobra é só uma subtração. Se o formato vier estranho, a lista fica vazia.
  */
 function parseSteps(route: NonNullable<OsrmRouteResponse['routes']>[number]): RouteStep[] {
   const steps: RouteStep[] = [];
@@ -210,8 +190,7 @@ function parseSteps(route: NonNullable<OsrmRouteResponse['routes']>[number]): Ro
       }
 
       steps.push({
-        // Tipo desconhecido vira "continue": seguir em frente é a única
-        // instrução que nunca manda o motorista para o lugar errado.
+        // Tipo desconhecido vira "continue" (seguir em frente).
         type: MANEUVER_TYPES[String(maneuver?.type)] ?? 'continue',
         modifier: MANEUVER_MODIFIERS[String(maneuver?.modifier)],
         roadName: step.name ?? '',

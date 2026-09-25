@@ -14,10 +14,7 @@ export type FilterPillProps = {
   onPress: () => void;
 };
 
-/**
- * Filtro que liga e desliga — pequeno, para caber ao lado de um título de
- * seção. Selecionado, fica azul; tocar de novo desliga.
- */
+/** Filtro liga/desliga pequeno, ao lado de um título. Selecionado fica azul. */
 export function FilterPill({ icon, label, selected, onPress }: FilterPillProps) {
   const tint = selected ? colors.primary : colors.textSecondary;
 

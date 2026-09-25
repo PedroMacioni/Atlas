@@ -3,15 +3,13 @@ import * as Speech from 'expo-speech';
 import { prepareAudioForSpeaking } from '@/features/voice/services/speech-recognition';
 
 /**
- * A voz do Atlas (RF-20): recomendações e confirmações faladas em voz alta.
+ * A voz do Atlas (RF-20): recomendações e confirmações faladas.
  *
- * O escopo pede voz masculina (§3.1). Os sistemas não marcam gênero nas vozes
- * de forma padronizada, então a escolha é por nome: entre as vozes em
- * português do Brasil, a primeira cujo identificador sugere voz masculina.
- * Sem nenhuma, fica a voz padrão pt-BR do aparelho — falar com a voz errada é
- * melhor que não falar.
+ * O escopo pede voz masculina (§3.1). Como os sistemas não marcam o gênero da
+ * voz de forma padrão, procuramos pelo nome, entre as vozes pt-BR. Se não
+ * achar, usa a voz padrão do aparelho.
  *
- * No iOS, com o aparelho no modo silencioso, o `expo-speech` não produz som.
+ * No iOS, com o celular no modo silencioso, não sai som.
  *
  * @see https://docs.expo.dev/versions/v57.0.0/sdk/speech/
  */
@@ -19,15 +17,11 @@ import { prepareAudioForSpeaking } from '@/features/voice/services/speech-recogn
 const LANGUAGE = 'pt-BR';
 
 /**
- * Teto para a espera pelo fim da fala.
+ * Tempo máximo esperando a fala terminar.
  *
- * `onDone` nem sempre chega: com o aparelho no silencioso, ou com a sessão de
- * áudio ainda presa no modo do reconhecimento de fala, o `expo-speech` fica
- * mudo e não avisa. Sem este teto a conversa inteira parava ali — o microfone
- * fechava e nada mais acontecia.
- *
- * O valor acompanha o tamanho do texto: ~90 ms por caractere é mais lento que
- * qualquer locução real, com um piso de 2 s e um teto de 15 s.
+ * Às vezes o aviso de "terminou" não chega (celular no silencioso, por
+ * exemplo). Sem este limite a conversa travaria. O tempo depende do tamanho
+ * do texto (~90 ms por letra), entre 2 s e 15 s.
  */
 const MS_PER_CHARACTER = 90;
 const MIN_TIMEOUT_MS = 2_000;
@@ -54,17 +48,13 @@ function pickVoice(): Promise<string | undefined> {
 }
 
 /**
- * Fala o texto, interrompendo o que estiver sendo falado, e resolve quando a
- * fala **termina**.
- *
- * Esperar o fim importa: a conversa por voz fala e depois escuta, e abrir o
- * microfone com o Atlas ainda falando faria ele ouvir a si mesmo.
+ * Fala o texto (interrompendo o que estiver falando) e só termina quando a
+ * fala acaba. Isso evita abrir o microfone com o Atlas ainda falando.
  */
 export async function speak(text: string): Promise<void> {
   const identifier = await pickVoice();
 
-  // Depois de ouvir, a sessão de áudio do iOS fica no modo de reconhecimento,
-  // em que a fala sai baixa ou não sai.
+  // Depois de ouvir, o áudio do iOS fica no modo de gravação e a fala sai baixa.
   prepareAudioForSpeaking();
   Speech.stop();
 

@@ -7,8 +7,8 @@ import { tripApiRequest } from '@/features/trip-session/services/trip-session-se
 import { HttpError } from '@/utils/http';
 
 /**
- * O Random Forest mora no backend (a "API local em Python" do escopo). Aqui
- * só se pergunta e se responde — nenhuma regra de decisão vive no aparelho.
+ * Chamadas de recomendação. O Random Forest roda no backend; o app só
+ * pergunta e responde.
  */
 
 export function evaluateRecommendation(tripId: string, request: RecommendationRequest) {

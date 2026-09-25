@@ -7,11 +7,11 @@ import {
 } from '@/features/voice/services/speech-recognition';
 
 export type WakeWordState = {
-  /** `false` no Expo Go, onde não há reconhecimento de fala. */
+  /** `false` no Expo Go (não tem reconhecimento de fala). */
   available: boolean;
-  /** `true` quando o Atlas está ouvindo o carro esperando pelo nome. */
+  /** `true` quando o Atlas está ouvindo, esperando alguém dizer "Atlas". */
   watching: boolean;
-  /** O último trecho ouvido de passagem, para a tela mostrar atenção. */
+  /** O último trecho ouvido. */
   heard: string;
   error: string | null;
   toggle: () => void;
@@ -19,32 +19,28 @@ export type WakeWordState = {
 };
 
 export type WakeWordParams = {
-  /**
-   * Chamado quando "Atlas" é ouvido, com o que veio depois — vazio quando a
-   * pessoa só chamou pelo nome.
-   */
+  /** Chamado quando "Atlas" é ouvido, com o que veio depois (vazio se só chamou o nome). */
   onWake: (rest: string) => void;
-  /** Desliga a vigília sem desmontar a tela (durante uma conversa, por ex.). */
+  /** Desliga a escuta sem fechar a tela (por exemplo, durante uma conversa). */
   enabled?: boolean;
 };
 
 /**
- * "Diga Atlas para começar", de verdade (RF-02, CA-02).
+ * Escuta contínua da palavra "Atlas" (RF-02, CA-02).
  *
- * Fica desligada até alguém ligar: uma escuta contínua gasta bateria e ouve
- * tudo o que se fala no carro, e isso é escolha de quem dirige, não padrão do
- * aplicativo. Enquanto está ligada, nada do que se ouve é gravado ou enviado
- * — só o trecho reconhecido é lido em memória à procura do nome.
+ * Fica desligada até o usuário ligar, porque gasta bateria e ouve tudo no
+ * carro. Enquanto ligada, nada é gravado nem enviado: o texto reconhecido só
+ * é conferido na memória, procurando o nome.
  *
- * Enquanto um comando está sendo ouvido, a vigília sai de cena sozinha: o
- * reconhecedor do sistema só aceita uma sessão por vez.
+ * Durante um comando a escuta contínua pausa sozinha, porque o sistema só
+ * permite uma sessão de reconhecimento por vez.
  */
 export function useWakeWord({ onWake, enabled = true }: WakeWordParams): WakeWordState {
   const [watching, setWatching] = useState(false);
   const [heard, setHeard] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Lido no momento em que a palavra aparece, e não quando a vigília começa.
+  // Lido na hora em que a palavra aparece.
   const latest = useRef(onWake);
 
   useEffect(() => {

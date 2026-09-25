@@ -5,15 +5,14 @@ import { distanceBetween } from '@/utils/geo';
 /** Quantos destinos a lista "Últimos" mostra. */
 export const RECENT_LIMIT = 10;
 
-/** Dois destinos com o mesmo nome a menos disso são o mesmo lugar. */
+/** Dois destinos com o mesmo nome a menos de 150 m são o mesmo lugar. */
 const SAME_PLACE_METERS = 150;
 
 /**
- * Os últimos destinos, a partir do histórico de viagens.
+ * Monta a lista de últimos destinos a partir do histórico de viagens.
  *
- * Função pura. As viagens chegam da mais recente para a mais antiga, e cada
- * lugar aparece uma vez só, na posição da viagem mais recente até ele — ir
- * três vezes à faculdade não empurra os outros destinos para fora da lista.
+ * As viagens chegam da mais recente para a mais antiga, e cada lugar aparece
+ * uma vez só (ir três vezes à faculdade não empurra os outros para fora).
  */
 export function recentDestinations(trips: TripCard[], limit = RECENT_LIMIT): Place[] {
   const places: Place[] = [];
@@ -47,7 +46,7 @@ export function recentDestinations(trips: TripCard[], limit = RECENT_LIMIT): Pla
   return places;
 }
 
-/** "Hoje", "Ontem" ou "18/09" — quando foi a última viagem até lá. */
+/** "Hoje", "Ontem" ou "Em 18/09": quando foi a última viagem até lá. */
 function describeWhen(startedAt: string, now = new Date()): string {
   const started = new Date(startedAt);
   if (Number.isNaN(started.getTime())) {

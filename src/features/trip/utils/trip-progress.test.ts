@@ -7,10 +7,8 @@ import {
 import type { Coordinate } from '@/features/map/types/coordinate';
 
 /**
- * Uma reta de leste a oeste na altura de Campinas, com 4 pontos.
- *
- * Coordenadas reais e não números redondos: a distância entre graus depende
- * da latitude, e um teste em (0, 0) esconderia justamente esse erro.
+ * Uma reta de oeste para leste em Campinas, com 4 pontos. Coordenadas reais:
+ * a distância entre graus depende da latitude.
  */
 const ROUTE: Coordinate[] = [
   { latitude: -22.9, longitude: -47.1 },

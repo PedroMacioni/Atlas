@@ -1,9 +1,8 @@
 /**
- * Os pedaços de conversa que se repetem: ler as 3 opções e escolher uma por
- * voz (RF-13, RF-14), e confirmar com "sim" ou "não" (CA-10, RF-25).
+ * Trechos de conversa que se repetem: ler as 3 opções e escolher uma por voz
+ * (RF-13, RF-14) e confirmar com "sim" ou "não" (CA-10, RF-25).
  *
- * Recebem `say` e `listen` em vez de importar o microfone, para serem usados
- * por qualquer tela com o mesmo `useVoice`.
+ * Recebem `say` e `listen` por parâmetro, para qualquer tela poder usar.
  */
 
 import type { NearbyPlace } from '@/features/nearby/types/nearby';
@@ -14,10 +13,7 @@ type Talk = Pick<Voice, 'say' | 'listen'>;
 
 const NUMBERS = ['Um', 'Dois', 'Três'];
 
-/**
- * Quantas opções a voz lê. Uma lista de 10 falada não se guarda na cabeça de
- * quem dirige; a tela mostra o resto.
- */
+/** Quantas opções a voz lê (uma lista de 10 falada ninguém guarda na cabeça). */
 const SPOKEN_OPTIONS = NUMBERS.length;
 
 function spokenDistance(meters: number): string {
@@ -49,7 +45,7 @@ export function describeOptions(places: NearbyPlace[]): string {
 
 /**
  * Lê as opções e pergunta qual. Aceita número ("o segundo") ou nome ("o
- * Taquaral"). Não entendeu: pergunta uma vez mais. Devolve o índice, ou
+ * Taquaral"); se não entender, pergunta mais uma vez. Devolve o índice, ou
  * `null` se a pessoa recusou ou não respondeu.
  */
 export async function chooseOptionByVoice(

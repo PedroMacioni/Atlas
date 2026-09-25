@@ -3,10 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { findWakeWord, parseCommand, stripWakeWord } from '@/features/voice/utils/command-parser';
 
 /**
- * Os comandos do escopo (§3.1), como eles chegam de verdade.
- *
- * O reconhecedor de fala devolve texto corrido, sem pontuação e às vezes sem
- * acento — os casos aqui são escritos assim de propósito.
+ * Comandos do escopo (§3.1), escritos como o reconhecedor devolve: sem
+ * pontuação e às vezes sem acento.
  */
 describe('parseCommand', () => {
   it('entende as categorias ditas de formas diferentes', () => {

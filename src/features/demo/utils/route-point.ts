@@ -1,10 +1,9 @@
 /**
- * Um ponto a tantos metros do início de uma rota.
+ * Um ponto a X metros do início de uma rota.
  *
- * Função pura sobre a geometria: recebe os vértices, a tabela de distâncias
- * acumuladas e quanto já se andou, e devolve onde isso cai — interpolando
- * dentro do segmento, para que o avanço seja contínuo em vez de saltar de
- * vértice em vértice.
+ * Função pura: recebe os pontos, a tabela de distâncias acumuladas e quanto já
+ * se andou, e devolve onde isso cai (interpolando dentro do segmento, para o
+ * movimento ser contínuo).
  */
 
 import { calculateHeading } from '@/features/map/utils/geo';
@@ -14,7 +13,7 @@ export type RoutePoint = {
   coordinate: Coordinate;
   /** Direção do segmento em que o ponto caiu, em graus. */
   heading: number | null;
-  /** Metros efetivamente usados: nunca além do fim da rota. */
+  /** Metros efetivamente usados (nunca além do fim da rota). */
   traveledMeters: number;
 };
 
@@ -34,8 +33,7 @@ export function pointAlongRoute(
   const total = cumulative[cumulative.length - 1] ?? 0;
   const target = Math.min(Math.max(meters, 0), total);
 
-  // O primeiro vértice cuja distância acumulada alcança o alvo fecha o
-  // segmento onde o ponto está.
+  // O primeiro ponto cuja distância acumulada alcança o alvo fecha o segmento.
   let index = 1;
   while (index < cumulative.length - 1 && cumulative[index] < target) {
     index += 1;
@@ -51,8 +49,7 @@ export function pointAlongRoute(
       latitude: start.latitude + (end.latitude - start.latitude) * t,
       longitude: start.longitude + (end.longitude - start.longitude) * t,
     },
-    // Vértices de rota costumam estar a poucos metros um do outro: o mínimo
-    // padrão de 5 m devolveria `null` na maior parte dos segmentos.
+    // Os pontos da rota ficam muito próximos: sem este 0, o mínimo de 5 m daria `null` quase sempre.
     heading: calculateHeading(start, end, 0),
     traveledMeters: target,
   };

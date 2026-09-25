@@ -28,9 +28,7 @@ export type Act = {
 };
 
 export const ACTS: Act[] = [
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 1: Introdução — Logo do Atlas (6 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 1: Introdução (logo do Atlas)
   {
     id: 1,
     name: 'Introdução',
@@ -44,9 +42,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 2: Destino — Mostra o destino definido (8 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 2: Destino definido
   {
     id: 2,
     name: 'Destino Definido',
@@ -61,9 +57,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 3: Navegação — Direção em tempo real (12 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 3: Navegação em tempo real
   {
     id: 3,
     name: 'Navegação Ativa',
@@ -76,9 +70,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 4: IA Recomenda — Random Forest sugere parar (15 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 4: a IA recomenda uma pausa (Random Forest)
   {
     id: 4,
     name: 'IA em Ação',
@@ -103,9 +95,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 5: Escolher Parada — Seleciona onde parar (12 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 5: escolher onde parar
   {
     id: 5,
     name: 'Onde Parar',
@@ -127,9 +117,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 6: Desvio — Rota ajustada automaticamente (15 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 6: desvio (a rota passa pela parada)
   {
     id: 6,
     name: 'Desvio Inteligente',
@@ -143,9 +131,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 7: Chegada na Parada — Feedback visual (10 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 7: chegada na parada
   {
     id: 7,
     name: 'Chegada na Parada',
@@ -160,9 +146,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 8: Controle por Voz — Abre menu e ativa escuta (15 segundos)
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 8: ativar a escuta por voz no menu
   {
     id: 8,
     name: 'Interação por Voz',
@@ -195,9 +179,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 9: Demonstração de um comando de voz
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 9: exemplo de comando de voz
   {
     id: 9,
     name: 'Atlas na Escuta',
@@ -218,9 +200,7 @@ export const ACTS: Act[] = [
     ],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ATO 10: Conclui a viagem e abre o trajeto final
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ATO 10: concluir a viagem e abrir o resumo
   {
     id: 10,
     name: 'Trajeto Final',

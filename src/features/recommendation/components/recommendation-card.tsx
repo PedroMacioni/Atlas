@@ -28,11 +28,9 @@ export type RecommendationCardProps = {
 };
 
 /**
- * A recomendação do Atlas na tela da viagem (RF-19, §4.7).
- *
- * A decisão em letras do escopo, o motivo por extenso e a confiança. Tudo que
- * mexe na rota pede confirmação — **Aceitar** ou **Agora não** —, e o Atlas
- * nunca muda o trajeto sozinho (CA-10). CONTINUAR não pede nada: só "Ok".
+ * Card da recomendação na tela da viagem (RF-19, §4.7): decisão, motivo e
+ * confiança. Tudo que muda a rota pede "Aceitar" ou "Agora não" (o Atlas nunca
+ * muda o trajeto sozinho, CA-10). CONTINUAR só mostra "Ok".
  */
 export function RecommendationCard({ recommendation, suggestedStopName, onAccept, onDecline }: RecommendationCardProps) {
   const visual = DECISION_VISUALS[recommendation.decision];

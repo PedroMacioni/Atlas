@@ -9,24 +9,22 @@ import {
 import { distanceBetween } from '@/utils/geo';
 
 /**
- * A partir de quantos metros da parada ela conta como alcançada.
- *
- * Maior que o raio de chegada ao destino (40 m): um posto ou um hospital
- * ocupam área, e o ponto do Google fica no meio do terreno, não na entrada.
+ * A que distância a parada conta como alcançada. Maior que o raio de chegada
+ * ao destino (40 m), porque posto e hospital ocupam área e o ponto do lugar
+ * costuma ficar no meio do terreno.
  */
 const REACHED_METERS = 80;
 
 type DetourState = {
   detour: DetourRequest | null;
   /**
-   * De onde a rota parte enquanto há desvio — a posição no momento em que ele
-   * foi aceito. A origem da viagem ficou para trás; recalcular a partir dela
-   * mandaria o motorista voltar.
+   * De onde a rota parte enquanto há desvio: a posição no momento em que ele foi
+   * aceito (recalcular a partir da origem mandaria o motorista voltar).
    */
   routeOrigin: NamedCoordinate | null;
-  /** O pedido vindo da emergência já adotado, para não adotá-lo duas vezes. */
+  /** Pedido vindo da emergência já usado, para não usar duas vezes. */
   adopted: DetourRequest | null;
-  /** A parada acabou de ser alcançada — o efeito registra no diário. */
+  /** A parada acabou de ser alcançada (o efeito registra no diário). */
   reached: DetourRequest | null;
 };
 
@@ -48,13 +46,12 @@ export type DetourControl = {
 /**
  * Uma parada no meio do caminho (RF-19, CA-10).
  *
- * Nasce de duas formas: o usuário aceita uma recomendação e escolhe um dos 3
- * locais, ou escolhe um hospital na emergência — que, aberta por cima da
- * viagem, publica o pedido em `detour-request`. Nos dois casos o destino da
- * viagem continua o mesmo; a rota passa pela parada antes.
+ * Pode vir de uma recomendação aceita (o usuário escolhe um dos 3 lugares) ou
+ * de um hospital escolhido na emergência (via `detour-request`). Nos dois
+ * casos o destino continua o mesmo; a rota só passa pela parada antes.
  *
- * Ao chegar a menos de 80 m da parada, ela é dada como feita: `onReached`
- * registra no diário, e a rota volta a ir direto ao destino, a partir dali.
+ * A menos de 80 m da parada ela é dada como feita: `onReached` registra no
+ * diário e a rota volta a ir direto ao destino.
  */
 export function useDetour(
   position: Coordinate | null,
@@ -65,8 +62,7 @@ export function useDetour(
 
   const here: NamedCoordinate | null = position ? { ...position, name: 'Sua localização' } : null;
 
-  // Pedido vindo da emergência: adotado durante a renderização, como estado
-  // derivado. Limpá-lo do canal é efeito, e fica no efeito abaixo.
+  // Pedido vindo da emergência: adotado durante a renderização. Limpá-lo fica no efeito abaixo.
   if (pending && pending !== state.adopted) {
     setState({ ...state, detour: pending, routeOrigin: here, adopted: pending });
   }
@@ -92,7 +88,7 @@ export function useDetour(
     if (reached) {
       onReached(reached);
     }
-    // Só a chegada importa; `onReached` é lido no momento dela.
+    // Só a chegada importa; `onReached` é lido na hora.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reached]);
 
@@ -100,7 +96,7 @@ export function useDetour(
     (detour: DetourRequest) => {
       setState((current) => ({ ...current, detour, routeOrigin: here, reached: null }));
     },
-    // `here` muda a cada leitura; o que vale é a posição no toque.
+    // Vale a posição no momento do toque.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [position?.latitude, position?.longitude],
   );

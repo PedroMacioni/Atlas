@@ -22,23 +22,15 @@ export type PrimaryButtonProps = {
   /** Retorno tátil leve ao toque. */
   haptics?: boolean;
   /**
-   * `danger` troca o gradiente azul pelo vermelho, para ação destrutiva.
-   *
-   * Continua sendo o botão primário: quando "Parar" e "Continuar" dividem uma
-   * linha, os dois precisam ter o mesmo peso — mesma altura, mesmo raio, mesma
-   * sombra. Um chapado claro ao lado de um com gradiente não se lê como par.
+   * `danger` troca o azul pelo vermelho, para ação destrutiva. Mantém o mesmo
+   * tamanho e sombra, para dois botões lado a lado ficarem iguais.
    */
   tone?: 'primary' | 'danger';
   /** Identificador para testes automatizados. */
   testID?: string;
 };
 
-/**
- * Ação principal: pílula com gradiente azul, ícone e seta.
- *
- * É um controle desenhado, não o botão do sistema — o gradiente e a sombra do
- * design de referência não são expressáveis com `Button` nativo.
- */
+/** Botão principal: pílula com gradiente azul, ícone e seta. */
 export function PrimaryButton({
   label,
   onPress,
@@ -84,11 +76,7 @@ export function PrimaryButton({
           <MaterialCommunityIcons name={icon} size={20} color={colors.textOnPrimary} />
         ) : null}
 
-        {/*
-          Uma linha só: dois botões lado a lado com rótulos de larguras
-          diferentes ficariam com alturas diferentes se um deles quebrasse — e
-          um par de botões de alturas diferentes é a definição de torto.
-        */}
+        {/* Uma linha só: se um rótulo quebrasse, os botões lado a lado ficariam com alturas diferentes. */}
         <Text
           variant="action"
           color="textOnPrimary"
@@ -98,13 +86,7 @@ export function PrimaryButton({
           {label}
         </Text>
 
-        {/*
-          O espaçador existe para **equilibrar** o elemento do outro lado, e
-          não por hábito: com um ícone à esquerda e nada à direita, o rótulo
-          nasceria fora do centro. Sem ícone e sem seta não há nada a
-          equilibrar, e reservar 22 px aí era justamente o que deixava o
-          rótulo torto.
-        */}
+        {/* Espaço vazio do lado direito para equilibrar o ícone da esquerda e centralizar o texto. */}
         {showChevron ? (
           <MaterialCommunityIcons
             name="chevron-right"

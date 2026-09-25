@@ -1,12 +1,9 @@
 /**
- * Da fala para o comando (escopo §3.1, RF-11, RF-12).
+ * Transforma a fala em comando (escopo §3.1, RF-11, RF-12).
  *
- * Regras em português, e não um modelo: previsíveis, testáveis e fáceis de
- * explicar na apresentação. O reconhecedor de fala entrega texto; aqui se
- * decide o que o texto pede.
- *
- * Função pura — sem React, sem microfone. Quem conversa com o usuário é
- * `use-voice-assistant`.
+ * São regras em português (e não um modelo de IA): previsíveis, testáveis e
+ * fáceis de explicar. O reconhecedor entrega o texto; aqui decidimos o que ele
+ * pede. Quem conversa com o usuário são `use-home-voice` e `use-trip-voice`.
  */
 
 import type { NearbyCategory } from '@/features/nearby/types/nearby';
@@ -36,9 +33,8 @@ export type VoiceCommand =
   | { type: 'unknown' };
 
 /**
- * O que a conversa espera ouvir agora. Muda a leitura de frases curtas: "um"
- * é escolha quando há opções na tela, e "pode" é confirmação quando há uma
- * pergunta no ar.
+ * O que a conversa espera ouvir agora. Muda o sentido de frases curtas: "um"
+ * é escolha quando há opções na tela; "pode" é "sim" quando há uma pergunta.
  */
 export type Expectation = 'command' | 'choice' | 'confirmation';
 
@@ -57,21 +53,13 @@ export function normalize(text: string): string {
 const WAKE_WORD_AT_START = /^(?:(?:ok|ei|oi|e ai)\s+)?atlas\b\s*/;
 
 /**
- * A palavra de ativação em qualquer lugar da frase.
- *
- * A escuta contínua ouve tudo o que se fala no carro, e a palavra raramente
- * cai no começo do trecho reconhecido: "...aí eu pedi pro Atlas achar um
- * posto" chega inteiro. Por isso aqui ela é procurada no meio, e o que vem
- * **depois** dela é o comando.
+ * A palavra de ativação em qualquer parte da frase. A escuta contínua ouve
+ * tudo no carro, então "...aí eu pedi pro Atlas achar um posto" chega inteiro;
+ * o que vem DEPOIS de "Atlas" é o comando.
  */
 const WAKE_WORD_ANYWHERE = /\batlas\b\s*/;
 
-/**
- * Procura "Atlas" no que foi ouvido de passagem (RF-02, CA-02).
- *
- * `rest` é o que veio depois da palavra, e pode ser vazio: quem só chama pelo
- * nome diz o comando em seguida.
- */
+/** Procura "Atlas" no que foi ouvido (RF-02, CA-02) e devolve o que veio depois. */
 export function findWakeWord(raw: string): { found: boolean; rest: string } {
   const text = normalize(raw);
   const match = WAKE_WORD_ANYWHERE.exec(text);
@@ -113,9 +101,9 @@ const NO = /^(nao|agora nao|cancela|cancelar|deixa|deixa pra la|nao precisa|nao 
 /**
  * Interpreta uma fala.
  *
- * A ordem das regras é a ordem de importância: mal-estar e emergência antes
- * de tudo, porque "não estou me sentindo bem, quero parar" é um pedido de
- * ajuda, não uma parada.
+ * As regras são testadas em ordem de importância: mal-estar e emergência
+ * primeiro, porque "não estou me sentindo bem, quero parar" é pedido de
+ * ajuda, e não uma parada.
  */
 export function parseCommand(raw: string, expecting: Expectation = 'command'): VoiceCommand {
   const { rest, hadWakeWord } = stripWakeWord(normalize(raw));
@@ -170,16 +158,12 @@ export function parseCommand(raw: string, expecting: Expectation = 'command'): V
   }
 
   /*
-    Cansaço é o pedido de avaliação dito do jeito que se fala.
+    Cansaço é o jeito normal de pedir uma avaliação: ninguém dirigindo diz
+    "preciso abastecer ou descansar", diz "estou cansado", "tô com sono". Isso
+    vai para o Random Forest, que responde com uma recomendação justificada.
 
-    Ninguém dirigindo diz "preciso abastecer ou descansar": diz "estou
-    cansado", "tô com sono", "não aguento mais". É exatamente o contexto para
-    o qual o Random Forest existe (§4.7), então entra pela mesma porta — e a
-    resposta continua sendo uma recomendação com justificativa, e não uma ação
-    tomada por conta própria.
-
-    Cansaço não é mal-estar: "não estou me sentindo bem" é tratado antes, e
-    abre a emergência.
+    (Mal-estar, como "não estou me sentindo bem", já foi tratado antes e abre a
+    emergência.)
   */
   if (
     /\b(abastecer ou descansar|descansar ou abastecer)\b/.test(text) ||
@@ -223,9 +207,8 @@ export function parseCommand(raw: string, expecting: Expectation = 'command'): V
 }
 
 /**
- * Qual das opções o usuário disse pelo nome (RF-14): "o Taquaral" escolhe o
- * "Posto Taquaral". Conta as palavras do nome que aparecem na fala; empate ou
- * nenhuma palavra em comum devolve `null`, e o Atlas pergunta de novo.
+ * Qual opção o usuário disse pelo nome (RF-14): "o Taquaral" escolhe o "Posto
+ * Taquaral". Conta as palavras em comum; empate ou nenhuma devolve `null`.
  */
 export function matchOptionByName(raw: string, names: string[]): number | null {
   const spoken = new Set(normalize(raw).split(' ').filter((word) => word.length > 2));

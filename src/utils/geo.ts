@@ -1,9 +1,7 @@
 /**
- * Geometria sobre coordenadas geográficas.
+ * Cálculos com coordenadas geográficas (latitude e longitude).
  *
- * Funções puras, sem React, sem rede e sem domínio — só matemática sobre
- * pares de latitude e longitude. É onde vive o cálculo que responde "quanto
- * falta" enquanto a viagem acontece.
+ * Funções puras: só matemática, sem React e sem rede.
  */
 
 import type { Coordinate } from '@/features/map/types/coordinate';
@@ -14,11 +12,9 @@ const EARTH_RADIUS_METERS = 6_371_008.8;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
 /**
- * Distância em metros entre dois pontos, pela fórmula de Haversine.
+ * Distância em metros entre dois pontos (fórmula de Haversine).
  *
- * Considera a curvatura da Terra, e por isso continua correta em trajetos
- * longos — ao contrário de tratar graus como plano cartesiano, que erra mais
- * conforme se afasta do equador.
+ * Considera a curvatura da Terra, então funciona bem mesmo em trajetos longos.
  */
 export function distanceBetween(from: Coordinate, to: Coordinate): number {
   const fromLatitude = from.latitude * DEGREES_TO_RADIANS;
@@ -39,30 +35,29 @@ export type SegmentProjection = {
   /** Distância, em metros, de `point` até o segmento. */
   distanceMeters: number;
   /**
-   * Posição da projeção ao longo do segmento, de 0 (início) a 1 (fim).
+   * Posição da projeção no segmento: 0 = início, 1 = fim.
    *
-   * Fica preso nesse intervalo de propósito: quando o ponto está "além" do
-   * segmento, a projeção é a extremidade dele, não um ponto imaginário na
-   * reta prolongada.
+   * Fica limitada entre 0 e 1: se o ponto estiver "além" do segmento, a
+   * projeção é a ponta dele.
    */
   t: number;
 };
 
 /**
- * Projeta um ponto sobre o segmento entre `start` e `end`.
+ * Projeta um ponto sobre o segmento entre `start` e `end` (acha o ponto do
+ * segmento mais perto dele).
  *
- * Em segmentos curtos — os de uma rota são de dezenas de metros — tratar
- * graus como plano é preciso o suficiente, desde que a longitude seja
- * corrigida pelo cosseno da latitude. Sem essa correção, um grau de longitude
- * seria contado como um grau de latitude, e no sul do Brasil isso infla a
- * distância leste-oeste em cerca de 8%.
+ * Em trechos curtos (os de uma rota têm dezenas de metros) dá para tratar
+ * latitude/longitude como um plano, desde que a longitude seja corrigida pelo
+ * cosseno da latitude. Sem essa correção, no sul do Brasil a distância
+ * leste-oeste sairia uns 8% maior.
  */
 export function projectOnSegment(
   point: Coordinate,
   start: Coordinate,
   end: Coordinate,
 ): SegmentProjection {
-  // Fator de compressão da longitude na latitude de trabalho.
+  // Quanto a longitude "encolhe" nesta latitude.
   const longitudeScale = Math.cos(point.latitude * DEGREES_TO_RADIANS);
 
   const startX = start.longitude * longitudeScale;
@@ -76,7 +71,7 @@ export function projectOnSegment(
   const segmentY = endY - startY;
   const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
 
-  // Segmento degenerado (dois vértices coincidentes): a projeção é o início.
+  // Segmento com os dois pontos iguais: a projeção é o próprio início.
   if (segmentLengthSquared === 0) {
     return { point: start, distanceMeters: distanceBetween(point, start), t: 0 };
   }
@@ -93,12 +88,10 @@ export function projectOnSegment(
 }
 
 /**
- * Distância acumulada até cada vértice de uma linha.
+ * Distância acumulada até cada ponto de uma linha.
  *
- * O primeiro valor é sempre 0, e o último é o comprimento total. Calcular
- * isso uma vez por rota — e não a cada leitura do GPS — é o que mantém o
- * acompanhamento barato: com a tabela pronta, saber quanto já foi percorrido
- * é uma soma, não um percurso da geometria inteira.
+ * O primeiro valor é 0 e o último é o comprimento total. Calculamos isso uma
+ * vez por rota; depois, saber quanto já foi percorrido é só uma soma.
  */
 export function buildCumulativeDistances(coordinates: Coordinate[]): number[] {
   const cumulative: number[] = new Array(coordinates.length);

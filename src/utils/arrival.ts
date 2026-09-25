@@ -1,16 +1,13 @@
 /**
- * Horário de chegada previsto.
+ * Horário previsto de chegada.
  *
- * É a informação que o motorista realmente usa: "14:32" responde "dá tempo?"
- * de um jeito que "faltam 47 minutos" não responde sem uma conta de cabeça.
+ * "Chego às 14:32" é mais útil para o motorista do que "faltam 47 minutos".
  */
 
 /**
- * Soma os segundos restantes ao instante atual e formata como hora local.
+ * Soma o tempo restante à hora atual e formata como "HH:MM".
  *
- * `now` é injetável para que a função seja testável sem depender do relógio da
- * máquina — e porque uma tela que atualiza a cada leitura de GPS precisa de um
- * instante estável dentro do mesmo quadro.
+ * `now` pode ser passado de fora para facilitar os testes.
  */
 export function formatArrivalTime(remainingSeconds: number, now: Date = new Date()): string {
   if (!Number.isFinite(remainingSeconds) || remainingSeconds < 0) {
@@ -19,20 +16,14 @@ export function formatArrivalTime(remainingSeconds: number, now: Date = new Date
 
   const arrival = new Date(now.getTime() + remainingSeconds * 1000);
 
-  // `pt-BR` dá o formato de 24 h, que é o usado no Brasil — e `Intl` resolve
-  // fuso e horário de verão sem conta manual.
+  // `pt-BR` usa o formato 24 h, e o `Intl` cuida do fuso horário.
   return arrival.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
   });
 }
 
-/**
- * Duração restante em formato curto, para a linha de métricas.
- *
- * Diferente de `formatDuration`, que escreve "1 h 05 min" por extenso: aqui o
- * espaço é apertado e a leitura é de relance, então "1h05" serve melhor.
- */
+/** Tempo restante em formato curto ("1h05", "12 min"), para caber na tela. */
 export function formatShortDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return '--';

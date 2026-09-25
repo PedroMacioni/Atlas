@@ -18,53 +18,42 @@ import {
 export type DemoDrive = {
   /** A posição que a tela usa no lugar do GPS, ou `null` sem rota ainda. */
   position: TrackedPosition | null;
-  /** Quanto o carro simulado já andou sobre a rota, em metros. */
+  /** Quanto o carro simulado já andou na rota, em metros. */
   traveledMeters: number;
   isPaused: boolean;
   togglePause: () => void;
   /**
-   * O trajeto inteiro, do começo ao destino, como se a viagem tivesse sido
-   * feita até o fim — é o que o botão de concluir manda para o resumo.
-   *
-   * Junta o que já foi andado nos trajetos anteriores (antes de cada desvio)
-   * com o trajeto atual completo, e por isso continua sendo o caminho de
-   * verdade mesmo depois de uma parada aceita.
+   * O trajeto inteiro, do começo ao destino, como se a viagem tivesse ido até
+   * o fim (usado pelo botão de concluir). Junta os trechos anteriores a cada
+   * desvio com o trajeto atual.
    */
   completeTrip: () => { path: Coordinate[]; distanceMeters: number; durationSeconds: number };
 };
 
 /**
- * Onde o carro está, em que trajeto, e quando ele chegou aí.
+ * Onde o carro está, em que rota, e quando chegou ali.
  *
- * O trajeto é guardado como a **rota**, e não como a geometria derivada dela.
- * A distinção importa: a rota vem de fora e só muda quando há trajeto novo,
- * enquanto a geometria é um valor memoizado — e comparar identidade de valor
- * memoizado para decidir se atualiza o estado é o caminho curto para um laço
- * de renderização, porque basta a memoização ser descartada uma vez para a
- * comparação dar "mudou" para sempre.
+ * Guardamos a rota (que só muda quando há trajeto novo), e não a geometria
+ * calculada a partir dela; comparar a geometria poderia causar um loop de
+ * renderização.
  */
 type DemoProgress = {
   route: RouteResult;
   meters: number;
   timestamp: number;
-  /** Os trajetos anteriores, já percorridos até o ponto de cada desvio. */
+  /** Trechos anteriores, já percorridos até o ponto de cada desvio. */
   traveled: Coordinate[];
 };
 
 /**
  * O carro da demonstração.
  *
- * Assim que a rota chega, o ponto aparece na metade dela — é o "estou no meio
- * do caminho" — e passa a andar a 100 km/h enquanto a tela estiver aberta. A
- * tela de viagem não sabe que a posição é inventada: recebe uma
- * `TrackedPosition` igual à do GPS, com direção e velocidade, e o
- * acompanhamento, o progresso e as manobras funcionam como sempre.
+ * Quando a rota chega, o carro aparece na metade dela e anda a 100 km/h. A
+ * tela de viagem recebe uma posição igual à do GPS (com direção e
+ * velocidade), então tudo funciona como numa viagem real.
  *
- * Aceitar uma parada troca o trajeto por outro, que começa onde o carro está
- * e passa pelo posto. Os metros percorridos não valem nada nessa rota nova —
- * são a conta de um trajeto que começava 58 km atrás —, e por isso o carro é
- * **reprojetado**: sua posição no mundo é procurada na geometria nova, e a
- * contagem recomeça dali. Sem isso ele saltaria para perto do destino.
+ * Ao aceitar uma parada, a rota muda. O carro é "reposicionado" na rota
+ * nova (no ponto mais perto de onde estava), senão ele pularia de lugar.
  */
 export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoDrive {
   const geometry = useMemo(
@@ -76,15 +65,12 @@ export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoD
   const [isPaused, setIsPaused] = useState(false);
   const lastTickAt = useRef<number | null>(null);
 
-  // Largada e reprojeção acontecem na renderização em que a rota muda — o
-  // mesmo padrão de derivar estado que `use-trip-origin` usa, e não um efeito,
-  // que deixaria um quadro com o carro no lugar errado.
+  // Largada e reposicionamento acontecem na renderização em que a rota muda.
   if (enabled && route && geometry && geometry.totalMeters > 0 && progress?.route !== route) {
     setProgress({
       route,
       meters: remapMeters(progress, geometry),
-      // O instante fica em zero até o primeiro avanço: ninguém lê a hora da
-      // leitura, e o relógio não pode ser consultado durante a renderização.
+      // A hora fica em zero até o primeiro avanço (não dá para ler o relógio na renderização).
       timestamp: progress?.timestamp ?? 0,
       traveled: progress ? [...progress.traveled, ...walkedPoints(progress)] : [],
     });
@@ -124,9 +110,9 @@ export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoD
   const togglePause = useCallback(() => setIsPaused((paused) => !paused), []);
 
   /*
-    A posição precisa ser o *mesmo objeto* enquanto nada muda: a viagem soma o
-    trajeto percorrido comparando a leitura atual com a última já somada, por
-    identidade. Um objeto novo a cada renderização a faria somar para sempre.
+    A posição precisa ser o MESMO objeto enquanto nada muda: a viagem soma o
+    trajeto comparando leituras por identidade, e um objeto novo a cada render
+    faria ela somar para sempre.
   */
   const position = useMemo<TrackedPosition | null>(() => {
     if (!enabled || !geometry || !progress || progress.route !== route) {
@@ -168,7 +154,7 @@ export function useDemoDrive(enabled: boolean, route: RouteResult | null): DemoD
   };
 }
 
-/** Os vértices do trajeto atual que o carro já deixou para trás. */
+/** Os pontos da rota atual que o carro já passou. */
 function walkedPoints(progress: DemoProgress): Coordinate[] {
   const geometry = buildRouteGeometry(progress.route.coordinates);
   const last = geometry.cumulative.findIndex((meters) => meters > progress.meters);
@@ -177,11 +163,8 @@ function walkedPoints(progress: DemoProgress): Coordinate[] {
 }
 
 /**
- * Onde o carro cai numa geometria nova.
- *
- * Sem trajeto anterior é a largada: metade do caminho. Com um, é o ponto da
- * rota nova mais próximo de onde o carro está agora — a mesma projeção que o
- * acompanhamento da viagem faz com a leitura do GPS.
+ * Onde o carro cai numa rota nova. Sem rota anterior: metade do caminho.
+ * Com rota anterior: o ponto da nova rota mais perto de onde o carro está.
  */
 function remapMeters(previous: DemoProgress | null, geometry: RouteGeometry): number {
   if (!previous) {
@@ -197,7 +180,7 @@ function remapMeters(previous: DemoProgress | null, geometry: RouteGeometry): nu
 
   const onNewRoute = computeTripProgress({
     geometry,
-    // A duração não importa aqui: só se quer a distância até a projeção.
+    // A duração não importa aqui; só a distância até a projeção.
     totalDurationSeconds: 0,
     position: point.coordinate,
   });

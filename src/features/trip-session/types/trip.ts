@@ -1,11 +1,10 @@
 import type { Coordinate } from '@/features/map/types/coordinate';
 
 /**
- * Viagens, diário de bordo e histórico — o formato de `/v1/trips`.
+ * Viagens, diário de bordo e histórico: formato de `/v1/trips`.
  *
- * Os vocabulários da IA (emoção, classe de imagem, decisão) são os do escopo e
- * os mesmos do backend. Ainda não há modelo que os preencha; o tipo existe
- * para que a tela de resumo já saiba exibi-los quando houver.
+ * As listas de emoções, classes de imagem e decisões são as do escopo e as
+ * mesmas do backend.
  */
 
 export type Emotion = 'cansado' | 'neutro' | 'animado' | 'tenso' | 'bravo';

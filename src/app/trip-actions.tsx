@@ -17,7 +17,7 @@ type ActionItem = {
   title: string;
   subtitle: string;
   danger?: boolean;
-  /** ID para o efeito de pressionado da apresentação. */
+  /** Id usado pelo efeito de "pressionado" do modo apresentação. */
   testID?: string;
 };
 

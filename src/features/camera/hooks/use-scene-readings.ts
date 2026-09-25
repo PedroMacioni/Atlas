@@ -7,24 +7,20 @@ import type { Coordinate } from '@/features/map/types/coordinate';
 import { IMAGE_CLASS_LABELS } from '@/features/trip-session/constants/journal-labels';
 
 /**
- * De quanto em quanto tempo a câmera lê a cena.
- *
- * Igual ao ciclo das recomendações (5 min): a leitura chega ao diário pouco
- * antes da próxima avaliação, e é ela que mantém a variável "imagem" do
- * Random Forest viva. Mais frequente do que isso não mudaria a decisão e só
- * gastaria bateria.
+ * De quanto em quanto tempo a câmera lê a cena (5 min, igual ao ciclo das
+ * recomendações). Mais que isso só gastaria bateria.
  */
 const READING_INTERVAL_MS = 5 * 60 * 1_000;
 
-/** A primeira leitura sai logo depois da partida, não cinco minutos depois. */
+/** A primeira leitura sai 30 s depois da partida. */
 const FIRST_READING_MS = 30 * 1_000;
 
 export type SceneReadingsState = {
-  /** Última classe lida, em português — legenda da miniatura da câmera. */
+  /** Última classe lida, em português. */
   caption: string | null;
   /** Resultado da última leitura, para quem quiser a confiança. */
   last: SceneResult | null;
-  /** Fotografa agora e registra o ponto turístico (RF-11, RF-22). */
+  /** Tira a foto e registra o ponto turístico (RF-11, RF-22). */
   registerTouristSpot: () => Promise<SceneResult>;
 };
 
@@ -37,10 +33,12 @@ export type SceneReadingsParams = {
 /**
  * A câmera lendo a estrada durante a viagem (RF-16, RF-22).
  *
- * A leitura automática é silenciosa: a foto sobe, vira classe no diário e é
- * descartada. Uma falha não interrompe nada — sem rede, a viagem segue e a
- * variável "imagem" volta a ser "desconhecida", que é um valor que o modelo
- * aprendeu a tratar.
+ * A leitura automática é silenciosa: a foto é enviada, vira classe no diário
+ * e é descartada. Se falhar, a viagem segue e a variável "imagem" fica como
+ * "desconhecida".
+ *
+ * Obs.: hoje a câmera só entrega a foto que o usuário tirou no botão da
+ * câmera (`SceneCamera`). Sem foto nova, a leitura automática não acontece.
  */
 export function useSceneReadings({
   tripId,
@@ -49,8 +47,7 @@ export function useSceneReadings({
 }: SceneReadingsParams): SceneReadingsState {
   const [last, setLast] = useState<SceneResult | null>(null);
 
-  // Lidos no disparo do temporizador, não na montagem dele: a posição muda a
-  // cada leitura do GPS, e não pode reiniciar o ciclo da câmera.
+  // Lidos na hora da foto (e não ao criar o timer), para a posição mudar sem reiniciar o ciclo.
   const latest = useRef({ tripId, location });
 
   useEffect(() => {

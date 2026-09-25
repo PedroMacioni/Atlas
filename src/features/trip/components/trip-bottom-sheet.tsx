@@ -20,9 +20,8 @@ export type TripBottomSheetProps = {
 };
 
 /**
- * Painel arrastável com hora de chegada, duração e distância.
- *
- * Ao puxar para cima, revela o botão "Encerrar viagem".
+ * Painel inferior da viagem, arrastável: hora de chegada, tempo e distância
+ * restantes. Puxando para cima aparece o botão "Encerrar viagem".
  */
 export function TripBottomSheet({
   remainingSeconds,
@@ -33,7 +32,7 @@ export function TripBottomSheet({
 }: TripBottomSheetProps) {
   const sheetRef = useRef<BottomSheet>(null);
 
-  // Colapsado esconde o botão, expandido revela
+  // Fechado esconde o botão; aberto mostra.
   const snapPoints = useMemo(() => {
     const collapsed = 80 + bottomInset;
     const expanded = 170 + bottomInset;

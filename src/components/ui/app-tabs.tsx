@@ -3,13 +3,8 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { colors } from '@/theme/colors';
 
 /**
- * Barra de abas do sistema.
- *
- * `NativeTabs` renderiza a `UITabBar` real no iOS (com o visual Liquid Glass
- * no iOS 26+) e a `BottomNavigationView` Material 3 no Android — não é uma
- * barra desenhada em JavaScript. Os ícones vêm dos catálogos nativos:
- * SF Symbols no iOS (`sf`) e Material Symbols no Android (`md`), sem
- * depender de nenhuma biblioteca de ícones.
+ * Barra de abas nativa do sistema (iOS e Android), com ícones nativos:
+ * SF Symbols no iOS e Material Symbols no Android.
  */
 export function AppTabs() {
   return (

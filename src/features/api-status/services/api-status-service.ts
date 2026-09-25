@@ -3,14 +3,12 @@ import type { ApiHealth } from '@/features/api-status/types/api-status';
 import { fetchJson } from '@/utils/http';
 
 /**
- * Estado da API e dos modelos de IA (CA-01).
- *
- * O `/health` responde 200 mesmo degradado — é a resposta que diz o que está
- * de pé: banco, Random Forest, câmera e emoção na voz.
+ * Consulta o `/health` da API (CA-01). Ele responde mesmo com algo fora do ar
+ * e diz o que está funcionando: banco, Random Forest, câmera e emoção na voz.
  */
 const HEALTH_PATH = '/health';
 
-/** Curto: a tela inicial não pode ficar presa esperando um diagnóstico. */
+/** Tempo curto: a tela não pode ficar esperando o diagnóstico. */
 const TIMEOUT_MS = 5_000;
 
 export function isApiConfigured(): boolean {

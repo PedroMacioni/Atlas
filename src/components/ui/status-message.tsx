@@ -21,7 +21,7 @@ export type StatusMessageProps = {
   floating?: boolean;
 };
 
-/** Faixa compacta de estado — carregando ou erro — sem esconder o conteúdo. */
+/** Faixa curta de estado (carregando ou erro), sem esconder o resto da tela. */
 export function StatusMessage({
   tone,
   message,

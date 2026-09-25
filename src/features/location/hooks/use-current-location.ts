@@ -10,25 +10,23 @@ type LocationSnapshot = {
 };
 
 export type CurrentLocationState = LocationSnapshot & {
-  /** Dispara uma nova tentativa (usado pelo botão "Tentar novamente"). */
+  /** Tenta de novo (botão "Tentar novamente"). */
   retry: () => void;
 };
 
 const PENDING: LocationSnapshot = { isLoading: true, coordinate: null, error: null };
 
 /**
- * Obtém a localização atual ao montar a tela.
+ * Pega a localização atual quando a tela abre.
  *
- * A ausência de localização nunca é bloqueante: o restante da tela — mapa,
- * rota e card — continua funcionando normalmente.
+ * Sem localização a tela continua funcionando (mapa, rota e cards).
  */
 export function useCurrentLocation(): CurrentLocationState {
   const [snapshot, setSnapshot] = useState<LocationSnapshot>(PENDING);
   const [attempt, setAttempt] = useState(0);
 
   const retry = useCallback(() => {
-    // Volta ao estado pendente aqui, e não dentro do efeito, para não
-    // encadear renderizações desnecessárias.
+    // Volta para "carregando" aqui mesmo, e não dentro do efeito.
     setSnapshot(PENDING);
     setAttempt((value) => value + 1);
   }, []);

@@ -5,12 +5,10 @@ import { HttpError } from '@/utils/http';
 /**
  * Envia a foto para a API classificar (RF-16, CA-06).
  *
- * A imagem sobe como `multipart/form-data` porque é um arquivo: o `fetch` do
- * React Native monta o corpo a partir do `uri` local, sem o app precisar ler
- * os bytes nem convertê-los para base64 — que dobraria o tamanho do envio.
+ * A foto vai como `multipart/form-data`: o `fetch` monta o corpo a partir do
+ * arquivo local, sem converter para base64 (que dobraria o tamanho).
  *
- * O modelo roda no PC da equipe e leva um instante; o limite é generoso para
- * que uma foto de estrada não falhe por causa de meio segundo a mais.
+ * O tempo limite é longo porque o modelo roda num computador comum.
  */
 const TIMEOUT_MS = 30_000;
 
@@ -23,7 +21,7 @@ export function sendScene({
 }: SendSceneParams): Promise<SceneResult> {
   const form = new FormData();
 
-  // O `fetch` do React Native aceita este formato de arquivo local.
+  // Formato de arquivo local aceito pelo `fetch` do React Native.
   form.append('image', {
     uri,
     name: 'cena.jpg',
@@ -46,7 +44,7 @@ export function sendScene({
   });
 }
 
-/** Mensagem de tela para uma falha ao classificar. */
+/** Mensagem para a tela quando a classificação falha. */
 export function describeSceneError(error: unknown): string {
   if (error instanceof HttpError) {
     if (error.code === 'vision_unavailable') {

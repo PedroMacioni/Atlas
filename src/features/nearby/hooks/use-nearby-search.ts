@@ -22,16 +22,15 @@ export type NearbySearchState = {
 };
 
 /**
- * Uma busca de opções próximas por vez.
+ * Busca de lugares próximos, uma de cada vez.
  *
- * Tocar outra categoria cancela a busca anterior — com a reserva do
- * OpenStreetMap podendo levar vinte segundos, uma resposta atrasada não pode
- * sobrescrever a categoria que o usuário escolheu depois.
+ * Tocar em outra categoria cancela a busca anterior. Assim uma resposta
+ * atrasada (o OpenStreetMap pode levar 20 s) não sobrescreve a escolha nova.
  */
 export function useNearbySearch(
-  /** Busca já na montagem — a emergência abre procurando hospitais. */
+  /** Busca já ao abrir (ex.: a emergência abre procurando hospitais). */
   initial?: { category: NearbyCategory; around: Coordinate } | null,
-  /** Quantas opções. 3 pelo escopo; a lista da tela de destino pede 10. */
+  /** Quantos lugares: 3 pelo escopo; a tela de destino pede 10. */
   limit: number = DEFAULT_NEARBY_LIMIT,
 ): NearbySearchState {
   const [key, setKey] = useState<SearchKey | null>(() =>
@@ -47,6 +46,8 @@ export function useNearbySearch(
   }, []);
 
   const retry = useCallback(() => {
+    // Limpa o resultado anterior para a tela mostrar "buscando" de novo.
+    setResult(null);
     setError(null);
     setKey((current) => (current ? { ...current, attempt: current.attempt + 1 } : current));
   }, []);

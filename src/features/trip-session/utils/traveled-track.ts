@@ -1,9 +1,8 @@
 /**
- * O trajeto de fato percorrido, montado leitura a leitura do GPS.
+ * Trajeto percorrido de verdade, montado leitura por leitura do GPS.
  *
- * É diferente da rota planejada: é o que o resumo final desenha como "mapa do
- * trajeto percorrido" e de onde sai a "distância total" (§7.2). Função pura —
- * recebe o acumulado e uma leitura, devolve o acumulado novo.
+ * É diferente da rota planejada: é o que o resumo desenha como "trajeto
+ * percorrido" e de onde sai a distância total (§7.2). Função pura.
  */
 
 import type { Coordinate } from '@/features/map/types/coordinate';
@@ -23,21 +22,20 @@ export type TrackReading = {
 };
 
 /**
- * Leituras com incerteza acima disto não entram: um ponto que pode estar a
- * 200 m de onde o carro está somaria um zigue-zague fantasma à distância.
+ * Leituras com incerteza maior que 50 m são ignoradas (somariam um
+ * zigue-zague falso à distância).
  */
 const MAX_ACCURACY_METERS = 50;
 
 /**
- * Deslocamento mínimo para contar. O rastreamento já pede leituras a cada
- * 10 m, mas o GPS parado oscila alguns metros — somar isso inflaria a
- * distância de quem ficou meia hora num posto.
+ * Movimento mínimo para contar. Parado, o GPS oscila alguns metros, e somar
+ * isso aumentaria a distância de quem ficou meia hora num posto.
  */
 const MIN_STEP_METERS = 8;
 
 /**
- * Teto de pontos guardados, o mesmo que o backend aceita. Ao atingi-lo, a
- * trilha é rarefeita pela metade: perde resolução, nunca o começo nem o fim.
+ * Máximo de pontos guardados (o mesmo limite do backend). Ao passar disso, a
+ * trilha fica com metade dos pontos, mantendo o começo e o fim.
  */
 export const MAX_TRACK_POINTS = 20_000;
 

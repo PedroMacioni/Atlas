@@ -3,11 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { pointAlongRoute } from '@/features/demo/utils/route-point';
 import { buildCumulativeDistances, distanceBetween } from '@/utils/geo';
 
-/**
- * Uma reta de três vértices subindo em latitude — trecho curto o bastante
- * para a distância entre vértices ser da ordem de centenas de metros, como a
- * geometria de uma rota de verdade.
- */
+/** Uma reta de 3 pontos subindo em latitude (trechos de centenas de metros). */
 const ROUTE = [
   { latitude: -22.9, longitude: -47.06 },
   { latitude: -22.895, longitude: -47.06 },

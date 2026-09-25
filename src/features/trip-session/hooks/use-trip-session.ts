@@ -27,9 +27,8 @@ export type TripSessionStatus =
   | 'error';
 
 /**
- * O trajeto e o instante do fim, quando quem encerra sabe mais do que o
- * acumulado do GPS — é o caso da viagem de demonstração, que conclui o
- * percurso inteiro de uma vez.
+ * Trajeto e hora do fim, quando quem encerra sabe mais que o GPS (é o caso
+ * da viagem de demonstração, que conclui o percurso inteiro de uma vez).
  */
 export type FinishOverride = {
   distanceMeters: number;
@@ -46,13 +45,13 @@ export type TripSession = {
   /** Nova tentativa de abrir a viagem depois de uma falha. */
   retry: () => void;
   /**
-   * "Registrar parada" — grava a posição atual como parada. `details` nomeia
-   * o lugar quando se sabe qual é (um desvio que chegou ao posto escolhido).
+   * "Registrar parada": grava a posição atual como parada. `details` dá o nome
+   * do lugar quando se sabe qual é (ex.: o posto escolhido num desvio).
    */
   registerStop: (details?: StopDetails) => Promise<void>;
   /**
-   * Encerra e devolve o id da viagem para abrir o resumo. Lança se a API
-   * recusar; sem viagem registrada, devolve `null` e a tela só sai.
+   * Encerra a viagem e devolve o id para abrir o resumo. Lança erro se a API
+   * recusar; sem viagem registrada, devolve `null`.
    */
   finish: (reason: EndReason, override?: FinishOverride) => Promise<string | null>;
   /** Distância percorrida até aqui, medida pelo GPS. */
@@ -66,12 +65,11 @@ export type UseTripSessionParams = {
 };
 
 /**
- * A viagem como registro: abre no backend assim que a origem é conhecida,
- * acumula o trajeto percorrido, grava paradas e eventos, e encerra com o
- * resumo.
+ * A viagem como registro no backend: abre assim que a origem é conhecida,
+ * soma o trajeto percorrido, grava paradas e eventos e encerra com o resumo.
  *
- * A navegação não depende disto. Se a API estiver fora, o mapa e a rota
- * continuam; só o diário deixa de ser escrito — e a tela avisa.
+ * A navegação não depende disto: se a API estiver fora, o mapa e a rota
+ * continuam; só o diário deixa de ser gravado (e a tela avisa).
  */
 export function useTripSession({
   origin,
@@ -85,9 +83,8 @@ export function useTripSession({
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  // Trajeto percorrido. Atualizado durante a renderização, comparando a
-  // leitura atual com a última já somada — o mesmo padrão de derivar estado
-  // de props que `use-trip-progress` usa, sem efeito e sem ref.
+  // Trajeto percorrido. Atualizado durante a renderização: compara a leitura
+  // atual com a última já somada.
   const [track, setTrack] = useState<{ last: TrackedPosition | null; value: TraveledTrack }>({
     last: null,
     value: EMPTY_TRACK,
@@ -97,8 +94,7 @@ export function useTripSession({
     setTrack({ last: position, value: appendReading(track.value, position) });
   }
 
-  // A viagem abre uma vez só, quando a origem fica conhecida. Origem de
-  // demonstração também conta: sem GPS a viagem ainda existe.
+  // A viagem abre uma vez só, quando a origem é conhecida (a de demonstração também vale).
   const canStart = available && origin !== null && tripId === null && error === null;
 
   useEffect(() => {
@@ -124,8 +120,7 @@ export function useTripSession({
     return () => {
       active = false;
     };
-    // `origin` e `destination` são fixos durante a viagem; a nova tentativa
-    // é o que dispara de novo.
+    // `origin` e `destination` não mudam na viagem; só a nova tentativa dispara de novo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canStart, attempt]);
 

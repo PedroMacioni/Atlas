@@ -15,24 +15,23 @@ export type HomeVoiceActions = {
 export type HomeVoice = Voice & {
   onMicPress: () => void;
   /**
-   * Continua a conversa a partir do que a escuta contínua já ouviu (CA-02).
+   * Continua a conversa a partir do que a escuta contínua ouviu (CA-02).
    *
-   * `rest` é o que veio depois de "Atlas": com um comando dentro, ele é
-   * executado direto; vazio, o Atlas pergunta e ouve a resposta.
+   * `rest` é o que veio depois de "Atlas": se tiver um comando, ele é executado;
+   * se estiver vazio, o Atlas pergunta para onde ir.
    */
   resume: (rest: string) => void;
 };
 
 /**
- * A conversa de abertura (RF-03, RF-05, RF-06, §3.1).
+ * Conversa por voz na tela inicial (RF-03, RF-05, RF-06, §3.1).
  *
  *     — Atlas.
  *     — Para onde você quer ir?
  *     — O posto mais próximo.
- *     → Definir destino, buscando postos, com as 3 opções lidas em voz alta.
+ *     → abre "Definir destino" buscando postos e lê as 3 opções.
  *
- * Também aceita a frase inteira de uma vez: "Atlas, quero ir para o posto
- * mais próximo".
+ * Também aceita tudo de uma vez: "Atlas, quero ir para o posto mais próximo".
  */
 export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
   const voice = useVoice();
@@ -63,7 +62,7 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
           return false;
       }
     },
-    // `actions` é lido no momento do comando.
+    // `actions` é lido na hora do comando.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [say],
   );
@@ -76,12 +75,12 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
         const first = await listen();
 
         if (!first) {
-          // Falha de microfone ou permissão: a mensagem já está na tela.
+          // Falha de microfone ou permissão: a mensagem já aparece na tela.
           return;
         }
 
         if (!first.transcript) {
-          // Silêncio vira resposta falada, e não microfone fechando sozinho.
+          // Silêncio vira uma resposta falada, e não o microfone fechando sem aviso.
           await say('Não ouvi nada. Toque de novo e diga para onde você quer ir.');
           return;
         }
@@ -94,7 +93,7 @@ export function useHomeVoice(actions: HomeVoiceActions): HomeVoice {
         return;
       }
 
-      // "Atlas", "destino" ou algo que não deu para entender: o Atlas pergunta.
+      // Só "Atlas", "destino" ou algo não entendido: o Atlas pergunta.
       await say(
         command.type === 'ask_destination'
           ? 'Para onde você quer ir?'

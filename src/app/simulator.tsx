@@ -26,14 +26,14 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 /**
- * Modo de demonstração do Random Forest.
+ * Simulador do Random Forest.
  *
- * Ninguém vai dirigir 2h40 na apresentação. Aqui as 6 variáveis são trocadas
- * à mão e o **modelo de verdade** responde — com a decisão, a justificativa e
- * as barras que mostram quanto cada variável pesou (CA-16).
+ * Troca as 6 variáveis à mão e o modelo de verdade responde, com a decisão, a
+ * justificativa e as barras de quanto cada variável pesou (CA-16). Cada
+ * avaliação fica no diário marcada como simulação e nunca entra no dataset.
  *
- * Toda avaliação vai para o diário da viagem marcada como simulação, e nunca
- * entra no dataset real.
+ * Obs.: nenhuma tela abre este simulador; só dá para acessar por link direto
+ * (`atlas://simulator?tripId=...`).
  */
 export default function SimulatorScreen() {
   const insets = useSafeAreaInsets();

@@ -1,7 +1,4 @@
-/**
- * Paleta única do Atlas, extraída do design de referência.
- * Nenhum valor hexadecimal deve ser escrito fora deste arquivo.
- */
+/** Paleta de cores do Atlas. As cores do app devem vir sempre daqui. */
 export const colors = {
   /** Fundo geral — quase branco, levemente azulado. */
   background: '#F7F9FC',
@@ -38,10 +35,7 @@ export const colors = {
   /** Fundo do chip de erro. */
   dangerSoft: '#FDECEA',
 
-  /**
-   * Cores de categoria. Cada tipo de lugar tem um tom próprio — é o que dá a
-   * leitura imediata das fileiras de ícones no design.
-   */
+  /** Cores das categorias de lugar (posto, comida, hotel, saúde, natureza). */
   categoryFuel: '#2F80ED',
   categoryFood: '#F2994A',
   categoryLodging: '#9B51E0',
@@ -55,10 +49,7 @@ export type ColorToken = keyof typeof colors;
 export const primaryGradient = [colors.primary, colors.primaryDeep] as const;
 
 /**
- * Gradiente da ação destrutiva.
- *
- * Existe para que "Parar" tenha o mesmo peso visual de "Continuar" quando os
- * dois dividem uma linha: um botão chapado claro ao lado de um com gradiente e
- * sombra não se lê como par, se lê como um botão e um aviso.
+ * Gradiente dos botões de ação destrutiva (ex.: "Parar"), com o mesmo peso
+ * visual do botão principal.
  */
 export const dangerGradient = [colors.danger, colors.dangerDeep] as const;

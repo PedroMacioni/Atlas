@@ -23,10 +23,8 @@ const DIMENSIONS = {
 } as const;
 
 /**
- * Ícone dentro de um círculo suave — o elemento mais repetido do design.
- *
- * Usa `@expo/vector-icons` em vez de SF Symbols porque o design pede a mesma
- * cor de categoria nas duas plataformas, e SF Symbols não existe no Android.
+ * Ícone dentro de um círculo colorido, o elemento mais repetido do design.
+ * Usa `@expo/vector-icons` para ter os mesmos ícones no iOS e no Android.
  */
 export function IconBadge({ name, color = 'primary', size = 'md', bare = false }: IconBadgeProps) {
   const { box, glyph } = DIMENSIONS[size];

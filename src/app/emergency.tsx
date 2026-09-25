@@ -48,19 +48,15 @@ const OPTIONS: {
 ];
 
 /**
- * Emergência (escopo §11, RF-23).
+ * Tela de emergência (escopo §11, RF-23).
  *
- * Aberta por cima de qualquer tela, em folha. Três alvos grandes, um por
- * linha, sem nada entre eles e a ação — quem abre isto não quer ler.
+ * Abre por cima de qualquer tela. Botões grandes para SAMU e Polícia, sem nada
+ * no caminho. Durante uma viagem, cada ação é gravada no diário (a ligação
+ * sai primeiro; o registro vai em paralelo).
  *
- * Com uma viagem em andamento, cada acionamento vai para o diário de bordo.
- * O registro nunca atrasa a ligação: ela sai primeiro, e o evento é gravado
- * em paralelo, sem esperar resposta.
- *
- * **Hospital (RF-24):** a folha já abre buscando os 3 hospitais mais próximos,
- * com distância, tempo de carro e nota. Durante uma viagem, o escolhido vira
- * uma parada na rota; fora dela, o destino de uma viagem nova. O mapa do
- * aparelho fica como reserva, para quando a API não responde.
+ * Hospital (RF-24): a tela já abre buscando os 3 hospitais mais próximos.
+ * Durante uma viagem, o escolhido vira uma parada na rota; fora dela, vira o
+ * destino de uma viagem nova. O botão do app de mapas fica como reserva.
  */
 export default function EmergencyScreen() {
   const insets = useSafeAreaInsets();

@@ -18,16 +18,15 @@ export type PlaceSearchState = {
   /** `true` enquanto a consulta está em andamento. */
   isLoading: boolean;
   /**
-   * Preenchido quando a API falhou e a lista exibida veio da cópia local.
-   * A tela continua usável; a mensagem só explica por que o resultado pode
-   * estar incompleto.
+   * Preenchido quando a API falhou e a lista veio da cópia local. A tela
+   * continua funcionando; a mensagem só explica que a lista pode estar menor.
    */
   error: string | null;
   /** `true` quando a consulta terminou e nada foi encontrado. */
   isEmpty: boolean;
 };
 
-/** Espera antes de consultar, para não disparar uma chamada por tecla. */
+/** Espera um pouco antes de buscar, para não fazer uma chamada a cada tecla. */
 const DEBOUNCE_MS = 250;
 
 const FALLBACK_MESSAGE = 'Sem conexão com a API — mostrando a lista local.';
@@ -35,26 +34,21 @@ const FALLBACK_MESSAGE = 'Sem conexão com a API — mostrando a lista local.';
 /**
  * Busca de destino.
  *
- * A fonte é decidida em `place-service`: a API do Atlas quando configurada,
- * a lista local quando não. O hook cuida do que é da tela — o texto digitado,
- * a categoria, o estado da consulta — e de três cuidados que a rede exige e a
- * lista local não exigia:
+ * A fonte é escolhida em `place-service` (API ou lista local). O hook cuida
+ * da tela: texto digitado, categoria e estado da busca, com três cuidados:
  *
- * - **debounce**, para que digitar "Ibirapuera" não gere dez requisições;
- * - **cancelamento**, para que uma resposta atrasada não sobrescreva uma
- *   busca mais recente;
- * - **degradação**, porque uma busca sem rede deve mostrar o que existe
- *   localmente em vez de uma lista vazia.
+ * - espera o usuário parar de digitar (debounce);
+ * - ignora respostas atrasadas de buscas antigas;
+ * - se a API falhar, mostra a lista local em vez de uma lista vazia.
  *
- * `near` é onde o usuário está. Vai junto de cada busca, mas mudar de lugar
- * não dispara uma busca nova — só o texto e a categoria disparam.
+ * `near` é a posição do usuário. Ela vai junto em cada busca, mas mudar de
+ * posição não dispara uma busca nova (só texto e categoria disparam).
  */
 export function usePlaceSearch(near: Coordinate | null = null): PlaceSearchState {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<PlaceCategory | null>(null);
 
-  // O primeiro render já mostra a lista local, e não um vazio que pisca: o
-  // resultado da API substitui isso assim que chega.
+  // Começa já mostrando a lista local; a resposta da API substitui quando chegar.
   const [results, setResults] = useState<Place[]>(() =>
     filterPlaces({ places: DEMO_PLACES, query: '', category: null }),
   );
@@ -93,7 +87,7 @@ export function usePlaceSearch(near: Coordinate | null = null): PlaceSearchState
           if (latestRequest.current !== requestId) {
             return;
           }
-          // A cópia local responde a mesma pergunta, só com menos lugares.
+          // A lista local responde a mesma busca, só com menos lugares.
           setResults(filterPlaces({ places: DEMO_PLACES, query, category }));
           setError(FALLBACK_MESSAGE);
         })

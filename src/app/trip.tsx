@@ -74,34 +74,20 @@ import { spacing } from '@/theme/spacing';
 
 const EMPTY_ROUTE: never[] = [];
 
-/**
- * Respiro que a câmera reserva ao enquadrar a rota.
- *
- * A faixa de instrução e o painel inferior cobrem parte do mapa; sem isso o
- * trajeto seria enquadrado atrás deles.
- */
+/** Espaço que a câmera do mapa reserva nas bordas (a faixa de instrução e o painel cobrem o mapa). */
 const MAP_EDGE_PADDING = { top: 150, bottom: 210, left: 56, right: 56 };
 
-/** Quanto tempo a confirmação "Parada registrada" fica na tela. */
+/** Quanto tempo o aviso curto (ex.: "Parada registrada") fica na tela. */
 const NOTICE_MS = 2_500;
 
 /**
- * Viagem em andamento.
+ * Tela da viagem em andamento.
  *
- * O mapa **é** a tela: encosta nas quatro bordas, e o resto flutua sobre ele —
- * a instrução da próxima manobra no topo, o painel de chegada embaixo. É o
- * arranjo dos aplicativos de navegação, e a razão é a mesma: dirigindo, o que
- * se olha é o mapa, e todo o resto precisa caber na periferia da atenção.
+ * O mapa ocupa a tela inteira e o resto flutua por cima: a instrução da
+ * próxima manobra no topo e o painel com a hora de chegada embaixo.
  *
- * Por isso o cabeçalho nativo sai daqui (`headerShown: false`, em
- * `_layout.tsx`) e a tela traz o próprio botão de voltar.
- *
- * O painel inferior responde à pergunta que se faz numa viagem — **a que horas
- * eu chego?** — e por isso o horário vem primeiro, centralizado. Tempo e
- * distância ficam abaixo, menores, separados por um ponto.
- *
- * A tela apenas compõe: localização, rota, progresso, manobras e apresentação
- * vivem cada um em sua própria feature.
+ * A tela só junta as peças: localização, rota, progresso, manobras, voz,
+ * câmera e recomendações ficam cada uma na sua pasta em `features/`.
  */
 export default function TripScreen() {
   const router = useRouter();
@@ -110,10 +96,9 @@ export default function TripScreen() {
   const cameraRef = useRef<SceneCameraHandle>(null);
 
   /*
-    Modo de demonstração (`atlas://trip?demo=1`): o trajeto é o de sempre —
-    origem, destino e rota vêm da mesma API —, mas a posição não vem do GPS.
-    Um ponto caminha sobre a rota, já na metade dela, e a tela inteira acredita
-    nele. É o que permite mostrar a viagem em andamento sem dirigir 110 km.
+    Modo demonstração (`atlas://trip?demo=1`): a rota é real, mas a posição não
+    vem do GPS. Um ponto "anda" sobre a rota a partir da metade dela, para
+    mostrar a viagem em andamento sem precisar dirigir.
   */
   const { demo: demoParam, presentation: presentationParam, skipIntro: skipIntroParam } = useLocalSearchParams<{
     demo?: string;
@@ -121,12 +106,12 @@ export default function TripScreen() {
     skipIntro?: string;
   }>();
   const isDemo = demoParam === '1';
-  // Sem `EXPO_PUBLIC_DEV_MODE`, o parâmetro é ignorado mesmo vindo de deep link.
+  // Sem `EXPO_PUBLIC_DEV_MODE`, o parâmetro é ignorado (mesmo vindo por link).
   const isPresentation = DEV_MODE && presentationParam === '1';
   const skipIntro = skipIntroParam === '1';
   const presentationState = usePresentationState();
 
-  // Presentation mode implies demo mode
+  // O modo apresentação também usa a viagem de demonstração.
   const effectiveDemo = isDemo || isPresentation;
 
   const chosenDestination = useTripDestination();
@@ -137,9 +122,8 @@ export default function TripScreen() {
   const origin = effectiveDemo ? DEMO_DRIVE_ORIGIN : gpsOrigin;
 
   /*
-    A rota chega à demonstração por um estado, e não direto de `useTripRoute`:
-    a posição simulada nasce da rota, e a rota — por causa do desvio — nasce da
-    posição. Um render de atraso desfaz o laço.
+    A rota chega à demonstração por um estado (com um render de atraso), porque
+    a posição simulada depende da rota e a rota (com desvio) depende da posição.
   */
   const [demoRoute, setDemoRoute] = useState<RouteResult | null>(null);
   const demoDrive = useDemoDrive(effectiveDemo, demoRoute);
@@ -150,15 +134,32 @@ export default function TripScreen() {
 
   const [notice, setNotice] = useState<string | null>(null);
 
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   /** Mostra um aviso curto sob a faixa de instrução. */
   const flash = (message: string) => {
     setNotice(message);
-    setTimeout(() => setNotice(null), NOTICE_MS);
+    // Um aviso novo reinicia o tempo; sem isso, o timer do aviso anterior
+    // apagaria o novo antes da hora.
+    if (noticeTimer.current) {
+      clearTimeout(noticeTimer.current);
+    }
+    noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
   };
 
+  // Ao sair da tela, cancela o timer do aviso.
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) {
+        clearTimeout(noticeTimer.current);
+      }
+    },
+    [],
+  );
+
   /*
-    Parada no caminho — de uma recomendação aceita ou de um hospital escolhido
-    na emergência. Ao alcançá-la, vira parada no diário com o nome do lugar.
+    Parada no caminho (de uma recomendação aceita ou de um hospital da
+    emergência). Ao chegar, vira parada no diário com o nome do lugar.
   */
   const detour = useDetour(position?.coordinate ?? null, (reached) => {
     session
@@ -172,20 +173,15 @@ export default function TripScreen() {
   const progress = useTripProgress(progressRoute, position?.coordinate ?? null);
 
   /*
-    Derivar durante a renderização, e não num efeito: é o padrão do resto da
-    viagem, e evita um quadro com o carro na rota antiga.
-
-    Só a rota pronta entra. Enquanto o desvio é calculado, `trip.route` volta a
-    ser nulo por alguns segundos, e adotar esse nulo faria o carro desaparecer
-    do mapa no meio da demonstração — ele continua andando no trajeto anterior
-    até o novo chegar.
+    Atualiza a rota da demonstração durante a renderização. Só usa a rota pronta:
+    enquanto um desvio é calculado a rota fica nula por alguns segundos, e o
+    carro sumiria do mapa.
   */
   if (effectiveDemo && trip.route && demoRoute !== trip.route) {
     setDemoRoute(trip.route);
   }
 
-  // Cada demonstração começa do cenário do escopo, e não do que ficou da
-  // anterior.
+  // Cada demonstração começa do cenário padrão.
   useEffect(() => {
     if (effectiveDemo) {
       resetDemoScenario();
@@ -193,9 +189,8 @@ export default function TripScreen() {
   }, [effectiveDemo]);
 
   /*
-    A distância que o modelo vê começa sendo a que o carro simulado já andou —
-    é o que torna as 6 variáveis coerentes com o que está na tela. Depois disso
-    ela é de quem mexe na folha de condições.
+    A distância que o modelo vê começa igual à que o carro simulado já andou.
+    Depois disso quem manda é a tela de condições.
   */
   const demoDistanceSynced = useRef(false);
 
@@ -211,26 +206,21 @@ export default function TripScreen() {
     });
   }, [effectiveDemo, demoDrive.traveledMeters]);
 
-  // Os 3 locais para uma recomendação aceita (RF-19).
+  // Os 3 lugares para uma recomendação aceita (RF-19).
   const stopOptions = useNearbySearch();
   const [presentationStopOptions, setPresentationStopOptions] = useState(false);
   const [stopReason, setStopReason] = useState('');
 
   const recommendations = useRecommendations({
     tripId: session.tripId,
-    // Na demonstração quem sabe a distância é o carro simulado: o diário da
-    // sessão só soma o que o GPS andou, e o GPS não andou.
+    // Na demonstração a distância vem do carro simulado (o GPS não andou).
     traveledMeters: effectiveDemo ? demoDrive.traveledMeters : session.traveledMeters,
     location: position?.coordinate ?? null,
   });
 
   /**
-   * Pede a avaliação ao Random Forest.
-   *
-   * Na demonstração vão junto as condições da folha de cenário — uma hora de
-   * estrada, cansaço na voz —, e a API responde com o modelo de verdade sobre
-   * variáveis escolhidas à mão. As condições são lidas no momento do toque,
-   * que é quando elas valem.
+   * Pede uma avaliação ao Random Forest. Na demonstração envia também as
+   * condições da tela de cenário (lidas na hora do toque).
    */
   const askRecommendation = () => recommendations.ask(effectiveDemo ? getDemoScenario() : undefined);
 
@@ -245,12 +235,8 @@ export default function TripScreen() {
 
 
   /**
-   * Próxima manobra à frente.
-   *
-   * Sem progresso — antes da primeira leitura do GPS, ou com o sinal ainda
-   * ruim — a manobra que interessa é a **primeira do trajeto**, e não nenhuma:
-   * a faixa precisa aparecer assim que a rota chega, senão quem abre a tela
-   * parado conclui que a instrução não funciona.
+   * Próxima manobra. Sem posição ainda, mostra a primeira manobra do trajeto,
+   * para a faixa aparecer assim que a rota chega.
    */
   const nextManeuver = useMemo(() => {
     if (!trip.route) {
@@ -264,30 +250,24 @@ export default function TripScreen() {
   const hasArrived = progress?.hasArrived ?? false;
 
   /*
-    O que o mapa desenha como "você" (RF-07).
+    Onde o mapa desenha "você" (RF-07).
 
-    Em rota, é a posição **projetada sobre o trajeto**, e não a leitura crua do
-    GPS: é o que mantém a seta em cima da via em vez de na calçada ou na
-    pista contrária. E a direção é a da rua em que se está, não a do aparelho,
-    que treme com o carro parado e some em velocidade baixa. Fora da rota as
-    duas coisas voltam a ser as do GPS — ali a rota não tem o que dizer.
+    Na rota, usa a posição "grudada" no trajeto (a seta fica em cima da rua, e
+    não na calçada) e a direção da rua. Fora da rota, usa a leitura do GPS.
   */
   const onRoute = progress !== null && !progress.isOffRoute;
   const mapLocation = onRoute ? progress.snappedPoint : (position?.coordinate ?? null);
   const mapHeading = (onRoute ? progress.courseDegrees : null) ?? position?.heading ?? null;
 
-  // Sem posição, os totais do trajeto são a melhor verdade disponível.
+  // Sem posição, mostra os totais da rota.
   const remainingMeters = progress?.remainingMeters ?? progressRoute?.distanceMeters ?? 0;
   const remainingSeconds = effectiveDemo
     ? Math.round(remainingMeters / DEMO_SPEED_METERS_PER_SECOND)
     : progress?.remainingSeconds ?? trip.route?.durationSeconds ?? 0;
 
   /**
-   * Encerra a viagem e abre o resumo.
-   *
-   * Sem API a viagem não foi registrada, e sair é tudo o que há a fazer. Com
-   * API, uma falha ao salvar não prende ninguém na tela: oferece tentar de
-   * novo ou sair sem o resumo.
+   * Encerra a viagem e abre o resumo. Sem API, só volta. Se salvar falhar,
+   * oferece tentar de novo ou sair sem salvar.
    */
   const endTrip = async (reason: EndReason, override?: FinishOverride) => {
     if (isEnding) {
@@ -317,14 +297,9 @@ export default function TripScreen() {
   };
 
   /**
-   * "Cheguei": conclui a demonstração como se o trajeto inteiro tivesse sido
-   * dirigido.
-   *
-   * O resumo precisa de três coisas que o carro simulado sabe e o diário da
-   * sessão não: o caminho completo — incluindo os trechos anteriores a cada
-   * desvio —, a distância somada sobre ele, e um fim de viagem coerente com o
-   * tempo que a rota leva, em vez dos poucos minutos que a demonstração
-   * passou aberta.
+   * "Cheguei" da demonstração: conclui como se o trajeto inteiro tivesse sido
+   * feito, com o caminho completo, a distância somada e uma hora de chegada
+   * coerente com o tempo da rota.
    */
   const concludeDemoTrip = async () => {
     const complete = demoDrive.completeTrip();
@@ -354,9 +329,9 @@ export default function TripScreen() {
   };
 
   /**
-   * Chegada ao destino: o Atlas pergunta uma vez se deve encerrar (RF-25).
-   * Encerrar sozinho seria arriscado — o GPS reconhece a chegada a 40 m, e
-   * ainda pode faltar achar a vaga. O ref garante uma pergunta por viagem.
+   * Chegada ao destino: o Atlas pergunta uma vez se deve encerrar (RF-25). Não
+   * encerra sozinho porque o GPS acusa a chegada a 40 m e ainda pode faltar
+   * achar a vaga.
    */
   const arrivalAsked = useRef(false);
 
@@ -388,12 +363,11 @@ export default function TripScreen() {
   };
 
   /**
-   * Resposta à recomendação (§4.7, CA-10).
-   *
-   * - DESCANSAR, ABASTECER, ALIMENTAR-SE e FAZER UMA PARADA buscam as 3 opções
-   *   próximas; a rota só muda quando o usuário escolhe uma delas.
-   * - REGISTRAR PONTO TURÍSTICO grava o local no diário na hora.
-   * - CONTINUAR não mexe em nada.
+   * Resposta à recomendação (§4.7, CA-10):
+   * - DESCANSAR, ABASTECER, ALIMENTAR-SE e FAZER UMA PARADA buscam 3 lugares;
+   *   a rota só muda quando o usuário escolhe um deles;
+   * - REGISTRAR PONTO TURÍSTICO grava o local no diário na hora;
+   * - CONTINUAR não muda nada.
    */
   const answerRecommendation = (accepted: boolean) => {
     const current = recommendations.current;
@@ -410,6 +384,8 @@ export default function TripScreen() {
       } else {
         stopOptions.search(category, here);
       }
+    } else if (accepted && category) {
+      flash('Sem localização para buscar lugares por perto.');
     }
 
     if (accepted && decision === 'registrar_ponto_turistico') {
@@ -418,13 +394,9 @@ export default function TripScreen() {
   };
 
   /**
-   * "Registrar ponto turístico": foto, classe e local no diário (RF-11,
-   * RF-22).
-   *
-   * Com a câmera pronta, a foto é tirada e classificada — é ela que aparece
-   * no resumo final. Sem câmera, sem permissão ou com a IA de imagem fora do
-   * ar, o registro acontece assim mesmo, só com o local: o escopo pede a
-   * marcação do ponto, e a foto é o que a enriquece.
+   * "Registrar ponto turístico" (RF-11, RF-22). Com foto, ela é classificada e
+   * aparece no resumo. Sem câmera ou com a IA de imagem fora do ar, grava só o
+   * local.
    */
   const registerTouristSpot = async () => {
     if (!session.tripId) {
@@ -450,7 +422,7 @@ export default function TripScreen() {
     flash('Ponto turístico registrado no diário.');
   };
 
-  /** Chamado após o usuário tirar a foto na câmera fullscreen. */
+  /** Chamado depois que o usuário tira a foto na câmera. */
   const onCameraCapture = () => {
     registerTouristSpot().catch((cause: unknown) => flash(describeSceneError(cause)));
   };
@@ -464,7 +436,7 @@ export default function TripScreen() {
       );
   };
 
-  /** O local escolhido vira parada no caminho; o destino continua o mesmo. */
+  /** O lugar escolhido vira uma parada no caminho; o destino continua o mesmo. */
   const chooseStop = (place: NearbyPlace) => {
     detour.start({
       name: place.name,
@@ -477,10 +449,9 @@ export default function TripScreen() {
   };
 
   /*
-    Voz (RF-11, RF-12, RF-20). Um toque no microfone, uma frase, uma ação. As
-    buscas de parada pedidas por voz têm as 3 opções lidas em voz alta e
-    escolhidas por voz (RF-13, RF-14) — o ref marca que a próxima lista de
-    opções nasceu de um pedido falado.
+    Voz (RF-11, RF-12, RF-20). Quando uma busca de parada vem de um pedido
+    falado, as opções são lidas e escolhidas por voz (RF-13, RF-14). O ref
+    marca isso.
   */
   const readOptionsByVoice = useRef(false);
 
@@ -516,9 +487,8 @@ export default function TripScreen() {
       }
 
       /*
-        O comando vai para o diário com o áudio: a API lê a emoção da voz e
-        grava as duas coisas no mesmo evento (RF-15, CA-07). Sem áudio — ou
-        com a API fora — resta gravar a frase, que é o que importa primeiro.
+        O comando vai para o diário com o áudio: a API lê a emoção da voz (RF-15,
+        CA-07). Se isso falhar, grava pelo menos a frase.
       */
       sendVoiceCommand({
         tripId: session.tripId,
@@ -543,10 +513,8 @@ export default function TripScreen() {
   });
 
   /*
-    "Diga Atlas" sem tirar a mão do volante (RF-02, CA-02). Desligada por
-    padrão, como na tela inicial: é escolha de quem dirige. Enquanto o Atlas
-    fala ou ouve um comando, a vigília sai de cena — o reconhecedor do
-    sistema só aceita uma sessão por vez.
+    Escuta contínua de "Atlas" (RF-02, CA-02). Desligada por padrão. Pausa
+    enquanto o Atlas fala ou ouve um comando (só uma escuta por vez).
   */
   const wake = useWakeWord({
     onWake: (rest) => tripVoice.resume(rest),
@@ -566,8 +534,7 @@ export default function TripScreen() {
           confirmEnd();
         }
       }),
-    // As funções são lidas quando a ação chega; reinscrever a cada render não
-    // melhora a entrega e pode trocar o listener enquanto o sheet fecha.
+    // As funções são lidas quando a ação chega.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [wake.toggle, askRecommendation, registerStop, confirmEnd],
   );
@@ -588,14 +555,14 @@ export default function TripScreen() {
         }
       })
       .catch(() => {});
-    // Só a chegada da lista importa; as ações são lidas no momento.
+    // Só a chegada da lista importa; as ações são lidas na hora.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopOptions.result]);
 
   /*
-    Toda recomendação é falada (RF-20). Se pede confirmação e há microfone, o
-    Atlas pergunta e ouve a resposta — o motorista não precisa tirar a mão do
-    volante. Sem resposta clara, o card continua na tela para o toque.
+    Toda recomendação é falada (RF-20). Se ela pede confirmação e há
+    microfone, o Atlas pergunta e ouve a resposta. Sem resposta clara, o card
+    continua na tela para o toque.
   */
   const spokenRecommendation = useRef<string | null>(null);
 
@@ -630,7 +597,7 @@ export default function TripScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recommendations.current]);
 
-  // Tensão forte: o Atlas oferece a emergência antes de qualquer recomendação.
+  // Tensão forte na voz: o Atlas oferece a emergência.
   useEffect(() => {
     if (!recommendations.assistance) {
       return;
@@ -655,10 +622,10 @@ export default function TripScreen() {
   const toggleFocus = () => {
     setIsFollowing((following) => {
       if (following) {
-        // Indo para overview: enquadra a rota inteira
+        // Vai para a visão geral: mostra a rota inteira.
         mapRef.current?.fitRoute();
       } else {
-        // Voltando para navegação: câmera 3D próxima ao usuário
+        // Volta para a navegação: câmera 3D perto do usuário.
         mapRef.current?.goToNavigation();
       }
       return !following;
@@ -717,9 +684,7 @@ export default function TripScreen() {
         destination={destination}
         routeCoordinates={trip.route?.coordinates ?? EMPTY_ROUTE}
         stops={detour.waypoints}
-        // O ponto azul nativo é o do GPS de verdade: na demonstração ele
-        // apareceria onde o aparelho está, longe da seta, como se houvesse
-        // dois "você" no mapa.
+        // Na demonstração o ponto azul do GPS real apareceria longe da seta simulada.
         showsUserLocation={!effectiveDemo && hasPosition && !isFollowing}
         showsOriginMarker={!hasPosition}
         focus={isFollowing ? 'navigation' : 'route'}
@@ -734,11 +699,7 @@ export default function TripScreen() {
           style={[styles.top, { paddingTop: insets.top + spacing.sm }]}
           pointerEvents="box-none">
           <View style={styles.topRow} pointerEvents="box-none">
-            {/*
-              A instrução ocupa toda a largura. Sem manobra em mãos, a faixa
-              mostra o destino: um espaço reservado e vazio seria pior que uma
-              faixa que diz para onde se vai.
-            */}
+            {/* A instrução ocupa toda a largura. Sem manobra, a faixa mostra o destino. */}
             <View style={styles.bannerSlot}>
               {nextManeuver && !hasArrived ? (
                 <ManeuverBanner maneuver={nextManeuver} />
@@ -771,7 +732,7 @@ export default function TripScreen() {
             </View>
           </View>
 
-          {/* Avisos de erro empilham sob a faixa */}
+          {/* Avisos de erro, embaixo da faixa */}
           {trip.error ? (
             <StatusMessage tone="error" message={trip.error} onRetry={trip.retry} floating />
           ) : null}
@@ -782,8 +743,7 @@ export default function TripScreen() {
             <StatusMessage
               tone="error"
               message={tracking.error}
-              // Com posição em mãos o erro é passageiro e o acompanhamento
-              // segue da última leitura boa; sem ela, vale oferecer a retomada.
+              // Com posição o erro é passageiro; sem ela, oferece tentar de novo.
               onRetry={hasPosition ? undefined : tracking.retry}
               floating
             />
@@ -845,12 +805,7 @@ export default function TripScreen() {
             <StatusMessage tone="info" message="Você saiu da rota." floating />
           ) : null}
 
-          {/*
-            O controle de câmera é um ícone sobre o mapa, e não um botão no
-            painel: é onde os aplicativos de navegação o colocam. Fica no alto,
-            à direita, logo abaixo dos avisos — assim nunca cobre a faixa de
-            instrução, que é o elemento mais importante da tela.
-          */}
+          {/* Botões flutuantes à direita, abaixo dos avisos (nunca cobrem a faixa de instrução). */}
           <View style={styles.mapActions} pointerEvents="box-none">
             {session.status === 'active' ? (
               <SceneCamera
@@ -859,10 +814,7 @@ export default function TripScreen() {
               />
             ) : null}
 
-            {/*
-              Controles da demonstração: as condições que o Random Forest vai
-              ver, e o pause — para a tela ficar parada na hora da foto.
-            */}
+            {/* Controles da demonstração: condições do modelo, concluir e pausar. */}
             {effectiveDemo && !isPresentation ? (
               <>
                 <FloatingIconButton
@@ -888,7 +840,7 @@ export default function TripScreen() {
               </>
             ) : null}
 
-            {/* Só num development build: no Expo Go não há reconhecimento de fala. */}
+            {/* Só num development build (no Expo Go não há reconhecimento de fala). */}
             {tripVoice.available ? (
               <FloatingIconButton
                 size="lg"
@@ -974,11 +926,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  /**
-   * Cobre o mapa inteiro e distribui os dois blocos — controles no topo,
-   * painel no rodapé — com o espaço livre no meio, que é onde o mapa fica
-   * visível e arrastável.
-   */
+  /** Cobre o mapa: controles no topo, painel embaixo e o mapa livre no meio. */
   overlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
@@ -995,27 +943,27 @@ const styles = StyleSheet.create({
   bannerSlot: {
     alignSelf: 'stretch',
   },
-  /** Velocidade no canto superior esquerdo, abaixo da faixa de direção. */
+  /** Velocidade no canto superior esquerdo, abaixo da faixa. */
   speedContainer: {
     alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  /** Alinha o controle de câmera à direita, sob a faixa de instrução. */
+  /** Botões alinhados à direita, abaixo da faixa de instrução. */
   mapActions: {
     alignItems: 'flex-end',
     paddingTop: spacing.xs,
     gap: spacing.sm,
   },
-  /** Painel de escolha dos 3 locais, sobre o mapa. */
+  /** Painel de escolha dos 3 lugares, sobre o mapa. */
   panel: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.md,
   },
-  /** Faixa de contexto quando não há manobra para anunciar. */
+  /** Faixa simples quando não há manobra para mostrar. */
   plainBanner: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -1024,7 +972,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  /** Eleva o componente acima do overlay de spotlight da apresentação. */
+  /** Deixa o elemento acima da camada escura do modo apresentação. */
   spotlight: {
     zIndex: 100,
   },

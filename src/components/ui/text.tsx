@@ -11,10 +11,8 @@ export type TextProps = RNTextProps & {
 };
 
 /**
- * Único componente de texto do aplicativo.
- *
- * Amarra família, tamanho e entrelinha à escala de `theme/typography.ts`, de
- * modo que nenhuma tela precise declarar `fontSize` ou `fontFamily`.
+ * Componente de texto do app. Aplica fonte, tamanho e espaçamento da escala de
+ * `theme/typography.ts`, para nenhuma tela precisar definir isso na mão.
  */
 export function Text({
   variant = 'body',

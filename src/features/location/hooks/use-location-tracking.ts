@@ -17,14 +17,12 @@ export type LocationTrackingState = {
 };
 
 /**
- * Acompanha a posição do aparelho enquanto a tela estiver montada.
+ * Acompanha a posição do aparelho enquanto a tela estiver aberta.
  *
- * A assinatura é a de `useCurrentLocation`, de propósito — a diferença está no
- * que acontece depois da primeira leitura: aqui elas continuam chegando.
+ * Parecido com `useCurrentLocation`, mas as leituras continuam chegando.
  *
- * `enabled` permite montar o hook sem ligar o GPS. Serve para não gastar
- * bateria antes de a viagem realmente começar, e para desligar o
- * acompanhamento quando ela termina.
+ * `enabled = false` monta o hook sem ligar o GPS (economiza bateria antes da
+ * viagem começar ou na viagem de demonstração).
  */
 export function useLocationTracking(enabled = true): LocationTrackingState {
   const [position, setPosition] = useState<TrackedPosition | null>(null);
@@ -32,8 +30,7 @@ export function useLocationTracking(enabled = true): LocationTrackingState {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  // A inscrição pode chegar depois de a tela desmontar; o ref garante que ela
-  // seja cancelada de todo jeito.
+  // A inscrição pode chegar depois da tela fechar; o ref garante o cancelamento.
   const subscription = useRef<TrackingSubscription | null>(null);
 
   const retry = useCallback(() => {
@@ -56,7 +53,7 @@ export function useLocationTracking(enabled = true): LocationTrackingState {
         }
         setPosition(next);
         setIsStarting(false);
-        // Uma leitura boa depois de uma falha temporária limpa o aviso.
+        // Uma leitura boa depois de uma falha apaga o aviso de erro.
         setError(null);
       },
       onError: (message) => {
@@ -67,8 +64,7 @@ export function useLocationTracking(enabled = true): LocationTrackingState {
         setIsStarting(false);
       },
     }).then((created) => {
-      // Desmontou enquanto a permissão era resolvida: cancela na hora, em vez
-      // de deixar o GPS ligado sem ninguém ouvindo.
+      // A tela fechou enquanto a permissão era pedida: desliga o GPS na hora.
       if (!active) {
         created?.remove();
         return;

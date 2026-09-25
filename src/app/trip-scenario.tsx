@@ -11,12 +11,8 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 /**
- * As condições da viagem de demonstração.
- *
- * O que o simulador faz em tela cheia, esta folha faz por cima do mapa: troca
- * as 6 variáveis e pergunta ao Random Forest. A diferença é o que se vê
- * depois — a resposta aparece na viagem em andamento, sobre o trajeto, que é
- * onde ela apareceria de verdade.
+ * Condições da viagem de demonstração: troca as 6 variáveis e pede a
+ * recomendação. A resposta aparece na própria viagem, sobre o mapa.
  */
 export default function TripScenarioScreen() {
   const insets = useSafeAreaInsets();

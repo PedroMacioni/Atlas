@@ -10,7 +10,7 @@ export type SecondaryButtonProps = {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  /** `danger` sinaliza recuperação de erro em vez de ação neutra. */
+  /** `danger` indica ação de recuperação de erro. */
   tone?: 'neutral' | 'danger';
 };
 

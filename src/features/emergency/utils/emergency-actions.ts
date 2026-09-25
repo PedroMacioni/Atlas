@@ -5,14 +5,9 @@ import type { Coordinate } from '@/features/map/types/coordinate';
 /**
  * Ações de emergência (escopo §11).
  *
- * O Atlas não substitui os serviços oficiais: só encurta o caminho até eles.
- * SAMU e Polícia abrem o discador já com o número; Hospital abre o aplicativo
- * de mapas do aparelho buscando hospitais em volta.
- *
- * O Hospital é provisório. O escopo pede **3 hospitais próximos** listados no
- * próprio Atlas, com distância, tempo e nota (RF-24) — isso depende da busca
- * de lugares por proximidade (Google Places), que ainda não existe. Até lá, o
- * mapa do sistema é o caminho mais curto e mais honesto.
+ * O Atlas não substitui os serviços oficiais, só encurta o caminho. SAMU e
+ * Polícia abrem o discador com o número; "Hospital" abre o app de mapas do
+ * celular buscando hospitais (reserva para quando a lista da API não carrega).
  */
 
 export type EmergencyAction = 'hospital' | 'samu' | 'policia';
@@ -22,7 +17,7 @@ export const EMERGENCY_NUMBERS = {
   policia: '190',
 } as const;
 
-/** Rótulo gravado no diário de bordo quando a ação é acionada. */
+/** Texto gravado no diário de bordo quando a ação é usada. */
 export const EMERGENCY_LABELS: Record<EmergencyAction, string> = {
   hospital: 'Emergência: Hospital',
   samu: 'Emergência: SAMU 192',
@@ -40,9 +35,8 @@ export function hospitalSearchUrl(near: Coordinate | null): string {
 }
 
 /**
- * Executa a ação. Devolve `false` se o aparelho não conseguiu abrir — um
- * tablet sem telefonia, por exemplo —, para a tela mostrar o número por
- * escrito em vez de falhar calada.
+ * Executa a ação. Devolve `false` se o celular não conseguiu abrir (ex.:
+ * tablet sem telefone), para a tela mostrar o número escrito.
  */
 export async function runEmergencyAction(
   action: EmergencyAction,

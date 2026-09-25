@@ -3,20 +3,16 @@ import * as Location from 'expo-location';
 import type { Coordinate } from '@/features/map/types/coordinate';
 
 /**
- * Rastreamento contínuo de posição, para a viagem em andamento.
+ * Acompanhamento contínuo da posição durante a viagem.
  *
- * Separado de `location-service.ts` porque o problema é outro: lá a pergunta é
- * "onde estou agora", respondida uma vez ao abrir a tela; aqui é "onde estou
- * a cada instante", enquanto o trajeto acontece.
- *
- * Só *foreground*: o rastreamento vive enquanto a tela de viagem está aberta.
- * Localização em segundo plano exige justificativa nas lojas e um módulo de
- * tarefas — fica para quando a navegação puder continuar com o app fechado.
+ * Diferente de `location-service.ts` (uma leitura só ao abrir a tela), aqui as
+ * leituras continuam chegando enquanto a tela de viagem está aberta. Só
+ * funciona com o app aberto (sem segundo plano).
  *
  * @see https://docs.expo.dev/versions/v57.0.0/sdk/location/
  */
 
-/** Leitura de posição enriquecida com o que a navegação aproveita. */
+/** Uma leitura de posição, com os dados extras que a navegação usa. */
 export type TrackedPosition = {
   coordinate: Coordinate;
   /** Velocidade em m/s, quando o aparelho informa. */
@@ -39,16 +35,11 @@ export type StartTrackingParams = {
 };
 
 /**
- * Precisão e cadência das leituras.
+ * Precisão e frequência das leituras.
  *
- * `BestForNavigation` é o nível mais alto, que soma sensores adicionais à
- * leitura — é o que a plataforma oferece para trajeto em movimento, e custa
- * bateria à altura. Aceitável porque o rastreamento só existe com a tela de
- * viagem aberta.
- *
- * `distanceInterval` de 10 m é o que evita a enxurrada de atualizações com o
- * carro parado no semáforo: sem ele, uma leitura por segundo redesenharia a
- * tela sem nada ter mudado. O `timeInterval` é o teto no Android.
+ * `BestForNavigation` é a precisão máxima (gasta mais bateria, mas só com a
+ * tela de viagem aberta). `distanceInterval: 10` evita leituras repetidas com
+ * o carro parado no semáforo.
  */
 const TRACKING_OPTIONS: Location.LocationOptions = {
   accuracy: Location.Accuracy.BestForNavigation,
@@ -72,9 +63,8 @@ function toTrackedPosition(location: Location.LocationObject): TrackedPosition {
 /**
  * Começa a acompanhar a posição.
  *
- * Nunca lança: toda falha chega por `onError`, para que a tela de viagem
- * continue de pé mostrando a rota — sem GPS ela perde o acompanhamento, não a
- * utilidade.
+ * Nunca lança erro: as falhas chegam por `onError`, e a tela continua
+ * mostrando a rota mesmo sem GPS.
  */
 export async function startTracking({
   onPosition,
@@ -98,9 +88,7 @@ export async function startTracking({
     return await Location.watchPositionAsync(
       TRACKING_OPTIONS,
       (location) => onPosition(toTrackedPosition(location)),
-      // O terceiro parâmetro recebe falhas que acontecem *depois* de o
-      // rastreamento começar — sinal perdido, GPS desligado no meio do
-      // trajeto. Sem ele, a tela ficaria congelada sem explicação.
+      // Recebe falhas que acontecem depois de começar (sinal perdido, GPS desligado).
       (error) => onError(String(error)),
     );
   } catch {

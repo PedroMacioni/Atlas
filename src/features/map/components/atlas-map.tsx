@@ -54,51 +54,29 @@ export type AtlasMapProps = {
   /** Desenha o marcador de destino. */
   showsDestinationMarker?: boolean;
   /**
-   * `route` enquadra o trajeto inteiro; `user` acompanha a posição atual;
-   * `navigation` ativa câmera 3D inclinada com rotação baseada no heading.
+   * `route` mostra o trajeto inteiro; `user` acompanha a posição;
+   * `navigation` usa a câmera 3D inclinada, girando com a direção.
    */
   focus?: 'route' | 'user' | 'navigation';
   /**
-   * Direção do movimento em graus (0-360), a partir do norte. No modo
-   * `navigation` ela gira a câmera e a seta do usuário.
-   *
-   * Quem chama prefere o rumo da rota ao do aparelho: o do aparelho oscila
-   * com o carro parado e some em velocidade baixa.
+   * Direção do movimento em graus (0 = norte). No modo `navigation` gira a
+   * câmera e a seta. Quem chama prefere o rumo da rua ao do celular.
    */
   userHeading?: number | null;
-  /**
-   * Índice do ponto atual na rota. Usado no modo `navigation` para
-   * dividir a polyline em trecho percorrido (opaco) e pendente (vibrante).
-   */
+  /** Índice do ponto atual na rota. Divide a linha em trecho percorrido e trecho que falta. */
   routeProgressIndex?: number;
   routeProgressPoint?: Coordinate | null;
-  /**
-   * `card` arredonda os cantos, para o mapa que convive com outros elementos.
-   * `full` encosta nas bordas, para a navegação — onde o mapa é a tela, e não
-   * um bloco dentro dela.
-   */
+  /** `card` tem cantos arredondados; `full` ocupa a tela inteira (navegação). */
   shape?: 'card' | 'full';
-  /**
-   * Respiro que a câmera reserva nas bordas ao enquadrar a rota.
-   *
-   * Na navegação a faixa de instrução e o painel inferior cobrem parte do
-   * mapa, e sem esse ajuste o trajeto seria enquadrado atrás deles.
-   */
+  /** Espaço reservado nas bordas ao enquadrar a rota (para não ficar atrás dos painéis). */
   edgePadding?: Partial<EdgePadding>;
   /** Paradas registradas, desenhadas como marcadores numerados na ordem. */
   stops?: Coordinate[];
-  /**
-   * `false` congela o mapa (sem arrastar nem zoom). Para o mapa que vive
-   * dentro de uma tela que rola, onde o gesto do mapa roubaria a rolagem.
-   */
+  /** `false` trava o mapa (sem arrastar nem zoom), para não atrapalhar a rolagem da tela. */
   interactive?: boolean;
 };
 
-/**
- * Espaçamento aplicado ao enquadrar a rota. Os valores são relativos ao mapa
- * e proporcionais o bastante para não esconder a Polyline atrás dos elementos
- * flutuantes em telas pequenas.
- */
+/** Margens ao enquadrar a rota. */
 const EDGE_PADDING: EdgePadding = {
   top: 72,
   right: 64,
@@ -109,14 +87,7 @@ const EDGE_PADDING: EdgePadding = {
 /** Enquadramento ao centralizar na posição do usuário, sob demanda. */
 const USER_FOCUS_DELTA = 0.045;
 
-/**
- * Enquadramento do acompanhamento contínuo — mais fechado que o de
- * centralizar.
- *
- * Cerca de 300-400 metros de janela: próximo o bastante para parecer o Waze,
- * mostrando a próxima curva sem perder o contexto. No zoom de
- * `USER_FOCUS_DELTA` o carro pareceria imóvel.
- */
+/** Zoom do acompanhamento contínuo: uma janela de uns 300–400 m. */
 const FOLLOW_DELTA = 0.0025;
 
 /** Duração das transições de câmera. */
@@ -134,10 +105,7 @@ function buildInitialRegion(origin: Coordinate, destination: Coordinate): Region
   return { latitude, longitude, latitudeDelta, longitudeDelta };
 }
 
-/**
- * Apresentação do mapa. Não busca dados e não conhece serviços: recebe tudo
- * por props e apenas desenha.
- */
+/** Componente do mapa. Não busca dados: recebe tudo por props e só desenha. */
 export function AtlasMap({
   ref,
   currentLocation,
@@ -209,11 +177,8 @@ export function AtlasMap({
   }, [focus, currentLocation, origin, destination]);
 
   /**
-   * Onde a parada aceita cai na rota.
-   *
-   * A rota já passa por ela — foi recalculada com a parada como ponto
-   * intermediário —, então basta achar o vértice mais próximo para saber onde
-   * o desvio termina. `null` quando não há parada.
+   * Em que ponto da rota fica a parada aceita. A rota já passa por ela, então
+   * basta achar o ponto mais próximo. `null` quando não há parada.
    */
   const stopOnRoute = useMemo(() => {
     const stop = stops?.[0];
@@ -223,12 +188,10 @@ export function AtlasMap({
     }
 
     return findNearestPointOnRoute(stop, routeCoordinates).index;
-    // Fora das dependências fica o progresso: ele muda a cada leitura, e
-    // varrer a rota inteira quatro vezes por segundo para achar um ponto que
-    // não saiu do lugar seria desperdício.
+    // O progresso fica fora das dependências: a parada não muda de lugar a cada leitura do GPS.
   }, [focus, stops, routeCoordinates]);
 
-  /** Some assim que a parada fica para trás: o desvio acabou. */
+  /** Some quando a parada fica para trás. */
   const stopIndex = stopOnRoute !== null && stopOnRoute > routeProgressIndex ? stopOnRoute : null;
 
   /** Trechos percorrido, até a parada e até o destino, cortados na posição do carro. */
@@ -269,9 +232,8 @@ export function AtlasMap({
   }, [currentLocation]);
 
   /**
-   * A câmera de navegação: inclinada, girada com o movimento e centrada um
-   * pouco **à frente** de quem dirige, para a estrada ocupar a tela e o carro
-   * ficar na parte de baixo.
+   * Câmera de navegação: inclinada, girando com o movimento e centrada um pouco
+   * À FRENTE do carro, para a estrada ocupar a tela.
    */
   const navigationCamera = useCallback(
     (at: Coordinate) => {
@@ -308,22 +270,14 @@ export function AtlasMap({
 
   useImperativeHandle(ref, () => ({ fitRoute, centerOnUser, goToNavigation }), [fitRoute, centerOnUser, goToNavigation]);
 
-  // Enquadra a rota sozinho assim que ela chega — mas só depois que o mapa
-  // nativo está montado, senão `fitToCoordinates` é ignorado silenciosamente.
+  // Enquadra a rota quando ela chega, mas só depois do mapa estar pronto.
   useEffect(() => {
     if (focus === 'route' && isMapReady && routeCoordinates.length >= 2) {
       fitRoute();
     }
   }, [focus, isMapReady, routeCoordinates, fitRoute]);
 
-  /**
-   * Acompanha a posição enquanto o foco é o usuário.
-   *
-   * A dependência é a coordenada em si, não o objeto: durante a viagem chega
-   * uma leitura a cada dez metros, e reagir à identidade do objeto animaria a
-   * câmera mesmo quando o aparelho reporta a mesma posição — o que acontece
-   * com o carro parado.
-   */
+  /** Acompanha a posição quando o foco é o usuário. */
   useEffect(() => {
     if (focus !== 'user' || !isMapReady || !currentLocation) {
       return;
@@ -338,26 +292,17 @@ export function AtlasMap({
       },
       ANIMATION_MS,
     );
-    // `currentLocation` inteiro fora das dependências é deliberado: as duas
-    // coordenadas já cobrem tudo que o efeito lê, e o objeto muda de
-    // identidade a cada leitura do GPS mesmo quando a posição é a mesma.
+    // Usa só latitude e longitude: o objeto muda a cada leitura mesmo com a posição igual.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude]);
 
   /**
-   * Acompanhamento em modo navegação.
+   * Acompanhamento no modo navegação.
    *
-   * Duas coisas separadas, e é a diferença entre elas que tirava a fluidez:
-   *
-   * - **A primeira posição não se anima.** Ela costuma estar longe do
-   *   enquadramento inicial — no modo de demonstração, 58 km adiante — e
-   *   animar até lá é uma viagem de câmera sobre o mapa inteiro, carregando
-   *   telas de todo o caminho. `setCamera` põe a câmera no lugar de uma vez.
-   * - **Depois, a animação dura o que durou o intervalo.** Cada leitura anima
-   *   pelo tempo que separou as duas últimas, então a câmera ainda está
-   *   chegando quando a próxima chega, e o movimento não tem buraco. Uma
-   *   duração fixa, menor que o intervalo, é o que faz o mapa andar aos
-   *   trancos.
+   * - A primeira posição não é animada: a câmera vai direto para lá (animar
+   *   poderia atravessar o mapa inteiro).
+   * - Depois, cada leitura anima a câmera por um tempo curto (entre 90 e
+   *   180 ms, perto do intervalo entre as leituras) para o movimento ficar suave.
    */
   const hasCenteredOnUser = useRef(false);
   const lastCameraMoveAt = useRef<number | null>(null);
@@ -381,8 +326,7 @@ export function AtlasMap({
     mapRef.current?.animateCamera(camera, {
       duration: Math.min(180, Math.max(90, sinceLastMove ?? 110)),
     });
-    // `currentLocation` inteiro fora das dependências é deliberado: as duas
-    // coordenadas já cobrem tudo que o efeito lê.
+    // Usa só latitude e longitude, como no efeito acima.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, isMapReady, currentLocation?.latitude, currentLocation?.longitude, navigationCamera]);
 
@@ -405,7 +349,7 @@ export function AtlasMap({
         loadingEnabled
         loadingBackgroundColor={colors.surfaceMuted}
         loadingIndicatorColor={colors.primary}>
-        {/* Modo navigation: duas polylines (percorrido + pendente) */}
+        {/* Modo navegação: duas linhas (percorrido e pendente) */}
         {focus === 'navigation' && segments.completed.length >= 2 ? (
           <Polyline
             coordinates={segments.completed}
@@ -436,7 +380,7 @@ export function AtlasMap({
           />
         ) : null}
 
-        {/* Modos route/user: polyline única */}
+        {/* Outros modos: uma linha só */}
         {focus !== 'navigation' && routeCoordinates.length >= 2 ? (
           <Polyline
             coordinates={routeCoordinates}
@@ -475,13 +419,9 @@ export function AtlasMap({
         ))}
 
         {/*
-          Modo navegação: seta customizada no lugar do ponto azul nativo.
-
-          A rotação é uma só, pela prop `rotation` do marcador, e em graus a
-          partir do norte **do mapa** — que é o que `flat` significa: o
-          marcador está deitado sobre o mapa e gira com ele. Girar também a
-          View por CSS somaria o giro da câmera ao do marcador, e a seta
-          apontaria para qualquer lado menos o da rua.
+          Modo navegação: seta própria no lugar do ponto azul nativo. `flat` deixa a
+          seta "deitada" no mapa, girando junto com ele; `rotation` aponta para a
+          direção da rua.
         */}
         {focus === 'navigation' && currentLocation ? (
           <Marker.Animated
@@ -497,12 +437,8 @@ export function AtlasMap({
         ) : null}
 
         {/*
-          Com permissão concedida, `showsUserLocation` já desenha o ponto azul
-          nativo da plataforma; não duplicamos um Marker. Sem permissão, nada
-          é renderizado e `currentLocation` segue disponível para lógica de
-          câmera futura.
-
-          No modo navegação, a seta customizada substitui o ponto azul.
+          Com permissão, `showsUserLocation` já desenha o ponto azul nativo. Sem ele,
+          mostramos um marcador simples. No modo navegação a seta substitui os dois.
         */}
         {focus !== 'navigation' && !showsUserLocation && currentLocation ? (
           <Marker coordinate={currentLocation} title="Você está aqui" pinColor={colors.primary} />
@@ -533,10 +469,7 @@ export function AtlasMap({
 
 const styles = StyleSheet.create({
   container: {
-    /**
-     * Preenche o espaço que a tela reservar. Quem decide a altura é o layout
-     * pai, com flexbox — nunca `Dimensions.get`.
-     */
+    /** Ocupa o espaço que a tela reservar (quem define a altura é o layout pai). */
     flex: 1,
     overflow: 'hidden',
     backgroundColor: colors.surfaceMuted,
@@ -565,7 +498,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     ...shadows.card,
   },
-  /** Container da seta de navegação com sombra para destacar do mapa. */
+  /** Fundo da seta de navegação, com sombra para destacar do mapa. */
   arrowContainer: {
     width: 44,
     height: 44,

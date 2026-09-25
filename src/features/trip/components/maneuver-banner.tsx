@@ -16,12 +16,9 @@ export type ManeuverBannerProps = {
 /**
  * Faixa de instrução no topo da viagem.
  *
- * A hierarquia é a de quem lê dirigindo: a distância primeiro, grande, porque
- * é o que decide se a ação é agora ou depois; a instrução em seguida, em duas
- * linhas no máximo; o ícone à esquerda, que é lido antes de qualquer palavra.
- *
- * Fundo escuro de propósito — é o único elemento da tela que precisa vencer o
- * mapa em contraste, e a inversão o separa do resto sem precisar de moldura.
+ * A distância vem primeiro e grande (diz se a manobra é agora ou depois), a
+ * instrução em seguida e o ícone à esquerda. O fundo escuro destaca a faixa
+ * sobre o mapa.
  */
 export function ManeuverBanner({ maneuver }: ManeuverBannerProps) {
   const { instruction, icon } = describeManeuver(maneuver.step);

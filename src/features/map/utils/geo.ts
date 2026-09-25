@@ -1,29 +1,18 @@
+import { distanceBetween } from '@/utils/geo';
+
 import type { Coordinate } from '../types/coordinate';
 
-const EARTH_RADIUS_METERS = 6371000;
-
 /**
- * Calcula a distância em metros entre duas coordenadas usando fórmula de Haversine
+ * Distância em metros entre duas coordenadas (fórmula de Haversine).
+ * Usa a mesma função de `utils/geo.ts`, para o app ter um cálculo só.
  */
 export function haversineDistance(a: Coordinate, b: Coordinate): number {
-  const dLat = toRadians(b.latitude - a.latitude);
-  const dLng = toRadians(b.longitude - a.longitude);
-
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLng = Math.sin(dLng / 2);
-
-  const h =
-    sinDLat * sinDLat +
-    Math.cos(toRadians(a.latitude)) * Math.cos(toRadians(b.latitude)) * sinDLng * sinDLng;
-
-  const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-
-  return EARTH_RADIUS_METERS * c;
+  return distanceBetween(a, b);
 }
 
 /**
- * Calcula o heading (direção) em graus de `from` para `to`.
- * Retorna null se a distância for menor que `minDistance` metros.
+ * Direção (rumo) em graus de `from` para `to`: 0 = norte, 90 = leste.
+ * Devolve `null` se os pontos estiverem a menos de `minDistance` metros.
  */
 export function calculateHeading(
   from: Coordinate,

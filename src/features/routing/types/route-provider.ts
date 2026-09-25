@@ -5,29 +5,27 @@ export type GetRouteParams = {
   origin: Coordinate;
   destination: Coordinate;
   /**
-   * Paradas no meio do caminho, em ordem. É como um desvio aceito pelo
-   * usuário — um posto sugerido pelo Atlas — entra na rota sem trocar o
-   * destino da viagem.
+   * Paradas no meio do caminho, em ordem. É assim que um desvio aceito (um
+   * posto sugerido pelo Atlas) entra na rota sem trocar o destino.
    */
   waypoints?: Coordinate[];
-  /** Permite cancelar a consulta quando a tela é desmontada. */
+  /** Permite cancelar a consulta (ex.: quando a tela fecha). */
   signal?: AbortSignal;
 };
 
 /**
- * Contrato que qualquer serviço de rotas precisa cumprir.
+ * Contrato que todo serviço de rotas precisa seguir.
  *
- * Trocar OSRM por Google Routes ou Mapbox Directions significa escrever uma
- * nova implementação deste tipo e registrá-la em `route-service.ts`. Nenhum
- * componente de interface precisa mudar.
+ * Para trocar o OSRM por Google Routes ou Mapbox, basta criar outra
+ * implementação deste tipo e registrar em `route-service.ts`. As telas não mudam.
  */
 export type RouteProvider = {
-  /** Identificador legível, usado em logs e mensagens de diagnóstico. */
+  /** Nome do serviço, usado em logs e diagnóstico. */
   readonly id: string;
   getRoute(params: GetRouteParams): Promise<RouteResult>;
 };
 
-/** Erro de domínio da camada de rotas, independente do provider. */
+/** Erro da camada de rotas, igual para qualquer serviço. */
 export class RouteError extends Error {
   readonly cause?: unknown;
 

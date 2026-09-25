@@ -19,8 +19,7 @@ export type TripHistoryCardProps = {
 
 /**
  * Card de uma viagem no histórico (RF-28): data, destino, distância, duração,
- * paradas e emoção predominante — os seis campos que o escopo pede, nesta
- * ordem de leitura.
+ * paradas e emoção predominante.
  */
 export function TripHistoryCard({ trip, onPress }: TripHistoryCardProps) {
   const inProgress = trip.endedAt === null;

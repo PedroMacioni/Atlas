@@ -18,7 +18,7 @@ import { spacing } from '@/theme/spacing';
 
 const EMPTY_ROUTE: never[] = [];
 
-/** Mapa em tela cheia; a busca é a única entrada para iniciar uma viagem. */
+/** Tela inicial: mapa em tela cheia, busca "Para onde?", voz e emergência. */
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -84,12 +84,7 @@ export default function HomeScreen() {
               onLongPress={wake.available ? wake.toggle : undefined}
             />
           ) : null}
-          {/*
-            Viagem de demonstração: Taquaral, em Campinas, até a São Paulo
-            Expo, já na metade do caminho. É o que abre a tela de viagem em
-            andamento sem precisar dirigir — para a apresentação, e para
-            conferir na mão o que só apareceria depois de horas de estrada.
-          */}
+          {/* Viagem de demonstração: Campinas → São Paulo Expo, já na metade do caminho (para a apresentação). */}
           <FloatingIconButton
             size="lg"
             icon="flask-outline"
@@ -97,10 +92,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/trip?demo=1')}
           />
 
-          {/*
-            Modo apresentação: demo guiado com 7 atos para gravação de vídeo.
-            Só existe com `EXPO_PUBLIC_DEV_MODE` ligada.
-          */}
+          {/* Modo apresentação: demonstração guiada em 10 atos. Só aparece com `EXPO_PUBLIC_DEV_MODE` ligada. */}
           {DEV_MODE ? (
             <FloatingIconButton
               size="lg"

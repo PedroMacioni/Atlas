@@ -14,11 +14,10 @@ import type {
 } from '@/features/recommendation/types/recommendation';
 
 /**
- * De quanto em quanto tempo o app pergunta "é hora?".
+ * De quanto em quanto tempo o app pergunta "é hora de avaliar?".
  *
- * Não é a cadência do modelo — essa é de 1 hora, e decidida no backend, junto
- * com as mudanças relevantes. Cinco minutos é o atraso máximo entre uma
- * mudança acontecer (uma leitura de cansaço, por exemplo) e o Atlas reagir.
+ * Quem decide a avaliação (a cada 1 hora ou quando algo muda) é o backend.
+ * Cinco minutos é o atraso máximo para o Atlas reagir a uma mudança.
  */
 const CHECK_INTERVAL_MS = 5 * 60 * 1_000;
 
@@ -37,11 +36,10 @@ export type RecommendationsState = {
   isAsking: boolean;
   error: string | null;
   /**
-   * "Atlas, preciso abastecer ou descansar" — sempre responde.
+   * "Atlas, preciso abastecer ou descansar": sempre responde.
    *
-   * Com `simulation`, as variáveis informadas substituem as reais e a
-   * avaliação é registrada como simulação: é o que a viagem de demonstração
-   * usa para perguntar "e se eu estivesse há uma hora na estrada?".
+   * Com `simulation`, os valores informados substituem os reais (usado na
+   * viagem de demonstração).
    */
   ask: (simulation?: SimulationOverrides) => void;
   /** Aceita ou recusa a recomendação atual. */
@@ -52,10 +50,9 @@ export type RecommendationsState = {
 /**
  * Recomendações durante a viagem (RF-17 a RF-20).
  *
- * Consulta o backend periodicamente com `check`; quando ele diz que vale
- * interromper, a recomendação vira `current` — a tela mostra e fala. Nenhuma
- * decisão é tomada aqui — o modelo, a política de quando avaliar e o tempo de
- * espera moram na API, onde está o diário inteiro.
+ * Pergunta ao backend de tempos em tempos (`check`). Quando ele diz que vale
+ * avisar, a recomendação vira `current` e a tela mostra e fala. Nenhuma
+ * decisão é tomada no app: modelo e regras ficam na API.
  */
 export function useRecommendations({
   tripId,
@@ -67,8 +64,7 @@ export function useRecommendations({
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Falar a recomendação é da tela: é ela que sabe se, depois de falar, deve
-  // ouvir a confirmação por voz — e as duas coisas não podem se sobrepor.
+  // Falar a recomendação é papel da tela (ela sabe se depois deve ouvir a resposta).
   const handle = useCallback((response: RecommendationResponse) => {
     if (response.assistance) {
       setAssistance(true);
@@ -97,9 +93,8 @@ export function useRecommendations({
     [tripId, traveledMeters, location, handle],
   );
 
-  // O intervalo é criado uma vez por viagem, mas cada tique precisa da
-  // distância e da posição de agora: o ref guarda sempre o `evaluate` mais
-  // recente, e é atualizado num efeito — nunca durante a renderização.
+  // O intervalo é criado uma vez por viagem, mas cada consulta precisa da
+  // distância e posição atuais. O ref guarda sempre o `evaluate` mais recente.
   const latestEvaluate = useRef(evaluate);
 
   useEffect(() => {
@@ -112,8 +107,7 @@ export function useRecommendations({
     }
 
     const intervalId = setInterval(() => {
-      // Falha silenciosa: uma consulta periódica perdida é só adiada para a
-      // próxima. Quem precisa saber do erro é quem pediu (`ask`).
+      // Se uma consulta periódica falhar, tenta de novo na próxima.
       latestEvaluate.current('check').catch(() => {});
     }, CHECK_INTERVAL_MS);
 

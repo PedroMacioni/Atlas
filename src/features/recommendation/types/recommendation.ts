@@ -2,11 +2,11 @@ import type { Coordinate } from '@/features/map/types/coordinate';
 import type { Decision, Emotion, ImageClass } from '@/features/trip-session/types/trip';
 
 /**
- * O formato de `/v1/trips/{id}/recommendations`.
+ * Formato de `/v1/trips/{id}/recommendations`.
  *
- * - `check`: consulta periódica — o backend decide se é hora (RF-18).
- * - `manual`: "Atlas, preciso abastecer ou descansar" — sempre responde.
- * - `simulation`: modo de demonstração, com as variáveis trocadas.
+ * - `check`: consulta periódica (o backend decide se é hora, RF-18).
+ * - `manual`: "Atlas, preciso abastecer ou descansar" (sempre responde).
+ * - `simulation`: modo de demonstração, com valores trocados.
  */
 export type RecommendationTrigger = 'check' | 'manual' | 'simulation';
 
@@ -32,7 +32,7 @@ export type Contribution = {
   variable: string;
   label: string;
   value: string;
-  /** Quanto a variável empurrou a probabilidade da decisão escolhida. */
+  /** Quanto a variável aumentou (ou diminuiu) a chance da decisão escolhida. */
   weight: number;
 };
 
@@ -48,13 +48,13 @@ export type Recommendation = {
   features: Record<string, number | string>;
   simulated: boolean;
   modelVersion: string;
-  /** Tudo que não for CONTINUAR pede confirmação antes de mexer na rota. */
+  /** Tudo que não for CONTINUAR pede confirmação antes de mudar a rota. */
   requiresConfirmation: boolean;
 };
 
 export type RecommendationResponse = {
   evaluated: boolean;
-  /** Vale interromper o motorista: mostrar e falar. */
+  /** Vale a pena avisar o motorista: mostrar e falar. */
   notify: boolean;
   reason: string | null;
   /** Tensão forte na voz: oferecer a emergência em vez de recomendar. */

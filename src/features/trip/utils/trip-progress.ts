@@ -1,19 +1,14 @@
 /**
- * Progresso da viagem: onde o usuário está na rota, e quanto falta.
+ * Progresso da viagem: onde o usuário está na rota e quanto falta.
  *
- * Função pura sobre a geometria e uma posição. Não sabe de React, de GPS nem
- * de mapa — recebe pontos e devolve números, o que a torna testável sem
- * simulador e sem sair do lugar.
+ * Função pura: recebe a rota e a posição e devolve números (fácil de testar).
  */
 
 import type { Coordinate } from '@/features/map/types/coordinate';
 import { calculateHeading } from '@/features/map/utils/geo';
 import { buildCumulativeDistances, distanceBetween, projectOnSegment } from '@/utils/geo';
 
-/**
- * Tabela de distâncias de uma rota, calculada uma vez e reaproveitada em cada
- * leitura do GPS.
- */
+/** Tabela de distâncias da rota, calculada uma vez e usada em cada leitura do GPS. */
 export type RouteGeometry = {
   coordinates: Coordinate[];
   /** Distância acumulada até cada vértice. */
@@ -43,45 +38,38 @@ export type TripProgress = {
   fraction: number;
   /** Ponto da rota mais próximo da posição atual. */
   snappedPoint: Coordinate;
-  /** Índice do vértice onde a busca parou, para continuar dali na próxima. */
+  /** Índice do ponto onde a busca parou, para continuar dali na próxima. */
   nearestIndex: number;
   /**
-   * Direção da rua em que se está, em graus — o rumo do trecho de rota sob a
-   * posição, não o do aparelho.
-   *
-   * É o que faz a seta apontar para onde a via segue, como nos aplicativos de
-   * navegação. O heading do GPS oscila com o carro parado e some em
-   * velocidade baixa; o da rota é estável e sempre existe.
+   * Direção da rua (em graus) no ponto da rota onde o usuário está, e não a do
+   * celular. Faz a seta apontar para onde a rua segue; o rumo do GPS oscila com
+   * o carro parado.
    */
   courseDegrees: number | null;
   /** Distância entre a posição real e a rota, em metros. */
   offRouteMeters: number;
-  /** `true` quando o usuário está longe o bastante para o progresso não valer. */
+  /** `true` quando o usuário está longe demais da rota. */
   isOffRoute: boolean;
   /** `true` quando o destino está a poucos metros. */
   hasArrived: boolean;
 };
 
 /**
- * A partir desta distância da rota, consideramos que o usuário saiu dela.
- *
- * Generoso de propósito: 60 m absorve imprecisão de GPS em cidade, viadutos e
- * vias marginais paralelas à principal, sem declarar desvio a cada oscilação.
+ * A partir desta distância consideramos que o usuário saiu da rota. 60 m
+ * absorve erro de GPS, viadutos e ruas paralelas.
  */
 const OFF_ROUTE_THRESHOLD_METERS = 60;
 
-/** Distância do destino a partir da qual a viagem é considerada concluída. */
+/** A esta distância do destino a viagem é considerada concluída. */
 const ARRIVAL_THRESHOLD_METERS = 40;
 
 /**
- * Quantos vértices à frente a busca olha antes de desistir e varrer a rota
- * inteira.
+ * Quantos pontos à frente a busca olha antes de procurar na rota inteira.
  *
- * A busca começa no último vértice alcançado e caminha para frente, porque o
- * progresso não retrocede. Isso resolve o caso em que a rota passa duas vezes
- * pelo mesmo lugar — ida e volta na mesma avenida, um retorno, um trecho que
- * se cruza: uma busca global casaria a posição com o trecho errado e o tempo
- * restante saltaria para trás.
+ * A busca começa no último ponto alcançado e vai para frente, porque o
+ * progresso não volta. Isso resolve rotas que passam duas vezes pelo mesmo
+ * lugar (ida e volta na mesma avenida): uma busca na rota toda poderia achar
+ * o trecho errado.
  */
 const FORWARD_WINDOW = 400;
 
@@ -111,9 +99,7 @@ export function computeTripProgress({
 
   let best = findNearestSegment(position, geometry, start, start + FORWARD_WINDOW);
 
-  // Longe da janela à frente? Pode ter havido um atalho, um desvio, ou o
-  // aparelho ficou sem sinal por um trecho. Vale varrer tudo antes de
-  // declarar que saiu da rota.
+  // Longe da janela à frente (atalho, desvio ou sem sinal)? Procura na rota inteira.
   if (best.distanceMeters > OFF_ROUTE_THRESHOLD_METERS) {
     const global = findNearestSegment(position, geometry, 0, coordinates.length - 2);
 
@@ -131,10 +117,8 @@ export function computeTripProgress({
   const remainingMeters = Math.max(0, totalMeters - traveledMeters);
   const fraction = Math.min(1, Math.max(0, traveledMeters / totalMeters));
 
-  // O tempo restante é proporcional à distância restante. É uma estimativa
-  // honesta e não uma previsão: o serviço de rotas entregou uma duração para o
-  // trajeto inteiro, sem trânsito, e não há dado novo para refiná-la. A
-  // previsão de verdade é a fase do modelo de histórico.
+  // Tempo restante proporcional à distância restante. É uma estimativa simples:
+  // o serviço de rotas deu uma duração para o trajeto todo, sem trânsito.
   const remainingSeconds = totalDurationSeconds * (1 - fraction);
 
   const destination = coordinates[coordinates.length - 1];
@@ -146,8 +130,7 @@ export function computeTripProgress({
     fraction,
     snappedPoint: best.point,
     nearestIndex: best.index,
-    // Vértices de rota ficam a poucos metros um do outro: o mínimo padrão de
-    // 5 m descartaria a maioria dos segmentos.
+    // Os pontos da rota ficam muito próximos: sem este 0, o mínimo de 5 m ignoraria a maioria.
     courseDegrees: calculateHeading(coordinates[best.index], coordinates[best.index + 1], 0),
     offRouteMeters: best.distanceMeters,
     isOffRoute: best.distanceMeters > OFF_ROUTE_THRESHOLD_METERS,
@@ -162,7 +145,7 @@ type NearestSegment = {
   distanceMeters: number;
 };
 
-/** Varre uma faixa de segmentos e devolve o mais próximo da posição. */
+/** Procura, num intervalo de segmentos, o mais próximo da posição. */
 function findNearestSegment(
   position: Coordinate,
   geometry: RouteGeometry,

@@ -11,15 +11,15 @@ import {
 export type RecentDestinationsState = {
   places: Place[];
   isLoading: boolean;
-  /** `true` quando o histórico não pôde ser lido — sem API ou sem rede. */
+  /** `true` quando o histórico não pôde ser lido (sem API ou sem rede). */
   unavailable: boolean;
 };
 
 /**
- * Os últimos destinos do aparelho, tirados do histórico de viagens.
+ * Últimos destinos do aparelho, tirados do histórico de viagens.
  *
- * Recarrega sempre que a tela ganha foco: quem volta de uma viagem vê o
- * destino dela no topo da lista.
+ * Recarrega sempre que a tela aparece: quem volta de uma viagem já vê o
+ * destino dela no topo.
  */
 export function useRecentDestinations(): RecentDestinationsState {
   const available = isTripHistoryAvailable();

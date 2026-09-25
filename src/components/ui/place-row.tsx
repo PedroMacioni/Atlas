@@ -18,11 +18,7 @@ export type PlaceRowProps = {
   onPress?: () => void;
 };
 
-/**
- * Linha de lugar: ícone circular, nome, referência e uma coluna opcional à
- * direita. É a unidade de lista usada na busca de destino e, adiante, nas
- * opções próximas e nas sugestões de parada.
- */
+/** Linha de lugar: ícone, nome, endereço e uma coluna opcional à direita. */
 export function PlaceRow({
   icon,
   iconColor = 'primary',

@@ -7,14 +7,10 @@ export type SpotlightOverlayProps = PropsWithChildren<{
 }>;
 
 /**
- * Overlay escuro sobre toda a tela.
+ * Camada escura sobre a tela, usada no modo apresentação.
  *
- * Quando `active` é true, o overlay aparece com opacity 0.6.
- * Os filhos são renderizados normalmente sobre o overlay.
- *
- * O spotlight "buraco" para elementos específicos será implementado
- * via z-index elevado nos componentes que devem ficar destacados,
- * já que SVG masks têm performance ruim no React Native.
+ * Com `active`, escurece a tela. O elemento em destaque fica visível porque
+ * recebe um `zIndex` maior (máscaras SVG seriam lentas no React Native).
  */
 export function SpotlightOverlay({ active, children }: SpotlightOverlayProps) {
   const opacity = useDerivedValue(() => {

@@ -11,18 +11,12 @@ export type FloatingIconButtonProps = {
   icon: IconName;
   onPress: () => void;
   /**
-   * O que a ação faz, para leitores de tela.
-   *
-   * Obrigatório, e não opcional: um botão sem rótulo visível é invisível para
-   * quem não vê o ícone. É a única descrição que o controle tem.
+   * O que o botão faz, para leitores de tela. Obrigatório, porque o botão não
+   * tem texto visível.
    */
   accessibilityLabel: string;
   iconColor?: ColorToken;
-  /**
-   * `md` é o alvo mínimo de toque das duas plataformas (44 pt). `lg` é para o
-   * controle principal sobre o mapa, que precisa ser acertado de relance com
-   * o carro em movimento.
-   */
+  /** `md` = 44 pt (tamanho mínimo de toque); `lg` = botão principal sobre o mapa. */
   size?: 'md' | 'lg';
   /** Ação secundária, por toque longo — descrita em `accessibilityHint`. */
   onLongPress?: () => void;
@@ -37,12 +31,8 @@ const SIZES = {
 } as const;
 
 /**
- * Botão circular que flutua sobre o mapa.
- *
- * Sem rótulo de texto — é o padrão dos aplicativos de navegação, onde cada
- * palavra na tela disputa espaço com o trajeto. O tamanho não é arbitrário:
- * 44 pt é o alvo mínimo de toque recomendado pelas duas plataformas, e o
- * controle principal de uma tela usada dirigindo merece mais que o mínimo.
+ * Botão redondo que flutua sobre o mapa, só com ícone (padrão dos apps de
+ * navegação, para não tampar o trajeto).
  */
 export function FloatingIconButton({
   icon,

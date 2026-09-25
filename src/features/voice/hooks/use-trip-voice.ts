@@ -17,30 +17,24 @@ const CATEGORY_SPEECH: Record<NearbyCategory, string> = {
 
 export type TripVoiceActions = {
   registerStop: () => Promise<void>;
-  /** "Preciso abastecer ou descansar": pede avaliação ao Random Forest. */
+  /** "Preciso abastecer ou descansar": pede uma avaliação ao Random Forest. */
   askRecommendation: () => void;
   describeTripProgress: () => string;
   registerTouristSpot: () => Promise<void>;
-  /** Busca as 3 opções de uma categoria — elas serão lidas em voz alta. */
+  /** Busca as 3 opções de uma categoria (elas serão lidas em voz alta). */
   findStop: (category: NearbyCategory) => void;
   openEmergency: () => void;
   endTrip: () => void;
-  /**
-   * Todo comando ouvido vai para o diário de bordo (§7.1), com o áudio da
-   * fala — é dele que sai a emoção (RF-15).
-   */
+  /** Todo comando ouvido vai para o diário (§7.1), com o áudio (de onde sai a emoção, RF-15). */
   recordCommand: (transcript: string, audioUri: string | null) => void;
 };
 
 export type TripVoice = Voice & {
   /** Toque no microfone: começa a ouvir, ou encerra a escuta em curso. */
   onMicPress: () => void;
-  /**
-   * Continua a partir do que a escuta contínua já ouviu (CA-02): com um
-   * comando depois de "Atlas", ele é executado; sem nada, o Atlas escuta.
-   */
+  /** Continua a partir do que a escuta contínua ouviu (CA-02). */
   resume: (rest: string) => void;
-  /** Runs a scripted command through the same parser without recording fake speech. */
+  /** Executa um comando pronto (modo apresentação), sem gravar fala falsa no diário. */
   demoCommand: (command: string) => Promise<void>;
 };
 
@@ -51,9 +45,8 @@ const HELP =
 /**
  * Comandos de voz durante a viagem (RF-11, RF-12, §3.1).
  *
- * Um toque no microfone, uma frase, uma ação — e o Atlas responde falando
- * (RF-20). Encerrar a viagem pede confirmação por voz (RF-25). O que precisa
- * de escolha (as 3 opções de uma parada) segue na tela, que lê as opções.
+ * Um toque no microfone, uma frase, uma ação, e o Atlas responde falando
+ * (RF-20). Encerrar a viagem pede confirmação por voz (RF-25).
  */
 export function useTripVoice(actions: TripVoiceActions): TripVoice {
   const voice = useVoice();
@@ -81,8 +74,7 @@ export function useTripVoice(actions: TripVoiceActions): TripVoice {
           return;
         }
 
-        // O comando falado vai para o diário com o áudio — é dele que sai a
-        // emoção. O que a vigília ouviu de passagem não tem áudio guardado.
+        // O comando vai para o diário com o áudio (de onde sai a emoção).
         if (record) currentActions.recordCommand(heard.transcript, heard.audioUri);
         spoken = heard.transcript;
       } else {

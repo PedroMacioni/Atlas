@@ -5,27 +5,22 @@ import type { GetRouteParams, RouteProvider } from '@/features/routing/types/rou
 import type { RouteResult } from '@/features/routing/types/route-result';
 
 /**
- * Ponto único de acesso a rotas.
+ * Ponto único para pedir rotas.
  *
- * A interface só conhece `getRoute`. Qual provider responde é decidido aqui:
- * a API do Atlas quando existe uma configurada, e o OSRM público direto quando
- * não existe.
- *
- * A escolha por configuração, e não por `__DEV__`, é deliberada: quem abre o
- * projeto e roda `npx expo start` sem subir o backend continua vendo o
- * aplicativo funcionar de ponta a ponta. Definir `EXPO_PUBLIC_ATLAS_API_URL`
- * é o que move as chamadas para o servidor — sem tocar em nenhuma tela.
+ * As telas só chamam `getRoute`. Qual serviço responde é decidido aqui: a API
+ * do Atlas quando ela está configurada, ou o OSRM público direto quando não.
+ * Assim o app funciona mesmo sem o backend rodando.
  */
 let activeProvider: RouteProvider = isAtlasApiConfigured()
   ? atlasRouteProvider
   : osrmRouteProvider;
 
-/** Substitui o provider em uso (produção, testes ou feature flag). */
+/** Troca o serviço de rotas em uso (útil em testes). */
 export function setRouteProvider(provider: RouteProvider): void {
   activeProvider = provider;
 }
 
-/** Provider atualmente ativo — útil para diagnóstico e telas de debug. */
+/** Id do serviço de rotas em uso (mostrado na aba Sobre). */
 export function getRouteProviderId(): string {
   return activeProvider.id;
 }

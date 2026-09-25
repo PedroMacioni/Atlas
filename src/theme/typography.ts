@@ -7,11 +7,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import type { TextStyle } from 'react-native';
 
-/**
- * Plus Jakarta Sans é a família do design de referência: geométrica, aberta e
- * com números de altura uniforme — o que mantém as métricas ("18,6 km",
- * "23 min") alinhadas sem ajuste manual.
- */
+/** Fonte do app: Plus Jakarta Sans, carregada em vários pesos. */
 export const fontAssets = {
   'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
   'PlusJakartaSans-Medium': PlusJakartaSans_500Medium,
@@ -28,10 +24,7 @@ export const fontFamily = {
   extrabold: 'PlusJakartaSans-ExtraBold',
 } as const;
 
-/**
- * Escala tipográfica fechada. Todo texto do aplicativo usa uma destas
- * variantes — nenhum `fontSize` solto em componente.
- */
+/** Tamanhos de texto do app. Todo texto usa uma destas variantes. */
 export const textVariants = {
   /** Wordmark do cabeçalho. */
   wordmark: {
@@ -40,12 +33,7 @@ export const textVariants = {
     lineHeight: 29,
     letterSpacing: 3.2,
   },
-  /**
-   * Número que domina um painel — o horário de chegada da viagem.
-   *
-   * Maior que `title` porque não concorre com nada: é a resposta que a tela
-   * existe para dar, lida de relance e a meio metro de distância.
-   */
+  /** Número grande de destaque (ex.: horário de chegada na viagem). */
   display: {
     fontFamily: fontFamily.extrabold,
     fontSize: 40,

@@ -9,35 +9,29 @@ import type { RouteResult, RouteStep } from '@/features/routing/types/route-resu
 import { HttpError, fetchJson } from '@/utils/http';
 
 /**
- * Provider de rotas que fala com a API do Atlas.
+ * Serviço de rotas que usa a API do Atlas (o padrão quando a API está
+ * configurada).
  *
- * É o provider de produção. A diferença em relação ao `osrmRouteProvider` não
- * está no formato — os dois devolvem o mesmo `RouteResult` — e sim em quem faz
- * o trabalho: aqui o backend escolhe o serviço de rotas, guarda o resultado em
- * cache e mantém as chaves de API fora do aplicativo. Trocar OSRM por Google
- * Routes deixa de exigir um release na loja.
- *
- * O corpo da resposta já vem no formato que a interface consome, então a
- * tradução é mínima: validar e confiar só no que foi validado.
+ * Devolve o mesmo formato do `osrmRouteProvider`, mas quem faz o trabalho é o
+ * backend: ele escolhe o serviço de rotas, guarda em cache e mantém as chaves
+ * fora do app. Aqui só validamos a resposta.
  */
 const ROUTES_PATH = '/v1/routes';
 
-/** Formato de `POST /v1/routes`, na parte que consumimos. */
+/** Resposta de `POST /v1/routes` (só os campos que usamos). */
 type AtlasRouteResponse = {
   coordinates: Coordinate[];
   distanceMeters: number;
   durationSeconds: number;
-  /** Ausente em respostas de versões anteriores da API. */
+  /** Pode não vir em versões antigas da API. */
   steps?: RouteStep[];
   provider: string;
   cached: boolean;
 };
 
 /**
- * Traduz a falha em mensagem de tela.
- *
- * O código de domínio da API tem prioridade sobre o status HTTP: ele é
- * estável, descreve a causa e não muda se o transporte mudar.
+ * Converte a falha em mensagem para a tela. O `code` da API vem primeiro,
+ * porque descreve a causa melhor que o status HTTP.
  */
 function toHumanMessage(error: unknown): string {
   if (error instanceof HttpError) {
@@ -93,12 +87,8 @@ function parseRoute(payload: AtlasRouteResponse): RouteResult {
 }
 
 /**
- * Valida as manobras devolvidas pela API.
- *
- * O formato já é o do aplicativo — a API expõe exatamente o tipo `RouteStep` —
- * então aqui não há tradução, apenas a checagem de que cada item tem o que a
- * tela vai ler. Uma manobra malformada é descartada em vez de derrubar a rota:
- * instruções são um extra sobre um trajeto que já é útil sem elas.
+ * Valida as manobras que vieram da API. Uma manobra com defeito é descartada
+ * em vez de derrubar a rota inteira (as instruções são um extra).
  */
 function parseSteps(steps: RouteStep[] | undefined): RouteStep[] {
   if (!Array.isArray(steps)) {

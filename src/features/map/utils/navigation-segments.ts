@@ -6,7 +6,7 @@ export type NavigationSegments = {
   pending: Coordinate[];
 };
 
-/** Split at the projected car position so the active line never starts behind it. */
+/** Divide a rota na posição do carro: trecho percorrido, desvio até a parada e trecho que falta. */
 export function navigationSegments(
   route: Coordinate[],
   segmentIndex: number,

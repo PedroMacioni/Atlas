@@ -6,13 +6,10 @@ import type {
 } from '@/features/voice/types/voice-command';
 
 /**
- * O comando falado vai para o diário com o áudio junto (RF-15, CA-07).
+ * Envia o comando falado para o diário junto com o áudio (RF-15, CA-07).
  *
- * O arquivo já existe: é o mesmo que o reconhecimento de fala gravou para
- * entender a frase. Subir o que já está no aparelho custa uma requisição e
- * poupa gravar duas vezes o mesmo segundo de voz.
- *
- * A emoção é lida no PC da equipe, não aqui: o modelo tem 1,2 GB.
+ * O arquivo de áudio já existe: é o mesmo que o reconhecimento de fala gravou.
+ * A emoção é analisada no backend, porque o modelo tem 1,2 GB.
  */
 const TIMEOUT_MS = 30_000;
 
@@ -51,11 +48,10 @@ function guessType(name: string): string {
 }
 
 /**
- * O aviso curto de tela, ou `null` quando não há nada a dizer.
+ * Aviso curto para a tela, ou `null` quando não há nada a dizer.
  *
- * Emoção neutra não vira aviso: interromper quem dirige para informar que a
- * voz estava normal seria ruído. Uma leitura fraca também não — abaixo de
- * 0,5 de confiança o modelo está adivinhando.
+ * Emoção neutra ou leitura fraca (confiança abaixo de 0,5) não geram aviso,
+ * para não distrair o motorista à toa.
  */
 export function describeEmotion(result: VoiceCommandResult): string | null {
   if (!result.emotion || result.emotion === 'neutro') {

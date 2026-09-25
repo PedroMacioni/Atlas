@@ -1,23 +1,21 @@
 /**
  * Endereço da API do Atlas.
  *
- * Vem de `EXPO_PUBLIC_ATLAS_API_URL`, lida do `.env` pelo Expo CLI e inlinada
- * no bundle em tempo de build. A referência precisa ser literal — o Expo
- * substitui `process.env.EXPO_PUBLIC_*` estaticamente, então desestruturar ou
- * usar índice não funciona.
+ * Vem da variável `EXPO_PUBLIC_ATLAS_API_URL` (arquivo `.env`). O Expo coloca
+ * o valor dentro do app na hora do build, por isso a leitura precisa ser
+ * escrita exatamente como `process.env.EXPO_PUBLIC_...`.
  *
- * Nada sensível passa por aqui: uma variável `EXPO_PUBLIC_` fica visível em
- * texto puro no aplicativo compilado. É justamente por isso que a URL da API
- * mora aqui e as **chaves** moram no backend.
+ * Tudo que é `EXPO_PUBLIC_` fica visível dentro do app, então aqui vai só a
+ * URL. As chaves de API ficam no backend.
  *
- * Sem a variável definida, o aplicativo continua funcionando como na fase
- * anterior: rotas direto do OSRM e lugares da lista local.
+ * Sem a variável, o app funciona sozinho: rotas direto do OSRM e lugares de
+ * uma lista local.
  *
  * @see https://docs.expo.dev/guides/environment-variables/
  */
 const RAW_BASE_URL = process.env.EXPO_PUBLIC_ATLAS_API_URL;
 
-/** URL sem barra final, ou `null` quando a API não foi configurada. */
+/** URL sem barra no final, ou `null` quando a API não foi configurada. */
 export const ATLAS_API_BASE_URL: string | null = normalize(RAW_BASE_URL);
 
 function normalize(value: string | undefined): string | null {
@@ -30,7 +28,7 @@ function normalize(value: string | undefined): string | null {
   return trimmed.replace(/\/+$/, '');
 }
 
-/** `true` quando existe um backend para conversar. */
+/** `true` quando existe um backend configurado. */
 export function isAtlasApiConfigured(): boolean {
   return ATLAS_API_BASE_URL !== null;
 }
@@ -38,9 +36,9 @@ export function isAtlasApiConfigured(): boolean {
 /**
  * Monta uma URL da API.
  *
- * Lança se chamada sem configuração — quem chama deve consultar
- * `isAtlasApiConfigured()` antes, e o erro existe para que uma chamada
- * esquecida apareça em desenvolvimento em vez de virar `undefined/v1/routes`.
+ * Dá erro se a API não estiver configurada. Quem chama deve checar
+ * `isAtlasApiConfigured()` antes; o erro existe para o esquecimento aparecer
+ * logo no desenvolvimento.
  */
 export function atlasApiUrl(path: string): string {
   if (ATLAS_API_BASE_URL === null) {

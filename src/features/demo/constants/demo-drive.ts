@@ -2,17 +2,11 @@ import type { NamedCoordinate } from '@/features/map/types/coordinate';
 import type { SimulationOverrides } from '@/features/recommendation/types/recommendation';
 
 /**
- * A viagem de demonstração: Taquaral, em Campinas, até a São Paulo Expo.
+ * Viagem de demonstração: do Taquaral (Campinas) até a São Paulo Expo.
  *
- * Existe para a apresentação. Ninguém vai dirigir 110 km no meio de um slide,
- * e a tela de viagem só tem o que mostrar — mapa, manobra, tempo restante e,
- * principalmente, a recomendação do Random Forest — quando há um trajeto real
- * em andamento. Aqui o trajeto é real (a rota vem da mesma API), o que é
- * fingido é o aparelho: a posição não vem do GPS, e sim de um ponto que
- * caminha sobre a rota.
- *
- * Nada disto entra no caminho de quem usa o aplicativo de verdade: só vale
- * com `?demo=1` na tela de viagem.
+ * Existe para a apresentação: ninguém vai dirigir 110 km no meio da aula. A
+ * rota é real (vem da mesma API); o que é simulado é a posição, que "anda"
+ * sobre a rota em vez de vir do GPS. Só vale com `?demo=1` na tela de viagem.
  */
 
 export const DEMO_DRIVE_ORIGIN: NamedCoordinate = {
@@ -27,35 +21,27 @@ export const DEMO_DRIVE_DESTINATION: NamedCoordinate = {
   name: 'São Paulo Expo',
 };
 
-/** Nome exibido em todas as etapas da parada criada para a apresentação. */
+/** Nome da parada usada no modo apresentação. */
 export const PRESENTATION_STOP_NAME = 'Graal Jaguariúna';
 
-/** Onde o carro aparece quando a tela abre: metade do caminho andado. */
+/** Onde o carro aparece quando a tela abre: na metade do caminho. */
 export const DEMO_START_FRACTION = 0.5;
 
-/** Velocidade da simulação, em m/s — 100 km/h, de rodovia. */
+/** Velocidade da simulação: 27,8 m/s = 100 km/h. */
 export const DEMO_SPEED_METERS_PER_SECOND = 27.8;
 
 /**
- * Cadência do avanço.
+ * Frequência do avanço: 10 passos por segundo, de ~3 m cada. Um passo por
+ * segundo faria o carro "pular" 28 m no mapa.
  *
- * Dez passos por segundo, de pouco menos de três metros cada. Um passo por
- * segundo faria o carro pular 28 m de cada vez, e é essa distância — não a
- * velocidade — que se vê como tranco no mapa.
- *
- * O passo não pode encolher à vontade: o trajeto percorrido descarta
- * deslocamentos menores que 8 m, porque num GPS parado eles são só oscilação.
- * Com passos menores que isso, a viagem simulada terminaria com distância
- * zero e nenhum caminho no resumo.
+ * Obs.: o trajeto percorrido só guarda um ponto novo a cada 8 m (para ignorar
+ * a oscilação do GPS), então vários passos pequenos se somam antes de contar.
  */
 export const DEMO_TICK_MS = 100;
 
 /**
- * As condições que o modelo vê quando a recomendação é pedida no modo de
- * demonstração: uma hora de estrada, sem parar, com cansaço na voz.
- *
- * É o ponto de partida — a tela de condições deixa trocar cada variável antes
- * de perguntar ao Random Forest.
+ * Condições iniciais que o modelo vê no modo demonstração: uma hora de
+ * estrada, sem parar, com cansaço na voz. Dá para mudar na tela de condições.
  */
 export const DEMO_SCENARIO: Required<Omit<SimulationOverrides, 'emotionConfidence'>> = {
   hour: 15,

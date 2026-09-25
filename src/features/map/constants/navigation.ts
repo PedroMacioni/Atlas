@@ -1,6 +1,6 @@
 import { colors } from '@/theme/colors';
 
-/** Configurações da câmera e thresholds para modo navegação */
+/** Configurações da câmera no modo navegação (visão 3D). */
 export const NAVIGATION_CONFIG = {
   /** Inclinação da câmera em graus (visão 3D) */
   PITCH: 60,
@@ -9,25 +9,8 @@ export const NAVIGATION_CONFIG = {
   /** Duração das animações de câmera em ms */
   ANIMATION_MS: 450,
   /**
-   * Limites da animação que acompanha a posição.
-   *
-   * A duração não é fixa: ela acompanha o intervalo real entre duas leituras,
-   * para que a câmera esteja chegando ao ponto quando o próximo chega. Fixá-la
-   * em 450 ms deixa a câmera parada entre uma leitura do GPS e a seguinte — o
-   * movimento aos trancos que se vê em vez do deslizar contínuo.
-   */
-  FOLLOW_MIN_MS: 200,
-  FOLLOW_MAX_MS: 2_000,
-  /** Distância em metros para considerar "fora da rota" */
-  OFF_ROUTE_THRESHOLD: 50,
-  /** Distância em metros para considerar "chegou ao destino" */
-  ARRIVED_THRESHOLD: 30,
-  /** Movimento mínimo em metros para calcular heading */
-  MIN_MOVEMENT_FOR_HEADING: 5,
-  /**
-   * Distância em metros que a câmera fica "à frente" do usuário.
-   * Isso cria o efeito de terceira pessoa, com o usuário na parte
-   * inferior da tela e a estrada visível à frente.
+   * Quantos metros a câmera fica "à frente" do usuário. Assim o carro aparece
+   * na parte de baixo da tela e a estrada à frente fica visível.
    */
   CAMERA_AHEAD_OFFSET: 80,
 } as const;
@@ -39,11 +22,8 @@ export const ROUTE_COLORS = {
   /** Trecho pendente - vibrante */
   pending: colors.primary,
   /**
-   * Trecho até a parada aceita.
-   *
-   * O mesmo laranja do pino da parada: o olho liga as duas coisas sem
-   * legenda, e fica claro que aquele pedaço de rota existe por causa dela —
-   * dali em diante o trajeto volta ao azul do destino.
+   * Trecho até a parada aceita, na mesma cor laranja do pino da parada.
+   * Depois da parada a rota volta a ser azul.
    */
   detour: colors.categoryFood,
 } as const;

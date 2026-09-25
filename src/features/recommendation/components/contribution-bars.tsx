@@ -11,12 +11,11 @@ export type ContributionBarsProps = {
 };
 
 /**
- * Por que o modelo decidiu isto — uma barra por variável (CA-16).
+ * Por que o modelo decidiu isto: uma barra por variável (CA-16).
  *
- * Cada barra é quanto a variável empurrou a probabilidade da decisão
- * escolhida: para a direita, a favor; para a esquerda, contra. É a leitura do
- * método de Saabas que o backend calcula, sem arredondar a verdade: a soma
- * das barras mais a base dá exatamente a confiança exibida.
+ * Barra para a direita = a variável ajudou a escolher esta decisão; para a
+ * esquerda = pesou contra. São os valores do método de Saabas calculados no
+ * backend.
  */
 export function ContributionBars({ contributions }: ContributionBarsProps) {
   const largest = Math.max(0.01, ...contributions.map((item) => Math.abs(item.weight)));
@@ -39,7 +38,7 @@ export function ContributionBars({ contributions }: ContributionBarsProps) {
               </Text>
             </View>
 
-            {/* Metade esquerda para "contra", metade direita para "a favor". */}
+            {/* Metade esquerda = contra; metade direita = a favor. */}
             <View style={styles.track}>
               <View style={styles.half}>
                 {positive ? null : (

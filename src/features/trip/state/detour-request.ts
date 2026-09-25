@@ -5,11 +5,9 @@ import type { NamedCoordinate } from '@/features/map/types/coordinate';
 /**
  * Pedido de desvio vindo de fora da tela de viagem.
  *
- * A emergência abre em folha, por cima da viagem. Quando o usuário escolhe um
- * hospital ali, a viagem — que continua montada por baixo — precisa receber
- * esse ponto como parada. Parâmetro de rota não serve: a tela de viagem já
- * existe e não é renavegada. Este é o canal: a folha publica, a viagem
- * consome e limpa.
+ * A emergência abre por cima da viagem. Quando o usuário escolhe um hospital
+ * ali, a viagem (que continua aberta por baixo) precisa receber esse ponto
+ * como parada. Este é o "canal": a emergência publica, a viagem consome.
  */
 export type DetourRequest = NamedCoordinate & { category: string; reason: string };
 

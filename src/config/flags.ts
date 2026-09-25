@@ -1,16 +1,14 @@
 /**
- * Flags de funcionalidade do Atlas.
+ * Chaves (flags) de funcionalidade do app.
  *
- * Como em `api.ts`, os valores vêm de variáveis `EXPO_PUBLIC_` inlinadas no
- * bundle em tempo de build — a referência a `process.env` precisa ser literal.
+ * Como em `api.ts`, os valores vêm de variáveis `EXPO_PUBLIC_` do `.env`.
  *
  * @see https://docs.expo.dev/guides/environment-variables/
  */
 
 /**
- * `EXPO_PUBLIC_DEV_MODE=true` libera as ferramentas de desenvolvimento que não
- * devem aparecer para quem usa o aplicativo — hoje, o modo apresentação.
- * Desligada por padrão: sem a variável, nada disso existe no app.
+ * `EXPO_PUBLIC_DEV_MODE=true` libera ferramentas de desenvolvimento que o
+ * usuário comum não deve ver (hoje, o modo apresentação). Desligada por padrão.
  */
 export const DEV_MODE = isTruthy(process.env.EXPO_PUBLIC_DEV_MODE);
 

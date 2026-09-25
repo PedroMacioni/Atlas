@@ -26,7 +26,7 @@ import { chooseOptionByVoice, confirmByVoice } from '@/features/voice/utils/voic
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
-/** Ícone e cor de cada categoria do catálogo, para as linhas da lista. */
+/** Ícone e cor de cada categoria, para as linhas da lista. */
 const CATALOG_VISUALS = {
   fuel: { icon: 'gas-station', color: 'categoryFuel' },
   food: { icon: 'silverware-fork-knife', color: 'categoryFood' },
@@ -38,29 +38,22 @@ const CATALOG_VISUALS = {
 
 const NO_PLACES: Place[] = [];
 
-/**
- * Quantas opções próximas a lista mostra. O escopo pede 3 (RF-08); aqui, com
- * a tela inteira para rolar, vão 10. A voz continua lendo só as 3 primeiras.
- */
+/** Quantos lugares próximos a lista mostra (o escopo pede 3; aqui há espaço para 10). A voz lê só 3. */
 const NEARBY_LIST_LIMIT = 10;
 
 /**
- * Definir destino (RF-04, RF-07, RF-08).
+ * Tela "Definir destino" (RF-04, RF-07, RF-08).
  *
- * Duas portas:
+ * Dois jeitos de escolher:
+ * - Categorias (Posto, Restaurante, Hotel, Ponto turístico, Hospital): mostra
+ *   os 10 mais próximos, com distância, tempo de carro e nota.
+ * - Busca por texto: lugares salvos primeiro, depois qualquer lugar ou
+ *   endereço achado pela TomTom.
  *
- * - **Categorias do escopo** — Posto, Restaurante, Hotel, Ponto turístico e
- *   Hospital. Tocar uma busca as **10 opções mais próximas**, com distância,
- *   tempo de carro e nota, pela API do Atlas (Google Places ou TomTom, com o
- *   OpenStreetMap de reserva). Tocar de novo volta à lista.
- * - **Busca por texto**: os lugares salvos primeiro e, atrás deles, qualquer
- *   lugar ou endereço achado pela TomTom, os mais perto primeiro.
+ * Sem texto, a lista mostra os últimos destinos (do histórico). O filtro
+ * "Salvos" mostra só os lugares salvos.
  *
- * Sem texto, a lista mostra os **últimos destinos**, do histórico de viagens.
- * O filtro **Salvos** troca a lista pelos lugares salvos — e, com texto, busca
- * só entre eles.
- *
- * Escolher qualquer lugar abre a viagem direto (RF-09).
+ * Escolher um lugar abre a viagem direto (RF-09).
  */
 export default function DestinationScreen() {
   const insets = useSafeAreaInsets();
@@ -73,10 +66,9 @@ export default function DestinationScreen() {
   const voice = useVoice();
 
   /*
-    Conversa por voz (RF-05, RF-06, RF-13, RF-14). Quando a busca nasce de uma
-    fala — vinda da tela Início ou do microfone daqui —, o resultado é lido em
-    voz alta e a escolha é feita por voz. Os refs marcam que a próxima
-    resposta da busca é de um pedido falado.
+    Conversa por voz (RF-05, RF-06, RF-13, RF-14). Quando a busca vem de uma
+    fala, o resultado é lido em voz alta e a escolha é feita por voz. Os refs
+    marcam que a próxima resposta é de um pedido falado.
   */
   const readOptionsByVoice = useRef(params.voice === '1');
   const pendingQuery = useRef<{ text: string; sawLoading: boolean } | null>(
@@ -104,8 +96,7 @@ export default function DestinationScreen() {
     search.setQuery(text);
   };
 
-  // A busca pedida na tela Início chega por parâmetro e dispara uma vez só —
-  // a categoria espera a localização, que resolve depois da montagem.
+  // Busca que veio da tela inicial (por parâmetro). A categoria espera a localização chegar.
   const [autoHandled, setAutoHandled] = useState(false);
 
   if (!autoHandled) {
@@ -122,7 +113,7 @@ export default function DestinationScreen() {
     }
   }
 
-  // Opções de uma busca falada: as 3 primeiras lidas e escolhidas por voz.
+  // Busca falada: as 3 primeiras opções são lidas e escolhidas por voz.
   useEffect(() => {
     const places = nearby.result?.places;
     if (!places || !readOptionsByVoice.current) {
@@ -145,7 +136,7 @@ export default function DestinationScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearby.result]);
 
-  // Um lugar pedido pelo nome: quando a busca termina, confirma por voz.
+  // Lugar pedido pelo nome: quando a busca termina, confirma por voz.
   useEffect(() => {
     const pending = pendingQuery.current;
     if (!pending) {
@@ -210,7 +201,16 @@ export default function DestinationScreen() {
         readOptionsByVoice.current = true;
         nearby.search(command.category, location.coordinate);
       } else if (command.type === 'emergency' || command.type === 'unwell') {
-        router.push('/emergency');
+        // Com a localização, a emergência já abre buscando os hospitais próximos.
+        router.push({
+          pathname: '/emergency',
+          params: location.coordinate
+            ? {
+                latitude: String(location.coordinate.latitude),
+                longitude: String(location.coordinate.longitude),
+              }
+            : {},
+        });
       } else {
         searchPlaceByVoice(command.type === 'go_place' ? command.query : heard.transcript);
       }
@@ -229,7 +229,7 @@ export default function DestinationScreen() {
 
   const showingNearby = nearby.category !== null;
   const showingSaved = search.category === 'saved';
-  // Sem texto e sem filtro: os últimos destinos, e não o catálogo.
+  // Sem texto e sem filtro: mostra os últimos destinos.
   const showingRecent = !showingSaved && search.query.trim().length === 0;
   const listData = showingNearby ? NO_PLACES : showingRecent ? recent.places : search.results;
   const listTitle = showingSaved ? 'Salvos' : showingRecent ? 'Últimos' : 'Resultados';

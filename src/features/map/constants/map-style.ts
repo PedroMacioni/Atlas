@@ -1,15 +1,11 @@
 import type { MapStyleElement } from 'react-native-maps';
 
 /**
- * Estilo claro do mapa, alinhado ao design de referência: base quase branca,
- * água em azul suave, vegetação em verde pálido e rótulos comerciais
- * suprimidos para que a rota seja o único elemento forte.
+ * Estilo claro do mapa: fundo quase branco, água azul suave, verde claro e
+ * nomes de comércio escondidos, para a rota ser o destaque.
  *
- * ⚠️ Limitação de plataforma: `customMapStyle` só é aplicado no Android e, no
- * iOS, apenas quando o provider é o Google Maps. No Expo Go o iOS usa Apple
- * Maps, então o iPhone mostra o mapa padrão do sistema — o restante da tela
- * segue idêntico. Para igualar o iOS será preciso um development build com
- * chave própria do Google Maps.
+ * Obs.: `customMapStyle` só funciona no Android (e no iOS com Google Maps). No
+ * iPhone, com Apple Maps, aparece o mapa padrão do sistema.
  */
 export const ATLAS_MAP_STYLE: MapStyleElement[] = [
   {

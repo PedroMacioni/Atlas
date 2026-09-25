@@ -11,16 +11,10 @@ import { colors } from '@/theme/colors';
 import { fontAssets, fontFamily } from '@/theme/typography';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
-  // A splash já pode ter sido dispensada num recarregamento; seguir é seguro.
+  // A splash pode já ter sido escondida num recarregamento; seguir é seguro.
 });
 
-/**
- * Cabeçalho nativo das telas empilhadas.
- *
- * O título e o botão de voltar são os da plataforma — seta e gesto do sistema
- * no iOS, `Toolbar` no Android. Só a tipografia é alinhada ao tema; nada é
- * redesenhado em JavaScript.
- */
+/** Cabeçalho nativo das telas empilhadas, só com a fonte do tema. */
 const STACK_OPTIONS = {
   headerShown: true,
   headerBackButtonDisplayMode: 'minimal',
@@ -32,21 +26,15 @@ const STACK_OPTIONS = {
 } as const;
 
 /**
- * Raiz da navegação.
- *
- * Mantém apenas composição: carregamento de fontes, provedores globais e a
- * pilha de telas. Nenhuma lógica de domínio vive aqui.
- *
- * A pilha tem dois níveis: o grupo `(tabs)`, com a barra de abas nativa, e as
- * telas que se empilham por cima dele — como a viagem, que ocupa a tela inteira
- * e tem o próprio botão de voltar.
+ * Raiz da navegação: carrega as fontes, os provedores globais e a pilha de
+ * telas. As abas ficam no grupo `(tabs)`; as outras telas (viagem, destino,
+ * emergência...) abrem por cima delas.
  */
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
 
   useEffect(() => {
-    // Só revela a interface quando a tipografia está pronta, para evitar o
-    // salto visual da fonte de sistema para a Plus Jakarta Sans.
+    // Só mostra a tela quando a fonte carregou (evita o "pulo" da fonte do sistema para a do app).
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => {});
     }
@@ -57,12 +45,7 @@ export default function RootLayout() {
   }
 
   return (
-    /*
-      `GestureHandlerRootView` precisa envolver a árvore para que os gestos
-      declarados com `Gesture.*` cheguem aos componentes — é o que o painel
-      arrastável da viagem usa. Sem ela, o gesto simplesmente não dispara, e
-      sem erro nenhum.
-    */
+    /* `GestureHandlerRootView` precisa envolver tudo para os gestos funcionarem (ex.: painel da viagem). */
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
@@ -76,11 +59,7 @@ export default function RootLayout() {
             name="presentation-destination"
             options={{ headerShown: false }}
           />
-          {/*
-            A viagem esconde o cabeçalho: o mapa encosta nas quatro bordas e a
-            tela traz o próprio botão de voltar, sobre o mapa. Um cabeçalho ali
-            roubaria a faixa onde vive a instrução de manobra.
-          */}
+          {/* A viagem não tem cabeçalho: o mapa ocupa a tela toda e ela tem o próprio botão de voltar. */}
           <Stack.Screen name="trip" options={{ headerShown: false }} />
           <Stack.Screen
             name="trip-actions"
@@ -91,7 +70,7 @@ export default function RootLayout() {
               sheetGrabberVisible: true,
             }}
           />
-          {/* As 6 variáveis da demonstração, por cima da viagem em andamento. */}
+          {/* As 6 variáveis da demonstração, por cima da viagem. */}
           <Stack.Screen
             name="trip-scenario"
             options={{
@@ -102,11 +81,8 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="history/[id]" options={{ title: 'Resumo da viagem' }} />
-          {/*
-            Emergência sobe em folha, por cima de qualquer tela — inclusive da
-            viagem, que continua rodando por baixo.
-          */}
           <Stack.Screen name="simulator" options={{ title: 'Simulador do Random Forest' }} />
+          {/* Emergência abre em folha por cima de qualquer tela (a viagem continua por baixo). */}
           <Stack.Screen
             name="emergency"
             options={{

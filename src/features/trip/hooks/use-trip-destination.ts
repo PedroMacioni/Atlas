@@ -5,11 +5,10 @@ import type { NamedCoordinate } from '@/features/map/types/coordinate';
 import { DEMO_DESTINATION } from '@/features/trip/constants/demo-route';
 
 /**
- * Destino da viagem, lido dos parâmetros de rota.
+ * Destino da viagem, lido dos parâmetros da tela.
  *
- * Coordenada ausente ou inválida cai no trajeto de demonstração em vez de
- * derrubar a tela — é o que mantém a viagem acessível por link direto, e por
- * `atlas://trip`, sem risco.
+ * Se a coordenada faltar ou for inválida, usa o destino de demonstração em
+ * vez de quebrar a tela.
  */
 export function useTripDestination(): NamedCoordinate {
   const params = useLocalSearchParams<{

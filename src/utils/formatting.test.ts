@@ -7,10 +7,9 @@ import { formatSpeed, toKilometersPerHour } from '@/utils/speed';
 import { formatManeuverDistance } from '@/features/trip/utils/maneuver-text';
 
 /**
- * Os números que aparecem na tela durante a viagem.
+ * Testes dos números mostrados durante a viagem.
  *
- * Erram em silêncio: uma conversão trocada não quebra nada, só mostra a
- * informação errada para quem está dirigindo.
+ * Um erro aqui não quebra o app, só mostra informação errada para quem dirige.
  */
 describe('distância', () => {
   it('abaixo de 1 km arredonda para dezenas de metros', () => {

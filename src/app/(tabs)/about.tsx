@@ -9,13 +9,7 @@ import { Text } from '@/components/ui/text';
 import { getRouteProviderId } from '@/features/routing/services/route-service';
 import { spacing } from '@/theme/spacing';
 
-/**
- * Categorias do acesso rápido.
- *
- * Vitrine, e não atalho: quem busca por categoria faz isso na tela de destino,
- * onde a busca acontece de verdade. Aqui elas aparecem atenuadas, só para
- * firmar a identidade visual das cinco categorias do escopo.
- */
+/** Categorias do escopo, só para mostrar (a busca de verdade é na tela de destino). */
 const QUICK_CATEGORIES = [
   { icon: 'gas-station', label: 'Posto', color: 'categoryFuel' },
   { icon: 'silverware-fork-knife', label: 'Restaurante', color: 'categoryFood' },
@@ -45,7 +39,7 @@ const ARCHITECTURE = [
   { title: 'features/api-status', description: 'Estado da API e dos três modelos de IA.' },
 ] as const;
 
-/** Aba de contexto: o que já existe, o que vem depois e de onde vêm os números. */
+/** Aba Sobre: o que é o projeto, o serviço de rotas em uso e a arquitetura. */
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
 

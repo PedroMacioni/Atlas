@@ -1,9 +1,6 @@
 import { Platform, type ViewStyle } from 'react-native';
 
-/**
- * Elevação. O design usa sombras muito suaves e difusas — o objetivo é
- * separar camadas, não criar profundidade dramática.
- */
+/** Sombras suaves, só para separar as camadas da tela. */
 function elevation(opacity: number, radius: number, offsetY: number, android: number): ViewStyle {
   return Platform.select<ViewStyle>({
     ios: {

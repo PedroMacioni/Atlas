@@ -14,13 +14,8 @@ export type PhotoGalleryProps = {
 };
 
 /**
- * As fotos da viagem, em ordem cronológica (§7.2, CA-14).
- *
- * Uma faixa que rola na horizontal, e não uma grade: são poucas fotos por
- * viagem, e a ordem — a sequência do caminho — importa mais que a contagem.
- *
- * Cada foto traz a classe que a IA deu a ela, que é o que liga a imagem à
- * decisão registrada no diário.
+ * Fotos da viagem em ordem cronológica (§7.2, CA-14), numa faixa que rola na
+ * horizontal. Cada foto mostra a classe que a IA deu a ela.
  */
 export function PhotoGallery({ photos }: PhotoGalleryProps) {
   if (photos.length === 0) {
@@ -39,10 +34,7 @@ export function PhotoGallery({ photos }: PhotoGalleryProps) {
       contentContainerStyle={styles.strip}>
       {photos.map((photo) => (
         <View key={photo.id} style={styles.item}>
-          {/*
-            A URL é assinada e expira: `recyclingKey` evita que o cache do
-            aparelho devolva um link velho para uma foto nova.
-          */}
+          {/* O link da foto expira: `recyclingKey` evita que o cache mostre um link velho. */}
           <Image
             source={{ uri: photo.url }}
             style={styles.image}

@@ -13,29 +13,14 @@ export type SpeedBadgeProps = {
 };
 
 /**
- * Velocímetro da viagem.
+ * Velocímetro da viagem, no canto superior esquerdo do mapa.
  *
- * Círculo no canto inferior esquerdo, sobre o mapa — a posição que os
- * aplicativos de navegação usam, e que aqui não disputa espaço com nada: a
- * instrução está no topo, o painel embaixo, e este canto estava vazio.
+ * Mostra sempre um número: quando não há leitura (antes do GPS responder, ou
+ * quando o iOS devolve `-1` por não saber), mostra 0, como o velocímetro de um
+ * carro. Um velocímetro que some ou mostra traços parece defeito.
  *
- * O número domina e a unidade fica miúda embaixo. É a leitura de um
- * velocímetro de verdade: o valor se lê de relance, e "km/h" só precisa estar
- * lá para dizer em que escala.
- *
- * O mostrador está **sempre na tela** e sempre marca um número — `0` quando
- * não há leitura. Um velocímetro que some, ou que mostra traços, parece
- * defeito.
- *
- * "Sem leitura" é mais comum do que parece: o iOS devolve `-1` para a
- * velocidade quando não consegue estimá-la — parado, sem sinal, ou nos
- * primeiros segundos de um trajeto — e antes da primeira leitura do GPS não
- * existe posição alguma. Nesses casos o mostrador marca zero, que é o que um
- * velocímetro de carro faz: ele não sabe distinguir "parado" de "não sei", e
- * quem está lendo também não precisa dessa distinção.
- *
- * A conversão, em `utils/speed.ts`, continua devolvendo `null` quando não sabe.
- * A escolha de exibir zero é de apresentação, e mora aqui.
+ * A conversão em `utils/speed.ts` continua devolvendo `null`; a escolha de
+ * mostrar 0 é só da tela.
  */
 export function SpeedBadge({ metersPerSecond }: SpeedBadgeProps) {
   const speed = formatSpeed(toKilometersPerHour(metersPerSecond) ?? 0);
@@ -57,11 +42,7 @@ export function SpeedBadge({ metersPerSecond }: SpeedBadgeProps) {
 
 const styles = StyleSheet.create({
   badge: {
-    /**
-     * Círculo, e não pílula: é a forma de velocímetro, e a que distingue este
-     * número dos outros da tela num olhar. A largura fixa também impede que o
-     * mostrador mude de tamanho entre 9 e 120 km/h.
-     */
+    /** Círculo com largura fixa, para o tamanho não mudar entre 9 e 120 km/h. */
     width: 64,
     height: 64,
     borderRadius: radius.pill,

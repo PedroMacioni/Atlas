@@ -1,21 +1,19 @@
 /**
- * Camada HTTP mínima do Atlas.
+ * Camada HTTP do app, usando o `fetch` nativo (sem Axios).
  *
- * Usa o `fetch` nativo do React Native (sem Axios). Todo acesso de rede do
- * aplicativo passa por aqui para que timeout, erro de rede, status inesperado
- * e corpo inválido tenham sempre o mesmo tratamento.
+ * Todas as chamadas de rede passam por aqui, para que tempo limite, falta de
+ * rede, status de erro e resposta inválida sejam tratados sempre do mesmo jeito.
  */
 
-/** Motivos pelos quais uma requisição pode falhar, já classificados. */
+/** Tipos de falha de uma requisição. */
 export type HttpErrorKind = 'timeout' | 'network' | 'status' | 'invalid-response';
 
 export class HttpError extends Error {
   readonly kind: HttpErrorKind;
   readonly status?: number;
   /**
-   * Código de domínio devolvido pela API do Atlas — `route_not_found`,
-   * `route_provider_timeout` e afins. Ausente quando o erro veio de outro
-   * serviço ou da própria rede.
+   * Código de erro devolvido pela API do Atlas (ex.: `route_not_found`).
+   * Não existe quando o erro veio de outro serviço ou da própria rede.
    */
   readonly code?: string;
 
@@ -28,16 +26,14 @@ export class HttpError extends Error {
   }
 }
 
-/** Formato de erro da API do Atlas. */
+/** Formato de erro da API do Atlas: `{ error: { code, message } }`. */
 type ErrorEnvelope = {
   error?: { code?: unknown; message?: unknown };
 };
 
 /**
- * Lê o envelope de erro sem nunca falhar por causa dele.
- *
- * Um serviço que responde 500 com HTML não pode transformar o tratamento de
- * erro em um segundo erro.
+ * Lê o erro da API sem nunca falhar por causa dele (um servidor que responde
+ * HTML no lugar de JSON não pode causar um segundo erro).
  */
 async function readErrorEnvelope(
   response: Response,
@@ -69,33 +65,37 @@ export type FetchJsonOptions = {
   /** Verbo HTTP. Padrão: `GET`. */
   method?: 'GET' | 'POST';
   /**
-   * Corpo da requisição. Vai como JSON, exceto um `FormData` — que sobe como
-   * multipart, com o limite escolhido pelo próprio `fetch`.
+   * Corpo da requisição. Vai como JSON, exceto `FormData`, que vai como
+   * multipart (usado para enviar foto e áudio).
    */
   body?: unknown;
-  /** Cabeçalhos extras — o identificador do aparelho, por exemplo. */
+  /** Cabeçalhos extras (ex.: o id do aparelho). */
   headers?: Record<string, string>;
 };
 
 /**
- * Busca uma URL e devolve o corpo já desserializado como JSON.
+ * Faz a requisição e devolve o corpo já convertido de JSON.
  *
- * Lança sempre `HttpError`, nunca um erro cru do `fetch`, para que as camadas
- * acima possam decidir a mensagem de interface a partir de `error.kind`.
+ * Sempre lança `HttpError` (nunca o erro cru do `fetch`), para as telas
+ * decidirem a mensagem a partir de `error.kind`.
  */
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, signal, method = 'GET', body, headers } = options;
 
-  // Um `FormData` se serializa sozinho, e o cabeçalho tem de trazer o limite
-  // que só o `fetch` conhece: definir `content-type` na mão quebraria o envio.
+  // Com `FormData` o próprio `fetch` monta o cabeçalho `content-type` (com o
+  // separador do multipart). Definir na mão quebraria o envio.
   const isMultipart = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  // Encadeia um eventual cancelamento externo no mesmo controller.
+  // Se quem chamou cancelar, cancela esta requisição também.
   const abortFromCaller = () => controller.abort();
   signal?.addEventListener('abort', abortFromCaller);
+  // O evento 'abort' não dispara de novo para um sinal que já veio cancelado.
+  if (signal?.aborted) {
+    controller.abort();
+  }
 
   let response: Response;
 
@@ -112,7 +112,7 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
     });
   } catch {
     if (controller.signal.aborted) {
-      // Cancelamento pedido por quem chamou não é uma falha da rede.
+      // Cancelamento pedido por quem chamou não é falha de rede.
       if (signal?.aborted) {
         throw new HttpError('network', 'Requisição cancelada.');
       }
@@ -125,8 +125,7 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
   }
 
   if (!response.ok) {
-    // A API do Atlas responde erro com `{ error: { code, message } }`. O código
-    // é estável e vale mais que o status: é ele que escolhe a mensagem de tela.
+    // O `code` do erro da API é mais útil que o status HTTP para escolher a mensagem.
     const failure = await readErrorEnvelope(response);
 
     throw new HttpError(

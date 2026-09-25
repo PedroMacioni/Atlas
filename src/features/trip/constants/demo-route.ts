@@ -1,11 +1,6 @@
 import type { NamedCoordinate } from '@/features/map/types/coordinate';
 
-/**
- * Trajeto fixo usado para validar o fluxo completo desta primeira fase.
- *
- * Substituir por busca de endereço (Google Places) em uma etapa futura;
- * nenhuma tela deve conter coordenadas literais.
- */
+/** Origem e destino padrão, usados quando falta GPS ou um destino válido. */
 export const DEMO_ORIGIN: NamedCoordinate = {
   latitude: -22.9056,
   longitude: -47.0608,

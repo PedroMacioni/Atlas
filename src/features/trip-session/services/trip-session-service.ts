@@ -12,11 +12,10 @@ import type {
 import { HttpError, fetchJson, type FetchJsonOptions } from '@/utils/http';
 
 /**
- * Viagens no backend: início, diário, paradas, encerramento e histórico.
+ * Chamadas de viagem ao backend: início, diário, paradas, fim e histórico.
  *
- * Sem API configurada nada disso existe — o histórico mora no banco, não no
- * aparelho. Quem chama consulta `isTripHistoryAvailable()` antes, e a viagem
- * continua navegável sem ser registrada.
+ * Sem API configurada nada disso existe (o histórico fica no banco, não no
+ * celular). A viagem continua navegável, só não é registrada.
  */
 const TRIPS_PATH = '/v1/trips';
 
@@ -28,10 +27,8 @@ export function isTripHistoryAvailable(): boolean {
 }
 
 /**
- * Toda chamada leva o identificador anônimo do aparelho.
- *
- * Exportada para as features que vivem dentro de uma viagem — recomendações,
- * por exemplo — e precisam do mesmo cabeçalho e do mesmo prefixo.
+ * Faz uma chamada em `/v1/trips`, sempre com o id anônimo do aparelho no
+ * cabeçalho. Usada também pelas recomendações, câmera e voz.
  */
 export async function tripApiRequest<T>(path: string, options: FetchJsonOptions = {}): Promise<T> {
   const deviceId = await getDeviceId();
@@ -48,7 +45,7 @@ export function startTrip(origin: NamedCoordinate, destination: NamedCoordinate)
 }
 
 export type StopDetails = {
-  /** Nome do lugar — "Posto Taquaral". Sem ele, a API grava "Parada". */
+  /** Nome do lugar (ex.: "Posto Taquaral"). Sem ele, a API grava "Parada". */
   name?: string;
   category?: string;
   reason?: string;
@@ -79,10 +76,7 @@ export type FinishTripParams = {
   distanceMeters: number;
   path: Coordinate[];
   location?: Coordinate | null;
-  /**
-   * Quando a viagem terminou. Omitido, a API usa o relógio dela — que é o
-   * certo para uma viagem de verdade, encerrada no instante do toque.
-   */
+  /** Quando a viagem terminou. Sem valor, a API usa a hora dela (o certo numa viagem real). */
   endedAt?: string;
 };
 
@@ -102,7 +96,7 @@ export function getTrip(tripId: string, signal?: AbortSignal) {
   return tripApiRequest<TripDetail>(`/${tripId}`, { signal });
 }
 
-/** Mensagem de tela para uma falha de qualquer chamada deste serviço. */
+/** Mensagem para a tela quando uma chamada deste serviço falha. */
 export function describeTripError(error: unknown): string {
   if (error instanceof HttpError) {
     switch (error.code) {

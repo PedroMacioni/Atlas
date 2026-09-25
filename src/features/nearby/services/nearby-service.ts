@@ -5,17 +5,14 @@ import type { Decision } from '@/features/trip-session/types/trip';
 import { HttpError, fetchJson } from '@/utils/http';
 
 /**
- * Opções próximas pela API do Atlas: Google Places com nota, TomTom sem nota,
- * ou OpenStreetMap de reserva quando nenhuma das duas responde.
- *
- * As chaves ficam no backend — nunca no aplicativo.
+ * Lugares próximos pela API do Atlas: Google Places (com nota), TomTom (sem
+ * nota) ou OpenStreetMap (reserva). As chaves ficam no backend.
  */
 const NEARBY_PATH = '/v1/nearby';
 
 /**
- * Longo de propósito. Pelo Google ou pela TomTom a resposta vem em 1 a 2 s;
- * pela reserva do OpenStreetMap, medida em 23 s num dia carregado. Desistir antes disso
- * deixaria quem está na estrada sem lista nenhuma.
+ * Tempo limite longo de propósito: Google e TomTom respondem em 1–2 s, mas a
+ * reserva do OpenStreetMap já levou 23 s num dia cheio.
  */
 const TIMEOUT_MS = 35_000;
 
@@ -23,7 +20,7 @@ export function isNearbyAvailable(): boolean {
   return isAtlasApiConfigured();
 }
 
-/** Quantas opções vêm por padrão: as 3 do escopo (RF-08), que a voz lê. */
+/** Quantos lugares vêm por padrão: 3, como pede o escopo (RF-08). */
 export const DEFAULT_NEARBY_LIMIT = 3;
 
 export function fetchNearby(
@@ -45,8 +42,8 @@ export function fetchNearby(
 }
 
 /**
- * Que tipo de lugar cada recomendação precisa (§4.7). CONTINUAR não busca
- * nada; REGISTRAR PONTO TURÍSTICO registra onde se está.
+ * Que tipo de lugar cada recomendação procura (§4.7). CONTINUAR não busca
+ * nada; REGISTRAR PONTO TURÍSTICO registra o lugar onde se está.
  */
 export const DECISION_CATEGORY: Partial<Record<Decision, NearbyCategory>> = {
   descansar: 'descanso',

@@ -4,20 +4,14 @@ import type { Coordinate, NamedCoordinate } from '@/features/map/types/coordinat
 import { DEMO_ORIGIN } from '@/features/trip/constants/demo-route';
 
 /**
- * Ponto de partida da viagem, fixado na primeira posição conhecida.
+ * Ponto de partida da viagem: fica fixo na primeira posição conhecida.
  *
- * `origin` e a posição atual são conceitos distintos, e na viagem em andamento
- * isso deixa de ser teoria: a posição muda a cada dez metros — é dela que vive
- * o acompanhamento — enquanto a origem é uma só. Se a origem seguisse o
- * aparelho, a rota seria recalculada a cada leitura do GPS e o trajeto nunca
- * se estabilizaria.
+ * A origem é diferente da posição atual: a posição muda o tempo todo, mas a
+ * origem é uma só. Se a origem seguisse o GPS, a rota seria recalculada a
+ * cada leitura.
  *
- * Enquanto a localização está sendo resolvida o valor é `null`, e quem calcula
- * a rota espera: melhor esperar do que gastar uma consulta com uma origem
- * provisória e refazê-la um instante depois.
- *
- * Se o GPS falhar ou a permissão for negada, cai no ponto de partida de
- * demonstração — a tela continua funcionando, com a rota visível.
+ * Enquanto a localização carrega, o valor é `null` (e a rota espera). Se o GPS
+ * falhar, usa o ponto de partida de demonstração.
  */
 export function useTripOrigin(
   position: Coordinate | null,
@@ -25,11 +19,7 @@ export function useTripOrigin(
 ): NamedCoordinate | null {
   const [origin, setOrigin] = useState<NamedCoordinate | null>(null);
 
-  // Decidir durante a renderização, e não em um efeito, evita um quadro com a
-  // origem nula depois de a posição já ser conhecida — que dispararia o
-  // cálculo da rota um ciclo mais tarde do que o necessário. É o padrão que o
-  // React recomenda para derivar estado de props que mudaram, e o mesmo que
-  // `use-trip-route` usa para invalidar a rota anterior.
+  // Decide durante a renderização (e não num efeito) para não perder um ciclo.
   if (origin === null) {
     if (position) {
       setOrigin({ ...position, name: 'Sua localização' });

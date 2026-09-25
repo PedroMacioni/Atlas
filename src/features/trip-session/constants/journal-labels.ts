@@ -8,11 +8,10 @@ import type {
 import type { ColorToken } from '@/theme/colors';
 
 /**
- * As palavras do diário de bordo e do resumo, em português.
+ * Textos em português do diário de bordo e do resumo.
  *
- * O backend guarda códigos (`cansado`, `registrar_ponto_turistico`); é aqui
- * que eles viram texto de tela. As emoções, classes e decisões são as do
- * escopo (§4), e já estão aqui para quando os modelos passarem a escrevê-las.
+ * O backend guarda códigos (`cansado`, `registrar_ponto_turistico`); aqui eles
+ * viram texto para a tela.
  */
 
 export const EMOTION_LABELS: Record<Emotion, string> = {

@@ -10,16 +10,13 @@ import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 
 /**
- * Faixa que mostra que o Atlas está ouvindo — e o que ele está entendendo.
- *
- * Ver o texto aparecer enquanto se fala é o que dá confiança de que o
- * comando vai dar certo; um microfone mudo não diz se está funcionando.
- * Falando, a faixa some: a voz já é o sinal.
+ * Faixa que mostra que o Atlas está ouvindo e o que ele está entendendo. Ver o
+ * texto aparecendo dá confiança de que o comando vai funcionar.
  */
 export function VoiceIndicator({ voice }: { voice: Pick<Voice, 'state' | 'partial' | 'error'> }) {
   const { demoVoiceText } = usePresentationState();
 
-  // Modo apresentação: mostra o texto simulado de voz
+  // Modo apresentação: mostra o texto de voz simulado.
   if (demoVoiceText) {
     return (
       <View style={[styles.bar, shadows.raised]}>

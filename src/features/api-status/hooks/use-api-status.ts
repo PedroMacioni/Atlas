@@ -5,7 +5,7 @@ import { fetchHealth, isApiConfigured } from '@/features/api-status/services/api
 import type { ApiHealth } from '@/features/api-status/types/api-status';
 
 export type ApiStatus = {
-  /** `false` sem `EXPO_PUBLIC_ATLAS_API_URL` — não há IA para conectar. */
+  /** `false` sem `EXPO_PUBLIC_ATLAS_API_URL` (não há API para conectar). */
   configured: boolean;
   isLoading: boolean;
   health: ApiHealth | null;
@@ -16,10 +16,10 @@ export type ApiStatus = {
 };
 
 /**
- * "Conexão com a IA" da tela de abertura (CA-01).
+ * Estado da conexão com a API e os modelos de IA (CA-01).
  *
- * Consulta a cada foco da tela, e não em intervalo: quem volta para a tela
- * inicial depois de ligar o backend vê a mudança sem reabrir o aplicativo.
+ * Consulta toda vez que a tela ganha foco, para mostrar a mudança se o backend
+ * for ligado com o app aberto.
  */
 export function useApiStatus(): ApiStatus {
   const configured = isApiConfigured();
@@ -57,7 +57,7 @@ export function useApiStatus(): ApiStatus {
   };
 }
 
-/** O que a pílula diz embaixo do título. */
+/** Texto curto que resume o estado. */
 function describe(configured: boolean, isLoading: boolean, health: ApiHealth | null): string {
   if (!configured) {
     return 'Configure EXPO_PUBLIC_ATLAS_API_URL';

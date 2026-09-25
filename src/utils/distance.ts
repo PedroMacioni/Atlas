@@ -1,7 +1,7 @@
 /**
- * Formata uma distância em metros para leitura humana em pt-BR.
+ * Formata uma distância em metros para leitura.
  *
- * - abaixo de 1 km: arredondado para dezenas de metros ("850 m")
+ * - abaixo de 1 km: arredonda para dezenas de metros ("850 m")
  * - a partir de 1 km: uma casa decimal com vírgula ("18,4 km")
  */
 export function formatDistance(meters: number): string {

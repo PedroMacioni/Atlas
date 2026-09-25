@@ -13,8 +13,8 @@ import { spacing } from '@/theme/spacing';
 /**
  * Histórico de viagens (RF-27, RF-28).
  *
- * Sem login: as viagens são as deste aparelho, pelo identificador anônimo.
- * Não há exclusão — o histórico é mantido enquanto o projeto existir (RF-30).
+ * Sem login: mostra as viagens deste aparelho (pelo id anônimo). Não há opção
+ * de apagar; o histórico é mantido (RF-30).
  */
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();

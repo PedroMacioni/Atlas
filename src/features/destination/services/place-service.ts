@@ -8,13 +8,12 @@ import { fetchJson } from '@/utils/http';
 /**
  * Busca de destino.
  *
- * Duas fontes, um formato. Com a API configurada, ela responde com os lugares
- * salvos e, havendo texto, com qualquer lugar ou endereço achado pela TomTom
- * — os mais perto de `near` primeiro. Sem API, a mesma consulta é respondida
- * pela lista local com `filterPlaces`, a função pura que a tela já usava.
+ * Com a API configurada, ela devolve os lugares salvos e, se houver texto, os
+ * resultados da TomTom (os mais perto de `near` primeiro). Sem API, a busca é
+ * feita na lista local com `filterPlaces`.
  *
- * A assinatura é assíncrona nos dois casos de propósito: a tela não deve
- * mudar de forma quando a fonte muda.
+ * A função é assíncrona nos dois casos, para a tela não precisar saber de
+ * onde vêm os dados.
  */
 const PLACES_PATH = '/v1/places';
 
@@ -31,7 +30,7 @@ type AtlasPlacesResponse = {
   count: number;
 };
 
-/** Quantos lugares uma busca traz de volta. A tela lista, não pagina. */
+/** Quantos lugares uma busca traz. */
 const RESULT_LIMIT = 50;
 
 export async function searchPlaces({
@@ -46,8 +45,7 @@ export async function searchPlaces({
 
   const params = new URLSearchParams({ limit: String(RESULT_LIMIT) });
 
-  // Parâmetro ausente e parâmetro vazio significam coisas diferentes para a
-  // API: só envia o que o usuário realmente escolheu.
+  // Só envia o que o usuário realmente escolheu (parâmetro vazio ≠ ausente).
   if (query.trim()) {
     params.set('query', query.trim());
   }

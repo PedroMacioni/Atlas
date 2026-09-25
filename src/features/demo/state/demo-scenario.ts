@@ -4,12 +4,10 @@ import { DEMO_SCENARIO } from '@/features/demo/constants/demo-drive';
 import type { SimulationOverrides } from '@/features/recommendation/types/recommendation';
 
 /**
- * As condições que a demonstração apresenta ao Random Forest.
+ * As condições que a demonstração envia ao Random Forest.
  *
- * Mora fora do React porque duas telas mexem nas mesmas variáveis: a folha de
- * condições, que as edita, e a viagem por baixo dela, que as envia ao pedir a
- * recomendação. Um estado no meio do caminho — a folha é uma tela empilhada,
- * não um filho da viagem — precisaria de contexto para atravessar a pilha.
+ * Fica fora do React porque duas telas usam os mesmos valores: a folha de
+ * condições (que edita) e a viagem por baixo dela (que envia).
  */
 
 export type DemoScenario = Required<Omit<SimulationOverrides, 'emotionConfidence'>> & {
@@ -29,15 +27,12 @@ export function setDemoScenario(next: DemoScenario) {
   listeners.forEach((listener) => listener());
 }
 
-/** Volta ao cenário do escopo — usado ao abrir uma nova demonstração. */
+/** Volta ao cenário padrão (usado ao abrir uma nova demonstração). */
 export function resetDemoScenario() {
   setDemoScenario(DEMO_SCENARIO);
 }
 
-/**
- * A inscrição é uma função de módulo, e não uma criada na renderização: um
- * `subscribe` novo a cada render faz o React refazer a inscrição toda vez.
- */
+/** `subscribe` é uma função fixa do módulo, para o React não refazer a inscrição a cada render. */
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => {

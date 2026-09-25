@@ -6,13 +6,9 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 /**
- * Cabeçalho da marca, com o wordmark centralizado.
+ * Cabeçalho com o nome ATLAS centralizado, usado nas abas.
  *
- * Usado apenas nas abas. Telas empilhadas usam o cabeçalho nativo do `Stack`,
- * com o botão de voltar e o gesto da própria plataforma.
- *
- * Respeita o recorte superior (Dynamic Island, notch, barra de status do
- * Android) via `useSafeAreaInsets` — sem `SafeAreaView`.
+ * Respeita o recorte do topo da tela (notch, Dynamic Island, barra de status).
  */
 export function AppHeader() {
   const insets = useSafeAreaInsets();

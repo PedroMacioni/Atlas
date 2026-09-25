@@ -1,9 +1,8 @@
 import type { Coordinate } from '@/features/map/types/coordinate';
 
 /**
- * Categorias de lugar da busca de destino. `other` só vem da busca externa
- * (TomTom): um shopping, uma faculdade, um endereço. `recent` só existe no
- * aplicativo: um destino tirado do histórico de viagens.
+ * Categorias de lugar. `other` só vem da busca externa (TomTom): um shopping,
+ * um endereço... `recent` só existe no app: um destino do histórico.
  */
 export type PlaceCategory = 'fuel' | 'food' | 'parking' | 'saved' | 'other' | 'recent';
 

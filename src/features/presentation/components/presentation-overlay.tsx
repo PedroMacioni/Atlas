@@ -51,8 +51,8 @@ export function PresentationOverlay({
     prevAct,
   } = usePresentation();
 
-  // Reset presentation state on mount. Quando initialAct > 1, o splash já foi
-  // mostrado na tela anterior e começamos direto no ato indicado.
+  // Zera o estado ao abrir. Se `initialAct` > 1, a tela anterior já mostrou a
+  // abertura e começamos direto no ato indicado.
   useEffect(() => {
     resetPresentation();
     if (initialAct > 1) {
@@ -73,7 +73,7 @@ export function PresentationOverlay({
     }, [demoDrive]),
 
     onTriggerRecommendation: useCallback(() => {
-      // Set scenario to trigger recommendation
+      // Define um cenário que leva o modelo a recomendar uma pausa.
       setDemoScenario({
         hour: 15,
         tripMinutes: 240,
@@ -113,22 +113,22 @@ export function PresentationOverlay({
     hasReachedStop: useCallback(() => stopReached, [stopReached]),
 
     onActComplete: useCallback(() => {
-      // Auto-advance to next act after sequence completes
+      // Quando a sequência do ato termina, avança para o próximo.
       if (currentAct < totalActs) {
         nextAct();
       }
     }, [currentAct, totalActs, nextAct]),
   };
 
-  // Keep the introduction visible until the route has produced a demo position.
+  // A abertura fica na tela até a rota gerar a posição simulada.
   useActRunner(demoDrive.position ? currentActData : undefined, isPaused, callbacks);
 
-  // Tap anywhere to advance
+  // Tocar em qualquer lugar avança.
   const tapGesture = Gesture.Tap().onEnd(() => {
     runOnJS(nextAct)();
   });
 
-  // Swipe right to go back
+  // Arrastar para a direita volta um ato.
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-50, 50])
     .onEnd((event) => {
@@ -141,22 +141,22 @@ export function PresentationOverlay({
 
   return (
     <View style={styles.container} pointerEvents="box-none">
-      {/* Intro screen for Act 1 */}
+      {/* Tela de abertura (ato 1) */}
       <IntroScreen visible={currentAct === 1} />
 
-      {/* Spotlight overlay - darkens everything except highlighted elements */}
+      {/* Camada escura que destaca um elemento */}
       <SpotlightOverlay active={spotlightTarget !== null}>{null}</SpotlightOverlay>
 
       {currentAct === 7 && stopReached ? <StopArrival /> : null}
 
-      {/* Caption bar centered vertically */}
+      {/* Legenda do ato */}
       {currentAct !== 1 && currentAct !== 5 && currentAct !== 7 && (
         <View style={styles.captionContainer}>
           <CaptionBar key={currentAct} text={caption} title={currentActData?.name ?? ''} step={currentAct} total={totalActs} />
         </View>
       )}
 
-      {/* Gesture area for tap/swipe */}
+      {/* Área que recebe o toque e o arrasto */}
       <GestureDetector gesture={composedGesture}>
         <View style={styles.gestureArea} />
       </GestureDetector>

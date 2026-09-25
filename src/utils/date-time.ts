@@ -1,8 +1,8 @@
 /**
- * Datas e horários em pt-BR, para o histórico e o diário de bordo.
+ * Datas e horários em português, para o histórico e o diário de bordo.
  *
- * O backend manda ISO 8601 com fuso; `Intl` converte para a hora local do
- * aparelho. Uma data inválida vira traço em vez de "Invalid Date" na tela.
+ * O backend manda datas ISO 8601; aqui elas viram hora local. Data inválida
+ * vira "--" em vez de "Invalid Date".
  */
 
 function parse(iso: string): Date | null {

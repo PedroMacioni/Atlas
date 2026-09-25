@@ -41,7 +41,7 @@ async function executeStep(step: ActStep, callbacks: ActCallbacks): Promise<void
         try {
           await hapticFn();
         } catch {
-          // Haptics may fail on simulator
+          // A vibração pode falhar no simulador.
         }
       }
       break;
@@ -105,7 +105,7 @@ export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks:
   useEffect(() => {
     if (!act) return;
 
-    // Each act owns its cancellation flag. A later act cannot revive an old wait.
+    // Cada ato tem seu próprio "cancelado": um ato novo não reativa a espera de um antigo.
     let cancelled = false;
 
     const wait = async (durationMs: number) => {
@@ -138,11 +138,11 @@ export function useActRunner(act: Act | undefined, isPaused: boolean, callbacks:
         try {
           await executeStep(step, callbacksRef.current);
         } catch {
-          // Step failed, continue
+          // Se um passo falhar, segue para o próximo.
         }
       }
 
-      // Sequence complete - auto advance
+      // Sequência terminada: avança para o próximo ato.
       if (!cancelled) {
         callbacksRef.current.onActComplete?.();
       }

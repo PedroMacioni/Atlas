@@ -9,13 +9,7 @@ import {
   type TripProgress,
 } from '@/features/trip/utils/trip-progress';
 
-/**
- * O último cálculo, junto com as entradas que o produziram.
- *
- * Guardar as entradas é o que permite reconhecer uma renderização em que nada
- * mudou — e devolver o resultado pronto em vez de percorrer a geometria de
- * novo.
- */
+/** O último cálculo, junto com o que foi usado para calculá-lo. */
 type Snapshot = {
   geometry: RouteGeometry | null;
   position: Coordinate | null;
@@ -27,27 +21,18 @@ type Snapshot = {
 const EMPTY: Snapshot = { geometry: null, position: null, progress: null, index: 0 };
 
 /**
- * Progresso da viagem sobre a rota, recalculado a cada leitura de posição.
+ * Progresso da viagem na rota, recalculado a cada leitura de posição.
  *
- * O hook faz três coisas e nada mais: guarda a tabela de distâncias da rota
- * enquanto ela não muda, lembra até onde a busca chegou, e chama a função pura
- * de progresso. Todo o cálculo vive em `trip-progress.ts`.
+ * O hook guarda a tabela de distâncias da rota, lembra até onde a busca
+ * chegou e chama a função pura `computeTripProgress` (em `trip-progress.ts`).
  *
- * A memória do índice fica em estado, e não em um ref: com o React Compiler
- * ligado o corpo do componente pode ser reexecutado, e ler ou escrever um ref
- * durante a renderização deixa de ser seguro. Ajustar estado durante o render
- * é o padrão que o React recomenda para derivar valor de props que mudaram —
- * o mesmo que `use-trip-route` usa para invalidar a rota anterior.
- *
- * Devolve `null` quando não há rota ou não há posição — a tela mostra os
- * totais do trajeto nesse caso, e não zeros.
+ * Devolve `null` sem rota ou sem posição (a tela mostra os totais da rota).
  */
 export function useTripProgress(
   route: RouteResult | null,
   position: Coordinate | null,
 ): TripProgress | null {
-  // A tabela de distâncias acumuladas é O(n) sobre a geometria — cara o
-  // bastante para não ser refeita a cada leitura do GPS, e só depende da rota.
+  // A tabela de distâncias só depende da rota, então é calculada uma vez por rota.
   const geometry = useMemo(
     () => (route ? buildRouteGeometry(route.coordinates) : null),
     [route],
@@ -55,14 +40,12 @@ export function useTripProgress(
 
   const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY);
 
-  // Mesma rota e mesma posição: o resultado guardado ainda vale. É este atalho
-  // que impede a geometria de ser percorrida em toda renderização — e há
-  // muitas, porque a tela inteira reage a cada leitura do GPS.
+  // Mesma rota e mesma posição: reaproveita o resultado.
   if (snapshot.geometry === geometry && snapshot.position === position) {
     return snapshot.progress;
   }
 
-  // Rota nova significa trajeto novo: a busca recomeça do primeiro vértice.
+  // Rota nova: a busca recomeça do primeiro ponto.
   const fromIndex = snapshot.geometry === geometry ? snapshot.index : 0;
 
   const progress =
@@ -79,8 +62,7 @@ export function useTripProgress(
     geometry,
     position,
     progress,
-    // Só avança a memória quando a leitura é confiável: uma posição fora da
-    // rota não deve empurrar o ponto de partida da próxima busca.
+    // Uma posição fora da rota não avança o ponto de partida da próxima busca.
     index: progress && !progress.isOffRoute ? progress.nearestIndex : fromIndex,
   });
 
