@@ -675,6 +675,11 @@ export default function TripScreen() {
                 </View>
               )}
             </View>
+
+            {/* Velocidade no canto superior esquerdo */}
+            <View style={styles.speedContainer}>
+              <SpeedBadge metersPerSecond={position?.speed ?? null} />
+            </View>
           </View>
 
           {/* Avisos empilham sob a faixa, sem empurrar o mapa. */}
@@ -863,7 +868,6 @@ export default function TripScreen() {
           remainingSeconds={remainingSeconds}
           remainingMeters={remainingMeters}
           bottomInset={insets.bottom}
-          leading={<SpeedBadge metersPerSecond={position?.speed ?? null} />}
           onEndTrip={confirmEnd}
         />
       </View>
@@ -935,6 +939,10 @@ const styles = StyleSheet.create({
   },
   bannerSlot: {
     alignSelf: 'stretch',
+  },
+  /** Velocidade no canto superior esquerdo, abaixo da faixa de direção. */
+  speedContainer: {
+    alignSelf: 'flex-start',
   },
   /** Alinha o controle de câmera à direita, sob a faixa de instrução. */
   mapActions: {
