@@ -85,7 +85,7 @@ export function IntroScreen({ visible }: IntroScreenProps) {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',

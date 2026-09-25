@@ -70,7 +70,7 @@ export function PresentationOverlay({
         distanceKm: 190,
         minutesSinceStop: 180,
         emotion: 'cansado',
-        imageClass: 'estrada',
+        image: 'estrada',
       });
       onTriggerRecommendation();
     }, [onTriggerRecommendation]),
@@ -157,7 +157,7 @@ export function PresentationOverlay({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     zIndex: 50,
   },

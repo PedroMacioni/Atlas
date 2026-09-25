@@ -38,7 +38,7 @@ export function SpotlightOverlay({ active, children }: SpotlightOverlayProps) {
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000000',
   },
 });

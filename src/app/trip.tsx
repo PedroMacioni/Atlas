@@ -58,6 +58,7 @@ import {
 import { useTripVoice } from '@/features/voice/hooks/use-trip-voice';
 import { useWakeWord } from '@/features/voice/hooks/use-wake-word';
 import { chooseOptionByVoice, confirmByVoice } from '@/features/voice/utils/voice-dialogs';
+import { PresentationOverlay } from '@/features/presentation';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { shadows } from '@/theme/shadows';
@@ -106,15 +107,22 @@ export default function TripScreen() {
     Um ponto caminha sobre a rota, já na metade dela, e a tela inteira acredita
     nele. É o que permite mostrar a viagem em andamento sem dirigir 110 km.
   */
-  const { demo: demoParam } = useLocalSearchParams<{ demo?: string }>();
+  const { demo: demoParam, presentation: presentationParam } = useLocalSearchParams<{
+    demo?: string;
+    presentation?: string;
+  }>();
   const isDemo = demoParam === '1';
+  const isPresentation = presentationParam === '1';
+
+  // Presentation mode implies demo mode
+  const effectiveDemo = isDemo || isPresentation;
 
   const chosenDestination = useTripDestination();
-  const destination = isDemo ? DEMO_DRIVE_DESTINATION : chosenDestination;
+  const destination = effectiveDemo ? DEMO_DRIVE_DESTINATION : chosenDestination;
 
-  const tracking = useLocationTracking(!isDemo);
+  const tracking = useLocationTracking(!effectiveDemo);
   const gpsOrigin = useTripOrigin(tracking.position?.coordinate ?? null, tracking.isStarting);
-  const origin = isDemo ? DEMO_DRIVE_ORIGIN : gpsOrigin;
+  const origin = effectiveDemo ? DEMO_DRIVE_ORIGIN : gpsOrigin;
 
   /*
     A rota chega à demonstração por um estado, e não direto de `useTripRoute`:
@@ -122,9 +130,9 @@ export default function TripScreen() {
     posição. Um render de atraso desfaz o laço.
   */
   const [demoRoute, setDemoRoute] = useState<RouteResult | null>(null);
-  const demoDrive = useDemoDrive(isDemo, demoRoute);
+  const demoDrive = useDemoDrive(effectiveDemo, demoRoute);
 
-  const position = isDemo ? demoDrive.position : tracking.position;
+  const position = effectiveDemo ? demoDrive.position : tracking.position;
 
   const session = useTripSession({ origin, destination, position });
 
@@ -159,17 +167,17 @@ export default function TripScreen() {
     do mapa no meio da demonstração — ele continua andando no trajeto anterior
     até o novo chegar.
   */
-  if (isDemo && trip.route && demoRoute !== trip.route) {
+  if (effectiveDemo && trip.route && demoRoute !== trip.route) {
     setDemoRoute(trip.route);
   }
 
   // Cada demonstração começa do cenário do escopo, e não do que ficou da
   // anterior.
   useEffect(() => {
-    if (isDemo) {
+    if (effectiveDemo) {
       resetDemoScenario();
     }
-  }, [isDemo]);
+  }, [effectiveDemo]);
 
   /*
     A distância que o modelo vê começa sendo a que o carro simulado já andou —
@@ -179,7 +187,7 @@ export default function TripScreen() {
   const demoDistanceSynced = useRef(false);
 
   useEffect(() => {
-    if (!isDemo || demoDistanceSynced.current || demoDrive.traveledMeters <= 0) {
+    if (!effectiveDemo || demoDistanceSynced.current || demoDrive.traveledMeters <= 0) {
       return;
     }
 
@@ -198,7 +206,7 @@ export default function TripScreen() {
     tripId: session.tripId,
     // Na demonstração quem sabe a distância é o carro simulado: o diário da
     // sessão só soma o que o GPS andou, e o GPS não andou.
-    traveledMeters: isDemo ? demoDrive.traveledMeters : session.traveledMeters,
+    traveledMeters: effectiveDemo ? demoDrive.traveledMeters : session.traveledMeters,
     location: position?.coordinate ?? null,
   });
 
@@ -210,7 +218,7 @@ export default function TripScreen() {
    * variáveis escolhidas à mão. As condições são lidas no momento do toque,
    * que é quando elas valem.
    */
-  const askRecommendation = () => recommendations.ask(isDemo ? getDemoScenario() : undefined);
+  const askRecommendation = () => recommendations.ask(effectiveDemo ? getDemoScenario() : undefined);
 
   const scene = useSceneReadings({
     tripId: session.tripId,
@@ -638,7 +646,7 @@ export default function TripScreen() {
         // O ponto azul nativo é o do GPS de verdade: na demonstração ele
         // apareceria onde o aparelho está, longe da seta, como se houvesse
         // dois "você" no mapa.
-        showsUserLocation={!isDemo && hasPosition && !isFollowing}
+        showsUserLocation={!effectiveDemo && hasPosition && !isFollowing}
         showsOriginMarker={!hasPosition}
         focus={isFollowing ? 'navigation' : 'route'}
         userHeading={mapHeading}
@@ -777,7 +785,7 @@ export default function TripScreen() {
               Controles da demonstração: as condições que o Random Forest vai
               ver, e o pause — para a tela ficar parada na hora da foto.
             */}
-            {isDemo ? (
+            {effectiveDemo && !isPresentation ? (
               <>
                 <FloatingIconButton
                   size="lg"
@@ -857,6 +865,21 @@ export default function TripScreen() {
           onEndTrip={confirmEnd}
         />
       </View>
+
+      {isPresentation && (
+        <PresentationOverlay
+          demoDrive={demoDrive}
+          onTriggerRecommendation={askRecommendation}
+          onAcceptRecommendation={() => answerRecommendation(true)}
+          onSelectPlace={(index) => {
+            const places = stopOptions.result?.places;
+            if (places && places[index]) {
+              chooseStop(places[index]);
+            }
+          }}
+          onCompleteTrip={concludeDemoTrip}
+        />
+      )}
     </View>
   );
 }

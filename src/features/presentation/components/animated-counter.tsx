@@ -8,7 +8,7 @@ import Animated, {
 import { TextInput, StyleSheet } from 'react-native';
 
 import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
+import { textVariants } from '@/theme/typography';
 
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
 
@@ -41,7 +41,7 @@ export function AnimatedCounter({ value, format, duration = 1000 }: AnimatedCoun
 
 const styles = StyleSheet.create({
   text: {
-    ...typography.metric,
+    ...textVariants.metric,
     color: colors.text,
     textAlign: 'center',
     padding: 0,
