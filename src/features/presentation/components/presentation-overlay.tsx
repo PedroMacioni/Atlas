@@ -126,7 +126,7 @@ export function PresentationOverlay({
       {/* Intro screen for Act 1 */}
       <IntroScreen visible={currentAct === 1} />
 
-      {/* Spotlight overlay for highlighting elements */}
+      {/* Spotlight overlay - darkens everything except highlighted elements */}
       <SpotlightOverlay active={spotlightTarget !== null}>{null}</SpotlightOverlay>
 
       {/* Caption bar centered vertically */}

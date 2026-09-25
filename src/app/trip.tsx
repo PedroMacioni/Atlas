@@ -721,15 +721,17 @@ export default function TripScreen() {
           ) : null}
 
           {recommendations.current ? (
-            <RecommendationCard
-              recommendation={recommendations.current}
-              onAccept={() => answerRecommendation(true)}
-              onDecline={() => answerRecommendation(false)}
-            />
+            <View style={isPresentation && styles.spotlight}>
+              <RecommendationCard
+                recommendation={recommendations.current}
+                onAccept={() => answerRecommendation(true)}
+                onDecline={() => answerRecommendation(false)}
+              />
+            </View>
           ) : null}
 
           {stopOptions.category ? (
-            <View style={[styles.panel, shadows.raised]}>
+            <View style={[styles.panel, shadows.raised, isPresentation && styles.spotlight]}>
               <Text variant="heading">Onde parar?</Text>
               <NearbyOptions
                 result={stopOptions.result}
@@ -931,5 +933,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     minHeight: 44,
+  },
+  /** Eleva o componente acima do overlay de spotlight da apresentação. */
+  spotlight: {
+    zIndex: 100,
   },
 });
