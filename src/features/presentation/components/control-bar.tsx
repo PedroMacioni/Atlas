@@ -5,7 +5,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { ActIndicator } from './act-indicator';
 import { colors } from '@/theme/colors';
-import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 
 export type ControlBarProps = {
