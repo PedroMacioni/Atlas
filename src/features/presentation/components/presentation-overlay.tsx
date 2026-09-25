@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -7,13 +7,14 @@ import { runOnJS } from 'react-native-reanimated';
 import { CaptionBar } from './caption-bar';
 import { IntroScreen } from './intro-screen';
 import { SpotlightOverlay } from './spotlight-overlay';
+import { TapEffect } from './tap-effect';
+import { ListeningBadge } from './listening-badge';
 import { usePresentation } from '../hooks/use-presentation';
 import { useActRunner, type ActCallbacks } from '../hooks/use-act-runner';
 import { resetPresentation } from '../state/presentation-state';
 import type { DemoDrive } from '@/features/demo/hooks/use-demo-drive';
 import { setDemoScenario } from '@/features/demo/state/demo-scenario';
 import { requestTripAction } from '@/features/trip/state/trip-action-request';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing } from '@/theme/spacing';
 
 export type PresentationOverlayProps = {
@@ -26,16 +27,16 @@ export type PresentationOverlayProps = {
   onCompleteTrip: () => void;
 };
 
+type TapEffectState = { x: number; y: number; key: number } | null;
+
 export function PresentationOverlay({
   demoDrive,
   onTriggerRecommendation,
   onAcceptRecommendation,
-  onSelectPlace,
   onSetNearbyStop,
   onCompleteTrip,
 }: PresentationOverlayProps) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const {
     currentAct,
     currentActData,
@@ -45,8 +46,10 @@ export function PresentationOverlay({
     totalActs,
     nextAct,
     prevAct,
-    togglePause,
   } = usePresentation();
+
+  const [tapEffect, setTapEffect] = useState<TapEffectState>(null);
+  const [showListening, setShowListening] = useState(false);
 
   // Reset presentation state on mount
   useEffect(() => {
@@ -94,6 +97,10 @@ export function PresentationOverlay({
       [onAcceptRecommendation, onSetNearbyStop, router]
     ),
 
+    onTapEffect: useCallback((x: number, y: number) => {
+      setTapEffect({ x, y, key: Date.now() });
+    }, []),
+
     onNavigate: useCallback(
       (to: string) => {
         router.push(to as never);
@@ -102,6 +109,10 @@ export function PresentationOverlay({
     ),
 
     onCompleteTrip,
+
+    onShowListening: useCallback((visible: boolean) => {
+      setShowListening(visible);
+    }, []),
 
     onActComplete: useCallback(() => {
       // Auto-advance to next act after sequence completes
@@ -137,6 +148,19 @@ export function PresentationOverlay({
       {/* Spotlight overlay - darkens everything except highlighted elements */}
       <SpotlightOverlay active={spotlightTarget !== null}>{null}</SpotlightOverlay>
 
+      {/* Tap effect animation */}
+      {tapEffect && (
+        <TapEffect
+          key={tapEffect.key}
+          x={tapEffect.x}
+          y={tapEffect.y}
+          onComplete={() => setTapEffect(null)}
+        />
+      )}
+
+      {/* Listening indicator - ao lado da velocidade */}
+      {showListening && <ListeningBadge />}
+
       {/* Caption bar centered vertically */}
       {currentAct !== 1 && (
         <View style={styles.captionContainer}>
@@ -148,8 +172,6 @@ export function PresentationOverlay({
       <GestureDetector gesture={composedGesture}>
         <View style={styles.gestureArea} />
       </GestureDetector>
-
-      {/* Control bar hidden for recording - tap to advance, swipe right to go back */}
     </View>
   );
 }
