@@ -1,20 +1,18 @@
 """
-A justificativa em português (escopo §4.5, RNF-08).
+Monta a justificativa da recomendação em português (escopo §4.5, RNF-08).
 
-A partir das contribuições do modelo, escolhe as variáveis que mais
-empurraram **esta** decisão e as escreve com os valores reais da viagem:
+Pega as variáveis que mais pesaram na decisão e escreve uma frase com os
+valores reais da viagem, por exemplo:
 
     Recomendação: DESCANSAR. Motivo: você parece cansado, está há 2h10 sem
     parar e viaja há 2h40.
 
-As frases não são fixas por decisão. Se o modelo decidiu DESCANSAR por causa
-do horário, a justificativa fala do horário; se foi pelo tempo sem parada,
-fala disso. O texto só pode citar o que o modelo de fato usou.
+O texto só cita as variáveis que o modelo realmente usou nesta decisão.
 """
 
 from app.ml.features import TripContext
 
-# Os nomes das decisões como o escopo os escreve (§4.4).
+# Nome de cada decisão como aparece no escopo (§4.4).
 DECISION_LABELS = {
     "continuar": "CONTINUAR",
     "descansar": "DESCANSAR",
@@ -26,7 +24,7 @@ DECISION_LABELS = {
 
 JUST_STARTED = "a viagem acabou de começar"
 
-# Contribuições menores que isto são ruído e não entram no texto.
+# Contribuições menores que isso são ruído e não entram no texto.
 MIN_CONTRIBUTION = 0.02
 MAX_REASONS = 3
 
@@ -48,7 +46,7 @@ def _clock(hour: float) -> str:
 
 
 def _reason(variable: str, context: TripContext) -> str | None:
-    """A frase de uma variável, ou `None` se ela não tem o que dizer."""
+    """Frase de uma variável, ou `None` se ela não tem nada a dizer."""
     match variable:
         case "emocao":
             return {
@@ -67,7 +65,7 @@ def _reason(variable: str, context: TripContext) -> str | None:
             }.get(context.image)
         case "tempo_sem_parada":
             if context.minutes_since_stop < 5:
-                # "Parou há 0 min" é número sem informação: diga o que é.
+                # "Parou há 0 min" não ajuda ninguém: melhor dizer o que aconteceu.
                 return JUST_STARTED if context.trip_minutes < 5 else "acabou de parar"
             if context.minutes_since_stop >= 60:
                 return f"está há {format_minutes(context.minutes_since_stop)} sem parar"
@@ -95,7 +93,7 @@ def _join(parts: list[str]) -> str:
 
 
 def explain(decision: str, contributions: dict[str, float], context: TripContext) -> str:
-    """A justificativa de uma decisão, pronta para ser exibida e falada."""
+    """Justificativa de uma decisão, pronta para mostrar e falar."""
     ranked = sorted(contributions.items(), key=lambda item: item[1], reverse=True)
 
     reasons = []
@@ -103,8 +101,7 @@ def explain(decision: str, contributions: dict[str, float], context: TripContext
         if weight < MIN_CONTRIBUTION or len(reasons) >= MAX_REASONS:
             break
         sentence = _reason(variable, context)
-        # Duas variáveis podem dizer a mesma coisa ("a viagem acabou de
-        # começar" vale para tempo de viagem e para tempo sem parada).
+        # Duas variáveis podem gerar a mesma frase ("a viagem acabou de começar").
         if sentence and sentence not in reasons:
             reasons.append(sentence)
 

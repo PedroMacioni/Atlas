@@ -1,4 +1,4 @@
-"""Recomendações do Random Forest — o contrato de `/v1/trips/{id}/recommendations`."""
+"""Formato das requisições e respostas de recomendação."""
 
 from typing import Literal
 from uuid import UUID
@@ -9,14 +9,14 @@ from app.schemas.base import ApiModel
 from app.schemas.coordinate import Coordinate
 from app.schemas.trip import Decision, Emotion, ImageClass
 
-# `check`: consulta periódica do app — o backend decide se é hora.
-# `manual`: "Atlas, preciso abastecer ou descansar" — sempre avalia.
-# `simulation`: modo de demonstração — sempre avalia, com variáveis trocadas.
+# `check`: consulta periódica do app (o backend decide se já é hora).
+# `manual`: "Atlas, preciso abastecer ou descansar" (sempre avalia).
+# `simulation`: modo de demonstração (sempre avalia, com valores trocados).
 Trigger = Literal["check", "manual", "simulation"]
 
 
 class SimulationOverrides(ApiModel):
-    """As 6 variáveis, todas opcionais: o que não vier fica com o valor real."""
+    """As 6 variáveis, todas opcionais: o que não vier usa o valor real."""
 
     hour: float | None = Field(default=None, ge=0, lt=24)
     trip_minutes: float | None = Field(default=None, ge=0, le=24 * 60)
@@ -29,7 +29,7 @@ class SimulationOverrides(ApiModel):
 
 class RecommendationRequest(ApiModel):
     trigger: Trigger
-    # Distância percorrida até aqui — só o aparelho a conhece, somando o GPS.
+    # Distância percorrida até agora (só o app sabe, somando o GPS).
     distance_meters: float = Field(ge=0)
     location: Coordinate | None = None
     simulation: SimulationOverrides | None = None
@@ -45,7 +45,7 @@ class Contribution(ApiModel):
     variable: str
     label: str
     value: str
-    # Quanto a variável empurrou a probabilidade da decisão escolhida.
+    # Quanto essa variável aumentou (ou diminuiu) a chance da decisão escolhida.
     weight: float
 
 
@@ -61,18 +61,17 @@ class Recommendation(ApiModel):
     features: dict[str, float | str]
     simulated: bool
     model_version: str
-    # Toda decisão que não seja CONTINUAR pede confirmação antes de mexer na
-    # rota (CA-10).
+    # Toda decisão diferente de CONTINUAR pede confirmação antes de mudar a rota (CA-10).
     requires_confirmation: bool
 
 
 class RecommendationResponse(ApiModel):
-    # `false` quando não era hora de avaliar (`reason` diz por quê).
+    # `false` quando ainda não era hora de avaliar (`reason` diz o motivo).
     evaluated: bool
-    # `true` quando vale interromper o motorista — mostrar e falar.
+    # `true` quando vale a pena avisar o motorista (mostrar e falar).
     notify: bool
     reason: str | None = None
-    # Tensão forte na voz: oferecer a emergência em vez de recomendar (§11).
+    # Tensão forte na voz: oferecer a emergência em vez de recomendar.
     assistance: bool = False
     recommendation: Recommendation | None = None
 

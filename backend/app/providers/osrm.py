@@ -1,19 +1,10 @@
 """
-Provider de rotas do OSRM.
+Serviço de rotas usando o OSRM.
 
-┌──────────────────────────────────────────────────────────────────────────┐
-│ ATENÇÃO — SOLUÇÃO TEMPORÁRIA DE DESENVOLVIMENTO                          │
-│                                                                          │
-│ `router.project-osrm.org` é mantido pelo projeto OSRM apenas como        │
-│ demonstração: sem SLA, sem uso comercial, com limites de requisição não  │
-│ documentados e sujeito a sair do ar sem aviso.                           │
-│                                                                          │
-│ O cache desta API reduz bastante a pressão sobre ele, mas não legitima o │
-│ uso em produção. Antes de distribuir, aponte `ATLAS_OSRM_BASE_URL` para  │
-│ uma instância própria ou escreva outro provider.                         │
-└──────────────────────────────────────────────────────────────────────────┘
-
-O mesmo aviso está em `src/features/routing/providers/osrm-route-provider.ts`.
+ATENÇÃO: `router.project-osrm.org` é um servidor público de demonstração,
+sem garantia de funcionamento, sem uso comercial e com limites de uso.
+O cache da API reduz as chamadas, mas para um produto de verdade seria
+preciso usar um servidor próprio (`ATLAS_OSRM_BASE_URL`) ou outro serviço.
 
 @see https://project-osrm.org/docs/v5.24.0/api/
 """
@@ -27,18 +18,14 @@ from app.providers.base import ProviderRoute
 from app.schemas.coordinate import Coordinate
 from app.schemas.route import ManeuverModifier, ManeuverType, RouteStep
 
-# O servidor público expõe apenas o perfil de carro.
+# O servidor público só tem o perfil de carro.
 OSRM_PROFILE = "driving"
 
-# Distância máxima entre o ponto pedido e a via onde o OSRM vai encaixá-lo.
+# Distância máxima entre o ponto pedido e a rua mais próxima.
 #
-# Sem esse limite o encaixe é ilimitado: um ponto no mar aberto recebe a
-# estrada mais próxima do continente, e a API devolve — com `code: Ok` — uma
-# rota que começa a mais de mil quilômetros de onde o usuário apontou. Com o
-# limite, o OSRM responde `NoSegment`, que esta API traduz para 404.
-#
-# 10 km é tolerante com zona rural e com imprecisão de GPS, e ainda rejeita
-# o que claramente não tem estrada por perto.
+# Sem esse limite, um ponto no meio do mar seria "encaixado" na estrada mais
+# perto, a centenas de km. Com o limite, o OSRM responde `NoSegment` e a API
+# devolve 404. 10 km aceita zona rural e erro de GPS.
 SNAP_RADIUS_METERS = 10_000
 
 
@@ -62,12 +49,12 @@ class OsrmRouteProvider:
         self, origin: Coordinate, destinations: list[Coordinate]
     ) -> list[tuple[float, float] | None]:
         """
-        Distância e tempo de carro da origem até cada destino, numa chamada só.
+        Distância e tempo de carro da origem até cada destino, numa chamada só
+        (serviço `table` do OSRM).
 
-        É o serviço `table` do OSRM. Devolve `(metros, segundos)` por destino,
-        na mesma ordem, ou `None` para um destino sem trajeto. Uma falha do
-        serviço devolve tudo `None` em vez de levantar: quem chama cai na
-        distância em linha reta, e a lista de opções continua de pé.
+        Devolve `(metros, segundos)` por destino, na mesma ordem, ou `None` para
+        um destino sem trajeto. Se o serviço falhar, devolve tudo `None` e quem
+        chamou usa a distância em linha reta.
         """
         if not destinations:
             return []
@@ -90,7 +77,7 @@ class OsrmRouteProvider:
         distances = (payload.get("distances") or [[]])[0]
         result: list[tuple[float, float] | None] = []
 
-        # O índice 0 é a própria origem; os destinos começam em 1.
+        # O índice 0 é a própria origem; os destinos começam no 1.
         for index in range(1, len(destinations) + 1):
             try:
                 distance, duration = distances[index], durations[index]
@@ -103,8 +90,7 @@ class OsrmRouteProvider:
         return result
 
     async def _fetch(self, points: list[Coordinate]) -> dict[str, Any]:
-        # A URL do OSRM leva os pontos no path, na ordem longitude,latitude:
-        # origem, paradas intermediárias e destino.
+        # O OSRM recebe os pontos na URL como longitude,latitude separados por ';'.
         path = ";".join(f"{p.longitude},{p.latitude}" for p in points)
         url = f"{self._base_url}/route/v1/{OSRM_PROFILE}/{path}"
 
@@ -112,15 +98,13 @@ class OsrmRouteProvider:
             response = await self._client.get(
                 url,
                 params={
-                    # GeoJSON dispensa decodificar polyline codificada.
+                    # GeoJSON evita ter que decodificar a polyline compactada.
                     "overview": "full",
                     "geometries": "geojson",
                     "alternatives": "false",
-                    # As manobras são o que permite a faixa de instrução na
-                    # tela de viagem. Custam bytes na resposta, não uma
-                    # chamada a mais.
+                    # Manobras para a faixa de instrução na tela.
                     "steps": "true",
-                    # Um raio por ponto, na ordem em que eles aparecem na URL.
+                    # Um raio de encaixe por ponto, na mesma ordem da URL.
                     "radiuses": ";".join([str(SNAP_RADIUS_METERS)] * len(points)),
                 },
             )
@@ -136,11 +120,9 @@ class OsrmRouteProvider:
         except ValueError:
             payload = None
 
-        # O OSRM responde 400 com um corpo explicativo quando a recusa é de
-        # domínio — `NoSegment` para um ponto sem via dentro do raio de
-        # encaixe, por exemplo. Isso não é uma falha do serviço, e o `code` do
-        # corpo vale mais que o status: deixar o parsing decidir dá 404 em vez
-        # de 502. Só quando não há corpo utilizável é que o status responde.
+        # Para recusas "de negócio" (ex.: `NoSegment`) o OSRM responde 400 com um
+        # corpo explicando. Nesse caso o `code` do corpo vale mais que o status
+        # HTTP: assim devolvemos 404 em vez de 502.
         if isinstance(payload, dict) and payload.get("code"):
             return payload
 
@@ -153,11 +135,11 @@ class OsrmRouteProvider:
 
     @staticmethod
     def _parse(payload: dict[str, Any]) -> ProviderRoute:
-        """Valida o corpo antes de confiar nele — a mesma checagem do provider do app."""
+        """Confere o corpo da resposta antes de usar."""
         code = payload.get("code")
 
         if code != "Ok":
-            # `NoRoute` é resposta legítima do serviço, não falha dele.
+            # `NoRoute`/`NoSegment` são respostas válidas: não existe caminho.
             if code in {"NoRoute", "NoSegment"}:
                 raise RouteNotFound("Nenhuma rota foi encontrada entre os pontos informados.")
             message = payload.get("message") or f"O serviço de rotas recusou a consulta ({code})."
@@ -175,8 +157,7 @@ class OsrmRouteProvider:
         if not isinstance(raw_pairs, list):
             raise RouteProviderUnavailable("O serviço de rotas devolveu uma geometria inválida.")
 
-        # GeoJSON usa [longitude, latitude] — a inversão de eixos é
-        # responsabilidade do provider, nunca de quem consome.
+        # GeoJSON usa [longitude, latitude]; aqui invertemos para o nosso formato.
         coordinates = [
             Coordinate(latitude=pair[1], longitude=pair[0])
             for pair in raw_pairs
@@ -201,9 +182,8 @@ class OsrmRouteProvider:
         return ProviderRoute(coordinates, distance, duration, _parse_steps(route))
 
 
-# Vocabulário do OSRM traduzido para o do Atlas. O que não estiver aqui vira
-# `CONTINUE`: seguir em frente é a instrução que nunca manda o motorista para o
-# lugar errado.
+# Vocabulário do OSRM convertido para o do Atlas. O que não estiver aqui
+# vira `CONTINUE` (seguir em frente).
 _MANEUVER_TYPES: dict[str, ManeuverType] = {
     "depart": ManeuverType.DEPART,
     "arrive": ManeuverType.ARRIVE,
@@ -237,16 +217,14 @@ _MANEUVER_MODIFIERS: dict[str, ManeuverModifier] = {
 
 def _parse_steps(route: dict[str, Any]) -> list[RouteStep]:
     """
-    Converte os passos do OSRM em manobras posicionadas sobre a rota.
+    Converte os passos do OSRM em manobras posicionadas na rota.
 
-    O OSRM descreve cada passo com a manobra no **início** dele e a distância
-    que ele cobre até a próxima. A API converte isso para distância acumulada
-    desde a partida: assim o aplicativo sabe quanto falta para a próxima
-    manobra subtraindo o que já percorreu, sem refazer geometria.
+    O OSRM informa, para cada passo, a manobra no início dele e a distância até
+    o próximo. Aqui convertemos para "distância desde a partida", assim o app
+    sabe quanto falta só subtraindo o que já andou.
 
-    Manobras nunca derrubam uma rota. Se o provider não as mandou, ou mandou em
-    formato inesperado, a lista volta vazia e a tela mostra o trajeto sem a
-    faixa de instrução — que é exatamente o comportamento anterior a elas.
+    Manobras nunca derrubam a rota: se vierem estranhas, a lista fica vazia e
+    a tela só não mostra a faixa de instrução.
     """
     steps: list[RouteStep] = []
     traveled = 0.0
@@ -271,9 +249,7 @@ def _parse_steps(route: dict[str, Any]) -> list[RouteStep]:
 
             steps.append(
                 RouteStep(
-                    type=_MANEUVER_TYPES.get(
-                        str(maneuver.get("type")), ManeuverType.CONTINUE
-                    ),
+                    type=_MANEUVER_TYPES.get(str(maneuver.get("type")), ManeuverType.CONTINUE),
                     modifier=_MANEUVER_MODIFIERS.get(str(maneuver.get("modifier"))),
                     road_name=str(raw.get("name") or ""),
                     distance_along_route_meters=traveled,
@@ -301,7 +277,7 @@ def _parse_location(raw: Any) -> Coordinate | None:
 
 
 def _is_finite_pair(longitude: Any, latitude: Any) -> bool:
-    """Descarta `null`, string e infinito antes de tentar construir a coordenada."""
+    """Descarta `null`, texto, NaN e infinito antes de criar a coordenada."""
     if not isinstance(longitude, int | float) or not isinstance(latitude, int | float):
         return False
     if isinstance(longitude, bool) or isinstance(latitude, bool):

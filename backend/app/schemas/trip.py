@@ -1,9 +1,8 @@
 """
 Viagens, diário de bordo e histórico.
 
-Os vocabulários — emoções, classes de imagem, decisões — são os do escopo
-(§4) e os mesmos dos CHECKs do banco. Os modelos de IA vão escrever nestes
-campos; o contrato fica declarado aqui, antes deles existirem.
+As listas de emoções, classes de imagem e decisões seguem o escopo (§4) e
+são as mesmas aceitas pelo banco (CHECK nas tabelas).
 """
 
 from datetime import datetime
@@ -74,9 +73,8 @@ class TripCreateRequest(ApiModel):
 
 class EventCreateRequest(ApiModel):
     """
-    Um evento do diário. Só os tipos que o aplicativo registra sozinho: início,
-    fim e parada nascem dos seus próprios endpoints, para não haver dois jeitos
-    de encerrar uma viagem.
+    Um evento do diário enviado pelo app. Início, fim e parada têm rotas
+    próprias, para não haver dois jeitos de fazer a mesma coisa.
     """
 
     kind: EventKind
@@ -102,10 +100,9 @@ class StopCreateRequest(ApiModel):
 class TripFinishRequest(ApiModel):
     end_reason: EndReason
     ended_at: datetime | None = None
-    # Distância percorrida de verdade, somada pelo aplicativo sobre o GPS.
+    # Distância percorrida de verdade, somada pelo app com o GPS.
     distance_meters: float = Field(ge=0)
-    # Trajeto percorrido, para o mapa do resumo. Limitado para que uma viagem
-    # longa não vire um corpo de vários megabytes.
+    # Trajeto percorrido, para o mapa do resumo. Tem limite de pontos para o corpo não ficar enorme.
     path: list[Coordinate] = Field(default_factory=list, max_length=20_000)
     location: Coordinate | None = None
 
@@ -138,13 +135,12 @@ class Stop(ApiModel):
 
 
 class TripCard(ApiModel):
-    """O card do histórico (RF-28)."""
+    """Card do histórico (RF-28)."""
 
     id: UUID
     origin_name: str
     destination_name: str
-    # No card, e não só no detalhe, para a tela de destino oferecer os últimos
-    # destinos sem abrir viagem por viagem.
+    # O destino vai no card para a tela de destino mostrar os "últimos destinos".
     destination: Coordinate
     started_at: datetime
     ended_at: datetime | None = None
@@ -160,7 +156,7 @@ class Photo(ApiModel):
 
     id: UUID
     event_id: UUID
-    # URL temporária do bucket privado. Expira; o app a busca junto da viagem.
+    # Link temporário para a foto no bucket privado. Expira.
     url: str
     image_class: ImageClass | None = None
     taken_at: datetime
@@ -174,10 +170,9 @@ class TripDetail(TripCard):
     path: list[Coordinate] = Field(default_factory=list)
     stops: list[Stop] = Field(default_factory=list)
     events: list[TripEvent] = Field(default_factory=list)
-    # Em ordem cronológica, como o resumo final as apresenta (§7.2).
+    # Em ordem cronológica.
     photos: list[Photo] = Field(default_factory=list)
-    # "Maior trecho sem parada" do resumo (§7.2), em segundos. `null` enquanto
-    # a viagem não terminou.
+    # "Maior trecho sem parada" (§7.2), em segundos. `null` enquanto a viagem não terminou.
     longest_stretch_without_stop_seconds: float | None = None
 
 

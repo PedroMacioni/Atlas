@@ -1,25 +1,24 @@
 """
-As 6 variáveis de entrada do Random Forest (escopo §4.3) e como viram números.
+As 6 variáveis de entrada do Random Forest (escopo §4.3) e como elas viram
+números.
 
-Este arquivo é o contrato entre o treino (`backend/ml/`) e a API: os dois
-codificam por aqui, e é isso que garante que o modelo em produção recebe
-exatamente o formato com que foi treinado.
+Este arquivo é usado tanto no treino (`backend/ml/`) quanto na API, o que
+garante que o modelo recebe os dados no mesmo formato em que foi treinado.
 
-| Variável                 | Unidade                 | Codificação                 |
-|--------------------------|-------------------------|-----------------------------|
-| Horário do dia           | hora decimal, 0–24      | seno e cosseno (cíclico)    |
-| Tempo de viagem          | minutos                 | número                      |
-| Distância percorrida     | quilômetros             | número                      |
-| Classe da imagem         | 4 classes + desconhecida| one-hot                     |
-| Estado emocional da voz  | 5 estados + desconhecido| one-hot                     |
-| Tempo desde última parada| minutos                 | número                      |
+| Variável                 | Unidade                  | Como vira número       |
+|--------------------------|--------------------------|------------------------|
+| Horário do dia           | hora decimal, 0–24       | seno e cosseno         |
+| Tempo de viagem          | minutos                  | número                 |
+| Distância percorrida     | quilômetros              | número                 |
+| Classe da imagem         | 4 classes + desconhecida | one-hot                |
+| Estado emocional da voz  | 5 estados + desconhecido | one-hot                |
+| Tempo desde última parada| minutos                  | número                 |
 
-O horário entra como seno e cosseno para que 23h e 0h fiquem perto uma da
-outra — como número puro, meia-noite estaria o mais longe possível das 23h.
+O horário usa seno e cosseno para que 23h e 0h fiquem próximos (como número
+simples, 23 e 0 ficariam longe um do outro).
 
-"Desconhecido" é categoria de primeira classe, e não um buraco: na maior parte
-de uma viagem não há foto recente nem fala recente, e o modelo precisa ter
-aprendido o que fazer justamente nesse caso.
+"Desconhecido" é uma categoria normal: na maior parte da viagem não há foto
+nem fala recente, e o modelo precisa saber o que fazer nesse caso.
 """
 
 import math
@@ -37,7 +36,7 @@ DECISIONS = (
     "fazer_parada",
 )
 
-# As 6 variáveis do escopo, na ordem em que a explicação as apresenta.
+# As 6 variáveis do escopo, na ordem usada na explicação.
 VARIABLES = (
     "horario",
     "tempo_viagem",
@@ -57,9 +56,8 @@ FEATURE_NAMES: tuple[str, ...] = (
     *(f"emocao_{name}" for name in EMOTIONS),
 )
 
-# De cada coluna para a variável do escopo que ela representa — é o que
-# permite somar as contribuições de `horario_sin` e `horario_cos`, ou das
-# colunas one-hot, numa contribuição só por variável.
+# Liga cada coluna à variável do escopo. Serve para somar as contribuições de
+# `horario_sin` e `horario_cos` (ou das colunas one-hot) numa só.
 FEATURE_TO_VARIABLE: dict[str, str] = {
     "horario_sin": "horario",
     "horario_cos": "horario",
@@ -73,7 +71,7 @@ FEATURE_TO_VARIABLE: dict[str, str] = {
 
 @dataclass(frozen=True)
 class TripContext:
-    """Uma leitura das 6 variáveis, em unidades humanas."""
+    """Os valores das 6 variáveis, em unidades normais (minutos, km...)."""
 
     hour: float
     trip_minutes: float
@@ -100,7 +98,7 @@ class TripContext:
 
 
 def encode(context: TripContext) -> list[float]:
-    """Vetor na ordem de `FEATURE_NAMES`."""
+    """Transforma o contexto no vetor de números, na ordem de `FEATURE_NAMES`."""
     angle = 2 * math.pi * (context.hour % 24) / 24
 
     return [

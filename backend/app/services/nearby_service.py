@@ -1,16 +1,17 @@
 """
-As opções próximas — 3 pelo escopo, até 10 na tela de destino: quem são, a
-que distância de carro, em quanto tempo e com que nota (RF-08).
+Lugares próximos: quais são, a que distância de carro, em quanto tempo e
+com que nota (RF-08).
 
-1. as fontes principais, na ordem — Google Places (com nota), depois TomTom
-   (sem nota, grátis) —, cada uma só se tiver chave e limite no dia;
-2. se nenhuma responder, o OpenStreetMap, que não tem chave nem limite;
-3. distância e tempo **de carro** para os candidatos, numa chamada ao OSRM;
-4. as `limit` mais rápidas de alcançar.
+Passos:
+1. tenta as fontes principais em ordem: Google Places (com nota) e depois
+   TomTom (sem nota), cada uma só se tiver chave e limite no dia;
+2. se nenhuma responder, usa o OpenStreetMap (grátis, sem chave);
+3. calcula distância e tempo de carro de todos numa chamada ao OSRM;
+4. devolve os `limit` mais rápidos de alcançar.
 
-As fontes ordenam por distância em linha reta, e em cidade isso engana: o posto
-do outro lado da rodovia está "perto" e a 8 minutos de retorno. Por isso o
-serviço pede alguns candidatos a mais e decide pelo tempo de carro.
+As fontes ordenam por linha reta, o que engana na cidade (o posto do outro
+lado da rodovia parece perto). Por isso pedimos alguns a mais e ordenamos
+pelo tempo de carro.
 """
 
 import logging
@@ -26,9 +27,8 @@ from app.utils.geo import distance_meters
 
 logger = logging.getLogger("atlas.api")
 
-# Serviços de vigilância, consultórios e farmácias aparecem ocasionalmente com
-# a classificação errada em catálogos abertos. Nunca são uma alternativa segura
-# para o botão de emergência.
+# Nomes que às vezes aparecem como "hospital" em catálogos abertos, mas não
+# atendem emergência (vigilância, farmácia, consultório...).
 _NOT_EMERGENCY_MEDICAL_TERMS = (
     "vigilância",
     "vigilancia",
@@ -45,12 +45,10 @@ _NOT_EMERGENCY_MEDICAL_TERMS = (
     "veterin",
 )
 
-# 3 é o que o escopo pede (RF-08) e o que a voz lê; a lista da tela de
-# destino pede até 10.
+# 3 é o que o escopo pede (RF-08) e o que a voz lê; a tela de destino pede até 10.
 DEFAULT_RESULTS = 3
 MAX_RESULTS = 10
-# Candidatos pedidos à fonte antes de ordenar pelo tempo de carro: o dobro do
-# que se vai mostrar, com piso para a lista curta ainda ter onde escolher.
+# Quantos candidatos pedir antes de ordenar pelo tempo de carro (o dobro, no mínimo 6).
 MIN_CANDIDATES = 6
 
 RADIUS_METERS: dict[NearbyCategory, float] = {
@@ -58,7 +56,7 @@ RADIUS_METERS: dict[NearbyCategory, float] = {
     NearbyCategory.RESTAURANTE: 10_000,
     NearbyCategory.HOTEL: 20_000,
     NearbyCategory.PONTO_TURISTICO: 30_000,
-    # Hospital pode estar longe na estrada; melhor achar 3 a 40 km que nenhum.
+    # Hospital pode estar longe na estrada; é melhor achar a 40 km do que nenhum.
     NearbyCategory.HOSPITAL: 40_000,
     NearbyCategory.DESCANSO: 20_000,
     NearbyCategory.PARADA: 15_000,
@@ -67,10 +65,10 @@ RADIUS_METERS: dict[NearbyCategory, float] = {
 
 @dataclass(frozen=True)
 class NearbySource:
-    """Uma fonte principal, na ordem de preferência, com o seu limite do dia."""
+    """Uma fonte principal, com o seu limite diário."""
 
     provider: NearbyProvider
-    # Como aparece no `fallback_reason`: "Google Places", "TomTom".
+    # Nome que aparece no `fallback_reason`: "Google Places", "TomTom".
     label: str
     budget: DailyBudget
 
@@ -95,16 +93,14 @@ class NearbyService:
         radius = RADIUS_METERS[category]
         candidates, source, reason = await self._candidates(category, origin, radius, wanted)
 
-        # Os mais próximos em linha reta primeiro, para a matriz de tempos
-        # olhar só os que têm chance.
+        # Primeiro os mais perto em linha reta, para calcular o tempo só dos que têm chance.
         candidates.sort(key=lambda c: distance_meters(origin, c.location))
         candidates = candidates[:wanted]
 
         matrix = await self._router.get_matrix(origin, [c.location for c in candidates])
         places = [_to_place(c, origin, road) for c, road in zip(candidates, matrix, strict=True)]
 
-        # Quem tem tempo de carro vem antes, pelo tempo; sem trajeto, pela
-        # distância em linha reta.
+        # Quem tem tempo de carro vem antes, pelo tempo; os outros, pela linha reta.
         places.sort(
             key=lambda p: (p.duration_seconds is None, p.duration_seconds or p.distance_meters)
         )
@@ -116,8 +112,7 @@ class NearbyService:
     async def _candidates(
         self, category: NearbyCategory, origin: Coordinate, radius: float, wanted: int
     ) -> tuple[list[Candidate], str, str | None]:
-        # O motivo de a preferida não ter respondido — o primeiro, que é o
-        # que explica a falta de nota.
+        # Motivo de a fonte preferida não ter sido usada (guardamos só o primeiro).
         reason = None if self._sources else "nenhuma fonte com chave configurada"
 
         for source in self._sources:
@@ -135,7 +130,11 @@ class NearbyService:
             if found:
                 return found, source.provider.id, reason
 
-            reason = reason or f"{source.label} sem hospitais adequados"
+            reason = reason or (
+                f"{source.label} sem hospitais adequados"
+                if category is NearbyCategory.HOSPITAL
+                else f"{source.label} sem resultados"
+            )
 
         try:
             found = await self._fallback.search(category, origin, radius, wanted)
@@ -148,7 +147,10 @@ class NearbyService:
         return _appropriate_candidates(category, found), self._fallback.id, reason
 
 
-def _appropriate_candidates(category: NearbyCategory, candidates: list[Candidate]) -> list[Candidate]:
+def _appropriate_candidates(
+    category: NearbyCategory, candidates: list[Candidate]
+) -> list[Candidate]:
+    """Na busca de hospital, tira da lista o que não atende emergência."""
     if category is not NearbyCategory.HOSPITAL:
         return candidates
 

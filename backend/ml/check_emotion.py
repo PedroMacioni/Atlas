@@ -1,16 +1,15 @@
 """
-Confere a leitura de emoção com as vozes do grupo (CA-07, §16).
+Testa a leitura de emoção com gravações do grupo (CA-07, §16).
 
     uv run python -m ml.check_emotion gravacoes/
 
-Cada arquivo de áudio da pasta é classificado e a tabela sai com arousal,
-valência, a emoção escolhida e a confiança. Com o nome do arquivo começando
-pela emoção esperada — `bravo_pedro_01.wav`, `cansado_ana.wav` — o script
-também conta os acertos e sugere onde os limites de `app/audio/emotion_rules`
-estão apertados demais.
+Cada áudio da pasta é classificado e o script mostra uma tabela com
+arousal, valência, emoção e confiança. Se o nome do arquivo começar pela
+emoção esperada (ex.: `bravo_pedro_01.wav`, `cansado_ana.wav`), ele também
+conta os acertos.
 
-É assim que a calibração sai do palpite: grave meia dúzia de frases de cada
-estado, rode isto e ajuste os cortes com a tabela na mão.
+Serve para ajustar os limites de `app/audio/emotion_rules.py` com dados
+reais em vez de palpite.
 """
 
 import sys

@@ -5,15 +5,15 @@ Treina e avalia o Random Forest de recomendação.
     uv run python -m ml.train
 
 Entradas:
-- `ml/data/synthetic.csv` — gerado pelas regras da equipe;
-- `ml/data/real.csv` — opcional, exportado dos testes reais por
-  `ml.export_real_data` (recomendações aceitas pelo usuário);
-- `ml/data/manual_scenarios.csv` — os cenários escritos à mão. **Não entram
-  no treino**: são a prova final, o conjunto que a equipe considera óbvio.
+- `ml/data/synthetic.csv`: gerado pelas regras da equipe;
+- `ml/data/real.csv`: opcional, dados reais exportados por
+  `ml.export_real_data`;
+- `ml/data/manual_scenarios.csv`: cenários escritos à mão. NÃO entram no
+  treino: servem como prova final.
 
 Saídas:
-- `ml/models/decision_rf.joblib` — o modelo que a API carrega;
-- `ml/reports/metrics.md` — a evidência de teste (entregável do escopo).
+- `ml/models/decision_rf.joblib`: o modelo que a API carrega;
+- `ml/reports/metrics.md`: relatório com as métricas (evidência de teste).
 """
 
 import csv
@@ -43,19 +43,17 @@ DATA_DIR = ML_DIR / "data"
 MODEL_PATH = ML_DIR / "models" / "decision_rf.joblib"
 REPORT_PATH = ML_DIR / "reports" / "metrics.md"
 
-# Escolhidos por validação cruzada no treino (F1 macro, 5 dobras), numa grade
-# de profundidade {10, 12, 16, sem limite} × folha mínima {1, 3, 5} × árvores
-# {150, 300} — ver "Escolha dos hiperparâmetros" em ml/README.md. Nunca pelos
-# cenários da equipe: esses são a prova final, e ajustar por eles seria
-# decorar a resposta.
+# Escolhidos por validação cruzada (F1 macro, 5 dobras) numa grade de
+# profundidade {10, 12, 16, sem limite} × folha mínima {1, 3, 5} × árvores
+# {150, 300}. Detalhes em ml/README.md. Os cenários da equipe nunca foram usados
+# para escolher, senão o modelo estaria "decorando a prova".
 HYPERPARAMETERS = {
     "n_estimators": 200,
-    # 16 ganhou de 12 por quase 3 pontos de F1; sem limite não ganhou de 16.
+    # 16 foi melhor que 12 (quase 3 pontos de F1); sem limite não melhorou.
     "max_depth": 16,
-    # 1 tende a decorar os 5% de ruído proposital do dataset; 2 é o meio-termo.
+    # 1 tende a decorar os 5% de ruído do dataset; 2 é o meio-termo.
     "min_samples_leaf": 2,
-    # CONTINUAR é mais de 40% do dataset; sem o balanceamento o modelo
-    # aprenderia que "continuar" quase sempre acerta.
+    # CONTINUAR é mais de 40% do dataset; sem balancear, o modelo diria "continuar" quase sempre.
     "class_weight": "balanced",
     "random_state": SEED,
     "n_jobs": -1,
@@ -118,7 +116,7 @@ def main() -> None:
     report = classification_report(y_test, predicted, labels=list(DECISIONS), output_dict=True)
     matrix = confusion_matrix(y_test, predicted, labels=list(DECISIONS))
 
-    # Importância global, somada por variável do escopo.
+    # Importância geral de cada variável do escopo.
     importance = dict.fromkeys(VARIABLES, 0.0)
     for name, value in zip(FEATURE_NAMES, forest.feature_importances_, strict=True):
         importance[FEATURE_TO_VARIABLE[name]] += float(value)
@@ -134,7 +132,7 @@ def main() -> None:
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, MODEL_PATH, compress=3)
 
-    # A prova final: os cenários da equipe, com o modelo como a API o usa.
+    # Prova final: os cenários da equipe, usando o modelo do mesmo jeito que a API.
     model = DecisionModel(bundle)
     manual_rows = []
     manual_hits = 0

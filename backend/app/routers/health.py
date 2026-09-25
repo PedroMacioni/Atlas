@@ -1,4 +1,4 @@
-"""Diagnóstico — o primeiro endpoint que qualquer deploy precisa responder."""
+"""Rota de diagnóstico: diz se a API, o banco e os modelos estão funcionando."""
 
 from typing import Any
 
@@ -21,15 +21,13 @@ async def health(
     settings: SettingsDep,
 ) -> HealthResponse:
     """
-    Responde 200 mesmo com o banco fora.
+    Responde 200 mesmo com o banco fora do ar.
 
-    A distinção é proposital: sem Supabase a API perde o catálogo e o cache,
-    mas continua calculando rotas. `degraded` diz exatamente isso, e um
-    balanceador pode decidir se ainda quer mandar tráfego.
+    Sem banco a API perde o cache e os lugares salvos, mas ainda calcula rotas.
+    Nesse caso o status é `degraded`.
 
-    O estado dos três modelos vem junto porque é o que a tela inicial do
-    aplicativo mostra: "conexão com a IA" (CA-01) é uma pergunta que só esta
-    resposta sabe responder.
+    Também informa o estado dos três modelos de IA, que a tela inicial do app
+    pode mostrar (CA-01).
     """
     try:
         await database.ping()
@@ -50,7 +48,7 @@ async def health(
 
 
 def _loading_state(classifier: Any | None) -> str:
-    """`off` quando não existe, `ready` quando já carregou, `loading` no meio."""
+    """`off` = desligado, `ready` = pronto, `loading` = ainda carregando."""
     if classifier is None:
         return "off"
     return "ready" if classifier.ready else "loading"

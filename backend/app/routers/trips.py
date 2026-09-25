@@ -1,8 +1,8 @@
 """
-Viagens: início, diário de bordo, paradas, encerramento e histórico.
+Viagens: início, diário de bordo, paradas, fim e histórico.
 
-Toda rota exige o cabeçalho `X-Atlas-Device` — o UUID anônimo do aparelho. Não
-há DELETE: o histórico é mantido por tempo indeterminado (RF-30).
+Toda rota exige o cabeçalho `X-Atlas-Device` (id anônimo do aparelho).
+Não existe DELETE: o histórico é mantido para sempre (RF-30).
 """
 
 from typing import Annotated
@@ -36,19 +36,19 @@ _FINISHED = {409: {"description": "A viagem já foi encerrada."}}
 async def start_trip(
     payload: TripCreateRequest, device: DeviceDep, service: TripServiceDep
 ) -> TripDetail:
-    """Abre uma viagem e registra o primeiro evento do diário."""
+    """Começa uma viagem e grava o primeiro evento do diário."""
     return await service.start(device, payload)
 
 
 @router.get("", response_model=TripListResponse)
 async def list_trips(device: DeviceDep, service: TripServiceDep) -> TripListResponse:
-    """Histórico do aparelho, da mais recente para a mais antiga (RF-28)."""
+    """Histórico do aparelho, da viagem mais recente para a mais antiga (RF-28)."""
     return await service.history(device)
 
 
 @router.get("/{trip_id}", response_model=TripDetail, responses=_NOT_FOUND)
 async def get_trip(trip_id: UUID, device: DeviceDep, service: TripServiceDep) -> TripDetail:
-    """Resumo e detalhe: trajeto, paradas e diário de bordo (RF-26, RF-29)."""
+    """Resumo e detalhe de uma viagem: trajeto, paradas e diário (RF-26, RF-29)."""
     return await service.get(device, trip_id)
 
 
@@ -61,7 +61,7 @@ async def get_trip(trip_id: UUID, device: DeviceDep, service: TripServiceDep) ->
 async def record_event(
     trip_id: UUID, payload: EventCreateRequest, device: DeviceDep, service: TripServiceDep
 ) -> TripEvent:
-    """Acrescenta um evento ao diário — comando, emergência, recomendação."""
+    """Adiciona um evento ao diário (comando, emergência, recomendação...)."""
     return await service.record_event(device, trip_id, payload)
 
 
@@ -74,7 +74,7 @@ async def record_event(
 async def add_stop(
     trip_id: UUID, payload: StopCreateRequest, device: DeviceDep, service: TripServiceDep
 ) -> Stop:
-    """ "Registrar parada": grava a parada e o evento correspondente no diário."""
+    """Registra uma parada ("Registrar parada") e o evento no diário."""
     return await service.add_stop(device, trip_id, payload)
 
 
@@ -90,9 +90,8 @@ async def finish_trip(
     return await service.finish(device, trip_id, payload)
 
 
-# Uma foto de celular a 1280 px e qualidade média fica em algumas centenas de
-# kB. 5 MB é o limite do bucket, e recusar antes de ler o arquivo inteiro
-# evita que um engano ocupe a memória da API.
+# Limite de 5 MB por foto (o mesmo do bucket). Uma foto de celular em
+# qualidade média tem algumas centenas de kB.
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
 
 
@@ -107,16 +106,21 @@ async def classify_scene(
     longitude: Annotated[float | None, Query(ge=-180, le=180)] = None,
 ) -> SceneResponse:
     """
-    Classifica a cena em Estrada, Posto, Restaurante ou Ponto turístico
+    Classifica a foto em Estrada, Posto, Restaurante ou Ponto turístico
     (RF-16, CA-06).
 
-    `purpose=context` é a leitura automática da câmera: vira classe no diário,
-    e a foto não é guardada. `purpose=tourist_spot` é o "Registrar ponto
-    turístico": a foto fica, e volta na resposta com uma URL temporária.
+    - `purpose=context`: leitura automática. Só a classe vai para o diário,
+      a foto é descartada.
+    - `purpose=tourist_spot`: "Registrar ponto turístico". A foto é guardada e
+      volta na resposta com um link temporário.
 
-    `recorded=false` diz que a leitura não virou evento — a cena não mudou
-    desde a anterior, ou a confiança ficou baixa demais para valer um registro.
+    `recorded=false` quer dizer que a leitura não virou evento (a cena não
+    mudou ou a confiança foi baixa demais).
     """
+    # `image.size` vem do próprio upload: dá para recusar sem ler o arquivo todo.
+    if image.size is not None and image.size > MAX_PHOTO_BYTES:
+        raise InvalidImageError("A imagem passa de 5 MB.")
+
     content = await image.read()
 
     if not content:
@@ -135,8 +139,7 @@ async def classify_scene(
     )
 
 
-# Um comando falado tem segundos, não minutos: 16 kHz mono em WAV dá ~32 kB/s,
-# e 2 MB já cobrem um minuto inteiro de fala.
+# Um comando falado dura segundos: 2 MB cobrem mais de um minuto de áudio.
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
 
 
@@ -153,12 +156,15 @@ async def record_voice_command(
     longitude: Annotated[float | None, Query(ge=-180, le=180)] = None,
 ) -> VoiceCommandResponse:
     """
-    Grava o comando falado no diário, com a emoção da voz (RF-15, CA-07).
+    Grava o comando de voz no diário, junto com a emoção da voz (RF-15, CA-07).
 
-    O áudio é o que o próprio reconhecimento de fala já gravou no aparelho.
-    Sem ele — ou com o modelo ainda carregando — o comando entra no diário
-    assim mesmo, e `reason` explica por que veio sem emoção.
+    O áudio é o mesmo que o reconhecimento de fala já gravou no celular. Sem
+    áudio (ou com o modelo ainda carregando), o comando é gravado mesmo assim,
+    e `reason` explica por que veio sem emoção.
     """
+    if audio is not None and audio.size is not None and audio.size > MAX_AUDIO_BYTES:
+        raise InvalidAudioError("O áudio passa de 2 MB.")
+
     content = await audio.read() if audio else None
 
     if content is not None and len(content) > MAX_AUDIO_BYTES:

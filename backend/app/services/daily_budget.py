@@ -1,8 +1,8 @@
 """
 Limite diário de consultas a uma API paga ou com cota.
 
-É a primeira barreira, dentro da API do Atlas; a segunda, que vale mesmo com
-a API reiniciada, é a cota configurada no painel do fornecedor (ver README).
+É a primeira proteção. A segunda é a cota configurada no painel do
+fornecedor, que vale mesmo se a API reiniciar.
 """
 
 from collections.abc import Callable
@@ -10,7 +10,7 @@ from datetime import date
 
 
 class DailyBudget:
-    """Quantas consultas ainda cabem hoje. Zera na virada do dia."""
+    """Conta quantas consultas ainda cabem hoje. Zera quando o dia muda."""
 
     def __init__(self, limit: int, today: Callable[[], date] = date.today) -> None:
         self._limit = limit

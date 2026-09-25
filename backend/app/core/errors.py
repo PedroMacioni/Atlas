@@ -1,14 +1,12 @@
 """
-Erros de domínio da API e a forma única de reportá-los.
+Erros da API e o formato único de resposta de erro.
 
-Toda falha sai como o mesmo envelope JSON:
+Toda falha sai no mesmo formato JSON:
 
     {"error": {"code": "route_provider_timeout", "message": "..."}}
 
-O `code` é estável e legível por máquina; o aplicativo escolhe a mensagem de
-interface a partir dele, do mesmo jeito que hoje decide a partir de
-`HttpError.kind` em `utils/http.ts`. A `message` é auxiliar — humana, em
-português, útil em log e em tela de diagnóstico.
+O `code` é fixo e o app usa ele para escolher a mensagem na tela. A
+`message` é um texto em português, útil para log e depuração.
 """
 
 import logging
@@ -21,7 +19,7 @@ logger = logging.getLogger("atlas.api")
 
 
 class AtlasError(Exception):
-    """Base de toda falha esperada da API."""
+    """Base de todos os erros esperados da API."""
 
     code: str = "internal_error"
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -141,18 +139,16 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _handle_validation_error(_: Request, error: RequestValidationError) -> JSONResponse:
-        # O detalhe do Pydantic é preciso, mas verboso e em inglês. O app só
-        # precisa saber que o pedido estava malformado; o detalhe vai junto
-        # para quem está depurando.
+        # O erro do Pydantic é detalhado e em inglês. O app só precisa saber que
+        # o pedido veio errado; o detalhe vai junto para quem estiver depurando.
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "error": {
                     "code": "invalid_request",
                     "message": "O corpo ou os parâmetros da requisição são inválidos.",
-                    # Sem `ctx`: ele pode carregar a exceção original de um
-                    # validador, que não é serializável — e o tratamento de erro
-                    # viraria um segundo erro, 500 no lugar de 422.
+                    # Sem o campo `ctx`: ele pode ter um objeto que não vira JSON, e aí
+                    # o tratamento do erro geraria outro erro (500 no lugar de 422).
                     "details": [
                         {key: value for key, value in item.items() if key != "ctx"}
                         for item in error.errors()
@@ -163,8 +159,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _handle_unexpected(_: Request, error: Exception) -> JSONResponse:
-        # Nada de stack trace no corpo: o log fica com o detalhe, o cliente
-        # recebe só o código.
+        # Nada de stack trace na resposta: o detalhe fica só no log.
         logger.exception("Falha não tratada na API", exc_info=error)
         return _envelope(
             "internal_error",

@@ -1,11 +1,12 @@
 """
-De arousal/valência para as 5 emoções do escopo (§4.1).
+Converte arousal e valência nas 5 emoções do escopo (§4.1).
 
-O modelo não devolve rótulos: devolve **dimensões** — quanta energia há na
-fala (arousal), se ela soa positiva ou negativa (valência) e quanto controle
-a voz transmite (dominância), cada uma de 0 a 1. A tradução para Cansado,
-Neutro, Animado, Tenso e Bravo é a regra abaixo, e ela vive aqui, separada do
-modelo, porque é uma decisão do projeto e não do `torch`:
+O modelo devolve três números de 0 a 1:
+- arousal: quanta energia tem a fala;
+- valência: se a fala soa positiva ou negativa;
+- dominância: quanto controle a voz transmite.
+
+A regra abaixo transforma esses números em emoção:
 
                      valência
                 0 ─────────────── 1
@@ -15,41 +16,35 @@ modelo, porque é uma decisão do projeto e não do `torch`:
                 │      NEUTRO
              0  │     CANSADO
 
-Sem treino para o português e sem dataset rotulado do grupo, uma régua
-explícita é mais honesta que um classificador de caixa-preta: qualquer um lê
-estes números e discorda deles com argumento.
+Uma regra simples é mais transparente que uma "caixa-preta": qualquer um
+consegue ler os números e discordar deles.
 
-**Os limites são uma calibração grossa**, feita em 20/09/2026 com duas falas
-reais e com a mesma fala acelerada e amplificada, para ver o arousal subir:
-0,18 (voz baixa e lenta) → 0,33 (fala calma) → 0,43 → 0,52 (acelerada e mais
-alta). Daí o corte do "cansado" em 0,30 e o da energia alta em 0,60. As faixas
-de tenso e bravo não puderam ser medidas: faltava voz irritada gravada. Rodar
-`ml/check_emotion.py` com as vozes do grupo é o jeito de ajustar isto com
-dados de verdade.
+Os limites foram ajustados com poucas gravações reais (voz baixa e lenta
+deu ~0,18 de arousal; fala calma ~0,33; fala acelerada ~0,52). Daí o corte
+do "cansado" em 0,30 e da energia alta em 0,60. Para ajustar melhor, rode
+`ml/check_emotion.py` com gravações do grupo.
 
-A confiança é a distância até a fronteira mais próxima da regra que decidiu,
-normalizada — uma fala bem no meio do quadrante sai com confiança alta, uma
-em cima da linha sai com pouca. É esse valor que o `needs_assistance` usa
-para oferecer a emergência só quando a tensão é clara (§4.7).
+A confiança é a distância até a fronteira mais próxima: bem no meio de uma
+região = confiança alta; em cima da linha = confiança baixa. É esse valor
+que decide se a tensão é forte o bastante para oferecer a emergência.
 """
 
 from dataclasses import dataclass
 
-# Abaixo disso a voz é de quem está sem energia.
+# Abaixo disso, voz sem energia (cansado).
 TIRED_AROUSAL = 0.30
-# Acima disso há energia de sobra: animado, tenso ou bravo.
+# Acima disso, muita energia (animado, tenso ou bravo).
 HIGH_AROUSAL = 0.60
 # Abaixo disso a fala soa negativa.
 NEGATIVE_VALENCE = 0.45
-# Bravo é a ponta negativa da valência, não só "não positiva".
+# Bravo é o extremo negativo da valência.
 ANGRY_VALENCE = 0.35
 # Acima disso a fala soa positiva.
 POSITIVE_VALENCE = 0.60
 
-# Quanto vale uma margem "cheia": 0,25 na escala de 0 a 1 já é o meio do
-# quadrante, e a partir daí a confiança satura em 1.
+# Distância que já conta como confiança total (1,0).
 FULL_MARGIN = 0.25
-# Nenhuma leitura sai com confiança zero: ela existe, só é fraca.
+# Confiança mínima de qualquer leitura.
 MIN_CONFIDENCE = 0.35
 
 
@@ -63,7 +58,7 @@ class EmotionReading:
 
 
 def to_emotion(arousal: float, valence: float, dominance: float = 0.5) -> EmotionReading:
-    """A emoção do escopo para um ponto (arousal, valência)."""
+    """Emoção do escopo para um ponto (arousal, valência)."""
     arousal = _clamp(arousal)
     valence = _clamp(valence)
 
@@ -80,8 +75,7 @@ def to_emotion(arousal: float, valence: float, dominance: float = 0.5) -> Emotio
         margin = min(arousal - HIGH_AROUSAL, valence - POSITIVE_VALENCE)
         emotion = "animado"
     else:
-        # Neutro é o que sobra, e a margem é a distância até a fronteira mais
-        # perto: quem está encostado no "tenso" não é um neutro confiante.
+        # Neutro é o que sobra. A margem é a distância até a fronteira mais próxima.
         margin = min(
             arousal - TIRED_AROUSAL,
             max(HIGH_AROUSAL - arousal, NEGATIVE_VALENCE - valence, valence - POSITIVE_VALENCE),

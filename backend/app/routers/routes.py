@@ -1,10 +1,8 @@
 """
 Cálculo de rotas.
 
-É `POST`, e não `GET`, porque origem e destino são um par de coordenadas que
-pertence ao corpo — e porque o resultado não deve ser cacheado por
-intermediário nenhum: quem decide a validade de uma rota é esta API, pelo
-`route_cache`, com o TTL que ela controla.
+É `POST` porque origem, destino e paradas vão no corpo como JSON. Quem
+decide por quanto tempo a rota vale é o cache desta API.
 """
 
 from fastapi import APIRouter, status
@@ -27,9 +25,8 @@ router = APIRouter(prefix="/v1/routes", tags=["rotas"])
 )
 async def create_route(payload: RouteRequest, service: RouteServiceDep) -> RouteResponse:
     """
-    Devolve o trajeto entre dois pontos, no formato que a `Polyline` consome.
+    Devolve o trajeto entre dois pontos, pronto para desenhar no mapa.
 
-    `cached` conta a procedência: `true` significa que nenhuma chamada externa
-    foi feita para atender este pedido.
+    `cached: true` indica que a rota veio do cache, sem chamar o serviço externo.
     """
     return await service.get_route(payload.origin, payload.destination, payload.waypoints)

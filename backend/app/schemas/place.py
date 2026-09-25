@@ -1,8 +1,6 @@
 """
-Catálogo de destinos. Espelha `features/destination/types/place.ts`.
-
-Os nomes dos campos são idênticos aos do TypeScript de propósito: o app
-consome a resposta sem nenhuma tradução no meio.
+Lugares da busca de destino. Mesmos campos do tipo `Place` do aplicativo,
+para o app usar a resposta direto.
 """
 
 from enum import StrEnum
@@ -17,8 +15,8 @@ class PlaceCategory(StrEnum):
     FOOD = "food"
     PARKING = "parking"
     SAVED = "saved"
-    # Achado na busca externa sem ser posto, comida ou estacionamento: um
-    # shopping, uma faculdade, um endereço. Nunca vem do catálogo.
+    # Resultado da busca externa que não é posto, comida nem estacionamento
+    # (um shopping, uma faculdade, um endereço). Nunca vem do banco.
     OTHER = "other"
 
 
@@ -34,5 +32,5 @@ class Place(ApiModel):
 
 class PlaceListResponse(ApiModel):
     places: list[Place]
-    # Quantos vieram, para a tela não precisar contar nem adivinhar se truncou.
+    # Quantidade de lugares na lista.
     count: int

@@ -1,18 +1,16 @@
 """
-O Random Forest em produção: carregar, decidir e dizer por quê.
+O Random Forest em uso: carregar, decidir e explicar a decisão.
 
-A explicação usa o **método de Saabas** (contribuições por caminho): em cada
-árvore, a decisão desce da raiz até uma folha, e a cada divisão a
-probabilidade de cada classe muda um pouco. Essa mudança é creditada à
-variável que a divisão testou. Somando por todas as árvores:
+A explicação usa o método de Saabas: em cada árvore, a decisão desce da raiz
+até uma folha, e a cada divisão a probabilidade de cada classe muda um
+pouco. Essa mudança é creditada à variável testada naquela divisão.
+Somando em todas as árvores:
 
-    probabilidade final = probabilidade de base + Σ contribuições por variável
+    probabilidade final = probabilidade base + soma das contribuições
 
-É exato — a soma bate com o `predict_proba` — e é **desta decisão**, não do
-modelo em geral. Foi escolhido no lugar da biblioteca SHAP porque dá a mesma
-leitura por decisão sem trazer numba/llvmlite para um serviço que roda no
-computador da equipe, e porque cabe inteiro nesta função — dá para mostrá-lo
-na apresentação.
+A soma bate exatamente com o `predict_proba`, e explica esta decisão em
+particular. Foi escolhido no lugar da biblioteca SHAP porque dá o mesmo tipo
+de resposta sem dependências pesadas.
 """
 
 import logging
@@ -33,17 +31,17 @@ class Prediction:
     decision: str
     confidence: float
     probabilities: dict[str, float]
-    # Contribuição de cada uma das 6 variáveis para a decisão escolhida.
+    # Quanto cada uma das 6 variáveis contribuiu para a decisão escolhida.
     contributions: dict[str, float]
     base_probability: float
 
 
 def path_contributions(forest: Any, row: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
-    Método de Saabas para uma linha.
+    Método de Saabas para uma linha de entrada.
 
-    Devolve `(base, contribuições)`: `base` tem uma probabilidade por classe,
-    `contribuições` tem forma (colunas × classes).
+    Devolve `(base, contribuições)`: `base` tem uma probabilidade por classe e
+    `contribuições` tem formato (colunas × classes).
     """
     X = row.reshape(1, -1)
     n_classes = len(forest.classes_)
@@ -55,8 +53,7 @@ def path_contributions(forest: Any, row: np.ndarray) -> tuple[np.ndarray, np.nda
         values = tree.value[:, 0, :]
         probabilities = values / values.sum(axis=1, keepdims=True)
 
-        # Índices de nó crescem da raiz para as folhas no sklearn, então a
-        # ordem do caminho é a ordem dos índices.
+        # No sklearn os nós vão da raiz para as folhas, então a ordem dos índices é o caminho.
         path = tree_model.decision_path(X).indices
 
         base += probabilities[path[0]]
@@ -68,7 +65,7 @@ def path_contributions(forest: Any, row: np.ndarray) -> tuple[np.ndarray, np.nda
 
 
 class DecisionModel:
-    """O modelo treinado, com os metadados de como foi treinado."""
+    """O modelo treinado, junto com as informações do treino."""
 
     def __init__(self, bundle: dict[str, Any]) -> None:
         if tuple(bundle["feature_names"]) != FEATURE_NAMES:
@@ -82,7 +79,7 @@ class DecisionModel:
 
     @classmethod
     def load(cls, path: Path) -> "DecisionModel | None":
-        """Carrega do disco, ou `None` se o arquivo não existe ou não confere."""
+        """Carrega o modelo do disco, ou `None` se o arquivo não existe ou é inválido."""
         if not path.exists():
             logger.warning("Modelo de recomendação ausente em %s — rode ml/train.py.", path)
             return None

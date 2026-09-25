@@ -1,19 +1,16 @@
 """
 Classificação de cena (RF-16, CA-06): Estrada, Posto, Restaurante ou Ponto
-turístico — sem treinar nada.
+turístico, sem precisar treinar nada.
 
-O modelo é o CLIP (OpenAI, ViT-B/32), que compara a foto com descrições em
-texto e diz com qual ela se parece mais. Cada classe é descrita por várias
-frases, e a classe vale pela média delas: "um posto de gasolina" sozinho erra
-a foto tirada da fila da bomba, "bombas de combustível" acerta.
+Usamos o CLIP (OpenAI, ViT-B/32), que compara a foto com frases de texto e
+diz com qual ela parece mais. Cada classe tem várias frases, e vale a média
+delas (ex.: "bombas de combustível" ajuda a reconhecer uma foto da bomba).
 
-Roda na CPU do PC da equipe, em ~0,2 s por foto. O modelo (~600 MB) é baixado
-do Hugging Face na primeira subida e fica no cache do usuário; até terminar de
-carregar, a API responde `vision_unavailable` em vez de travar a subida.
+Roda na CPU em ~0,2 s por foto. O modelo (~600 MB) é baixado na primeira
+vez; até carregar, a API responde `vision_unavailable`.
 
-As dependências (`torch`, `transformers`, `pillow`) são o extra `vision` do
-`pyproject.toml`: sem elas a API sobe mesmo assim, e só a câmera fica inerte —
-o mesmo acordo do Random Forest ausente.
+Precisa do extra `vision` (torch, transformers, pillow). Sem ele, a API
+funciona normalmente e só a câmera fica desligada.
 """
 
 import asyncio
@@ -25,7 +22,7 @@ from typing import Any, Protocol
 
 logger = logging.getLogger("atlas.api")
 
-# As frases em inglês: é a língua em que o CLIP foi treinado.
+# Frases em inglês, a língua em que o CLIP foi treinado.
 CLASS_PROMPTS: dict[str, tuple[str, ...]] = {
     "estrada": (
         "a photo of a road seen through a car windshield",
@@ -64,11 +61,11 @@ class SceneReading:
 
 
 class InvalidImage(Exception):
-    """O arquivo não é uma imagem legível."""
+    """O arquivo não é uma imagem válida."""
 
 
 class VisionUnavailable(Exception):
-    """O classificador não está pronto — carregando ou sem dependências."""
+    """O classificador não está pronto (carregando ou sem dependências)."""
 
 
 class SceneClassifier(Protocol):
@@ -92,7 +89,7 @@ class ClipSceneClassifier:
         return self._text_features is not None
 
     def load_in_background(self) -> None:
-        """Carrega numa thread: a API responde enquanto o modelo baixa."""
+        """Carrega o modelo numa thread separada; a API continua respondendo."""
         threading.Thread(target=self._load, name="clip-loader", daemon=True).start()
 
     def _load(self) -> None:
@@ -114,7 +111,7 @@ class ClipSceneClassifier:
                 encoded = _embedding(model.get_text_features(**tokens))
                 encoded = encoded / encoded.norm(dim=-1, keepdim=True)
 
-            # Uma direção por classe: a média das suas frases, renormalizada.
+            # Um vetor por classe: a média das frases dela.
             per_class, start = [], 0
             for phrases in CLASS_PROMPTS.values():
                 mean = encoded[start : start + len(phrases)].mean(dim=0)
@@ -131,7 +128,7 @@ class ClipSceneClassifier:
     async def classify(self, image: bytes) -> SceneReading:
         if not self.ready:
             raise VisionUnavailable(self._error or "O classificador de imagem está carregando.")
-        # Inferência é CPU pura: fora do laço de eventos, uma de cada vez.
+        # A inferência roda fora do loop assíncrono, uma de cada vez.
         return await asyncio.to_thread(self._classify, image)
 
     def _classify(self, image: bytes) -> SceneReading:
@@ -157,9 +154,9 @@ class ClipSceneClassifier:
 
 def _embedding(output: Any) -> Any:
     """
-    O vetor já projetado no espaço comum de texto e imagem.
+    Vetor da imagem ou do texto, já no espaço comum do CLIP.
 
-    Até o `transformers` 4 as funções `get_*_features` devolviam o tensor; do 5
-    em diante devolvem um objeto, com o vetor projetado em `pooler_output`.
+    No transformers 4 vinha o tensor direto; no 5 vem um objeto, com o vetor
+    em `pooler_output`.
     """
     return getattr(output, "pooler_output", output)

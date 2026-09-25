@@ -1,12 +1,9 @@
 """
-Busca de destino: os lugares salvos do catálogo e, atrás deles, a busca
-livre da TomTom.
+Busca de destino: primeiro os lugares salvos no banco, depois os
+resultados da busca por texto da TomTom.
 
-O catálogo vem sempre primeiro — é onde estão os lugares que o usuário
-marcou, e alguns que nenhuma fonte grátis acha pelo nome. A TomTom completa a
-lista quando há texto digitado; sem texto, a tela mostra só os salvos. Se a
-TomTom falhar ou esgotar o limite do dia, a resposta sai só com o catálogo:
-a busca fica mais pobre, nunca quebrada.
+Sem texto digitado, só os salvos aparecem. Se a TomTom falhar ou o limite do
+dia acabar, a resposta sai só com os salvos (a busca fica menor, mas não quebra).
 """
 
 import logging
@@ -22,12 +19,11 @@ from app.utils.geo import distance_meters
 
 logger = logging.getLogger("atlas.api")
 
-# Menos que isso ainda não diz nada ("po" é posto? pousada? Porto Alegre?) e
-# gastaria cota a cada tecla.
+# Menos de 3 letras ainda não diz nada e gastaria a cota a cada tecla.
 MIN_EXTERNAL_QUERY = 3
-# Quantos resultados pedir à busca externa. A tela é uma lista, não um mapa.
+# Quantos resultados pedir à TomTom.
 EXTERNAL_LIMIT = 10
-# Um resultado externo a menos disso de um lugar salvo é o mesmo lugar.
+# Resultado externo a menos de 150 m de um lugar salvo é o mesmo lugar.
 DUPLICATE_METERS = 150
 
 
@@ -60,7 +56,7 @@ class PlaceService:
         catalog = await self._repository.list_places(query=query, category=category, limit=limit)
         extra = await self._external_search(query, category, near)
 
-        # Sem repetir o que o catálogo já mostra.
+        # Tira da lista externa o que já aparece entre os salvos.
         extra = [
             place
             for place in extra

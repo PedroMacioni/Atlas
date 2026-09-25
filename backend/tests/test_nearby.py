@@ -295,7 +295,8 @@ async def test_tomtom_emergencia_descarta_servico_de_saude_que_nao_e_hospital(cl
 
     result = await build(client, google=False, tomtom=True).search(NearbyCategory.HOSPITAL, ORIGIN)
 
-    assert [place.name for place in result.places] == ["Hospital Municipal", "Pronto-Socorro Central"]
+    names = [place.name for place in result.places]
+    assert names == ["Hospital Municipal", "Pronto-Socorro Central"]
     assert tomtom.calls.last.request.url.params["categorySet"] == "7321,9956"
 
 

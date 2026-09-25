@@ -1,20 +1,15 @@
 """
-API do Atlas.
+API do Atlas (FastAPI).
 
-Três responsabilidades, nesta fase:
+Funções principais:
+  1. Guardar as chaves de API (Supabase, TomTom, Google) fora do aplicativo.
+  2. Calcular rotas (OSRM) e guardar o resultado em cache no banco.
+  3. Buscar lugares: salvos no banco, busca por texto e lugares próximos.
+  4. Registrar viagens, diário de bordo, paradas e histórico.
+  5. Rodar os modelos de IA: Random Forest (recomendação), CLIP (imagem)
+     e wav2vec2 (emoção na voz).
 
-  1. **Guardar as chaves.** Nenhuma credencial de Supabase ou de provider de
-     rotas precisa existir dentro do aplicativo.
-  2. **Absorver o provider externo.** O app pede uma rota à API; a API decide
-     se responde do cache ou se chama o OSRM. Trocar de provider deixa de ser
-     um release na loja.
-  3. **Servir os lugares.** Os salvos vêm do banco; a busca livre e as
-     opções próximas, da TomTom, com o OpenStreetMap de reserva.
-
-Autenticação, histórico de viagens e o modelo de previsão são as fases
-seguintes. O contrato de hoje foi desenhado para recebê-los sem quebrar:
-`RouteResponse` já carrega `provider` e `cached`, e o versionamento por
-prefixo (`/v1`) deixa espaço para evoluir sem romper clientes instalados.
+As rotas públicas ficam sob o prefixo `/v1`, para permitir versões futuras.
 """
 
 import logging
@@ -42,19 +37,18 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
 )
-# Em INFO o `httpx` registra cada URL chamada, e a da TomTom leva a chave na
-# query string.
+# Em nível INFO o httpx mostra cada URL chamada, e a URL da TomTom leva a
+# chave. Por isso ele só mostra avisos e erros.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Abre os clientes de saída uma vez e os fecha no encerramento.
+    Cria os objetos que vivem enquanto a API estiver no ar e os fecha no final.
 
-    Um `AsyncClient` por processo, não um por requisição: é ele que mantém as
-    conexões vivas e o pool de TLS, e é o que faz a diferença entre uma chamada
-    de rota de 80 ms e uma de 400 ms.
+    Usamos um único cliente HTTP para todas as chamadas externas: ele reaproveita
+    as conexões, o que deixa cada chamada bem mais rápida.
     """
     settings = get_settings()
 
@@ -75,7 +69,7 @@ async def lifespan(app: FastAPI):
     google_key = _secret(settings.google_places_api_key)
     tomtom_key = _secret(settings.tomtom_api_key)
 
-    # Um limite só para a TomTom: a cota do plano soma as duas buscas.
+    # Um limite diário só para a TomTom: a cota do plano soma busca e próximos.
     app.state.tomtom_budget = DailyBudget(settings.tomtom_daily_limit)
     app.state.place_search = TomTomPlaceSearch(outbound, tomtom_key) if tomtom_key else None
 
@@ -106,11 +100,10 @@ async def lifespan(app: FastAPI):
 
 def _scene_classifier(settings) -> ClipSceneClassifier | None:
     """
-    O classificador de imagem, carregando numa thread.
+    Classificador de imagem (CLIP), carregado em segundo plano.
 
-    O CLIP leva alguns segundos para abrir — e minutos na primeira vez, quando
-    ainda baixa o modelo. Nada disso pode atrasar a subida da API: até ficar
-    pronto, a câmera responde `vision_unavailable` e o resto da viagem segue.
+    O modelo demora para abrir (e para baixar na primeira vez). A API sobe na
+    hora e, até o modelo ficar pronto, a câmera responde `vision_unavailable`.
     """
     if not settings.vision_enabled:
         return None
@@ -121,7 +114,7 @@ def _scene_classifier(settings) -> ClipSceneClassifier | None:
 
 
 def _emotion_classifier(settings) -> Wav2VecEmotionClassifier | None:
-    """O modelo de emoção na voz, carregando numa thread, como o da câmera."""
+    """Modelo de emoção na voz, também carregado em segundo plano."""
     if not settings.voice_emotion_enabled:
         return None
 
@@ -131,14 +124,14 @@ def _emotion_classifier(settings) -> Wav2VecEmotionClassifier | None:
 
 
 def _secret(value: SecretStr | None) -> str | None:
-    """A chave em texto, ou `None` quando ausente ou vazia no `.env`."""
+    """Devolve a chave como texto, ou `None` se estiver vazia no `.env`."""
     return value.get_secret_value() if value and value.get_secret_value() else None
 
 
 def _nearby_sources(
     settings: Settings, outbound: httpx.AsyncClient, tomtom_budget: DailyBudget
 ) -> list[NearbySource]:
-    """As fontes principais das opções próximas, na ordem de preferência."""
+    """Fontes de lugares próximos, em ordem de preferência (Google, depois TomTom)."""
     sources = []
 
     if google_key := _secret(settings.google_places_api_key):
@@ -172,8 +165,8 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
         allow_methods=["GET", "POST"],
-        # Sem DELETE nem PATCH de propósito: o histórico não é apagado pelo
-        # aplicativo (RF-30), e encerrar uma viagem é um POST de ação.
+        # Sem DELETE nem PATCH: o histórico não é apagado pelo app (RF-30), e
+        # encerrar uma viagem é um POST.
         allow_headers=["*"],
     )
 

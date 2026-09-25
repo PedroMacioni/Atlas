@@ -1,19 +1,16 @@
 """
-Regras de rotulagem do dataset sintético — o conhecimento da equipe.
+Regras que dão o rótulo (a resposta certa) de cada linha do dataset sintético.
 
-O Random Forest aprende a partir de exemplos, e os exemplos sintéticos recebem
-o rótulo destas regras. Elas são, portanto, a definição de comportamento do
-Atlas: mudar uma regra aqui e retreinar muda o que o copiloto recomenda.
+O Random Forest aprende com exemplos, e os exemplos sintéticos recebem o
+rótulo destas regras. Ou seja: mudar uma regra aqui e treinar de novo muda o
+que o Atlas recomenda. A explicação de cada limite está em `ml/RULES.md`.
 
-A documentação legível, com a justificativa de cada limiar, está em
-`ml/RULES.md`. Os dois precisam andar juntos.
+As regras são testadas em ordem de prioridade (segurança primeiro). A
+primeira que for verdadeira decide o rótulo.
 
-As regras são avaliadas **em ordem de prioridade** — segurança primeiro. A
-primeira que casar decide o rótulo.
-
-Variabilidade: cada exemplo sintético usa limiares ligeiramente diferentes
-(`Thresholds.jittered`), como motoristas diferentes cansam em momentos
-diferentes. É isso que impede o modelo de apenas decorar um corte exato.
+Cada exemplo usa limites um pouco diferentes (`Thresholds.jittered`), como
+motoristas diferentes que cansam em momentos diferentes. Isso evita que o
+modelo só decore um valor exato.
 """
 
 import random
@@ -21,7 +18,7 @@ from dataclasses import dataclass, replace
 
 from app.ml.features import TripContext
 
-# Janelas de refeição, em hora decimal.
+# Horários de refeição, em hora decimal.
 LUNCH = (11.5, 14.0)
 DINNER = (18.5, 21.0)
 
@@ -45,7 +42,7 @@ class Thresholds:
     generic_without_stop_min: float = 150
 
     def jittered(self, rng: random.Random, spread: float = 0.15) -> "Thresholds":
-        """Os mesmos limiares, cada um deslocado em até ±15%."""
+        """Os mesmos limites, cada um deslocado em até ±15%."""
         return replace(
             self,
             **{
@@ -83,10 +80,7 @@ def label(context: TripContext, t: Thresholds = DEFAULT_THRESHOLDS) -> str:
         return "fazer_parada"
 
     # 3. ABASTECER — pela distância, já que não há sensor de combustível.
-    if (
-        context.distance_km >= t.fuel_distance_km
-        and since_stop >= t.fuel_min_without_stop_min
-    ):
+    if context.distance_km >= t.fuel_distance_km and since_stop >= t.fuel_min_without_stop_min:
         return "abastecer"
     if image == "posto" and context.distance_km >= t.fuel_distance_with_station_km:
         return "abastecer"

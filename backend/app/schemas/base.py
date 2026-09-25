@@ -1,13 +1,9 @@
 """
-Base dos corpos de resposta.
+Modelo base das respostas.
 
-O JSON sai em camelCase porque quem consome é TypeScript: `distanceMeters`, e
-não `distance_meters`. O Python de dentro continua em snake_case, e a tradução
-acontece só na borda — uma regra declarada uma vez, e não um `alias` repetido
-campo a campo.
-
-`populate_by_name` mantém a construção pelos nomes Python, que é como os
-serviços e os testes montam os objetos.
+O JSON sai em camelCase (`distanceMeters`) porque quem lê é o app em
+TypeScript. No Python os nomes continuam em snake_case (`distance_meters`);
+a conversão é automática.
 """
 
 from pydantic import BaseModel, ConfigDict

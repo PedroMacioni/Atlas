@@ -4,16 +4,13 @@ Exporta os dados reais dos testes para o dataset (escopo §4.6).
     uv run python -m ml.export_real_data
     uv run python -m ml.train
 
-Cada recomendação que o usuário **aceitou** durante um teste de verdade vira
-uma linha rotulada: as 6 variáveis que o modelo viu (`recommendations.features`)
-e a decisão como rótulo. Recusadas não entram — uma recusa diz "isto não",
-mas não diz qual seria a resposta certa.
+Cada recomendação que o usuário ACEITOU num teste real vira uma linha do
+dataset: as 6 variáveis que o modelo viu e a decisão como rótulo.
+Recomendações recusadas não entram (dizem "isto não", mas não dizem qual
+seria a certa). Simulações também não entram.
 
-Simulações nunca entram: o modo de demonstração inventa a situação, e treinar
-com ela seria o modelo aprendendo com o próprio chute.
-
-Saída: `ml/data/real.csv`, no mesmo formato de `synthetic.csv`, com
-`origem = real`. O `train.py` o soma ao sintético automaticamente.
+Saída: `ml/data/real.csv`, no mesmo formato do `synthetic.csv`. O `train.py`
+junta os dois automaticamente.
 """
 
 import asyncio

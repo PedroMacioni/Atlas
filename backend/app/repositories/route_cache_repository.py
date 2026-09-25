@@ -1,13 +1,11 @@
 """
-Cache de rotas em Postgres.
+Cache de rotas no banco (tabela `route_cache`).
 
-O ganho não é velocidade — é **não depender** do provider externo a cada toque
-na tela. O OSRM público aplica limites não documentados; o Google Routes cobra
-por chamada. Um par origem-destino repetido é a regra, não a exceção: o mesmo
-trajeto de casa para o trabalho, todo dia.
+Evita chamar o serviço de rotas toda hora. O mesmo trajeto (casa → trabalho)
+se repete muito.
 
-A chave é determinística e arredondada, para que dois pedidos praticamente
-iguais compartilhem a mesma linha.
+A chave é feita com as coordenadas arredondadas, para que pedidos quase
+iguais usem a mesma linha do cache.
 """
 
 import hashlib
@@ -20,8 +18,7 @@ from app.schemas.route import RouteStep
 
 TABLE = "route_cache"
 
-# 4 casas decimais ≈ 11 m. Abaixo disso o trajeto calculado é o mesmo, e cada
-# casa a mais só fragmenta o cache sem melhorar a resposta.
+# 4 casas decimais ≈ 11 m. Mais precisão só espalharia o cache.
 _COORDINATE_PRECISION = 4
 
 
@@ -31,7 +28,7 @@ def build_cache_key(
     destination: Coordinate,
     waypoints: list[Coordinate] | None = None,
 ) -> str:
-    """Identidade estável de um pedido de rota, independente do provider."""
+    """Gera uma chave fixa (hash) para um pedido de rota."""
     parts = [
         provider_id,
         _quantize(origin.latitude),
@@ -39,8 +36,7 @@ def build_cache_key(
         _quantize(destination.latitude),
         _quantize(destination.longitude),
     ]
-    # Sem paradas, a chave é a mesma de antes — o cache existente continua
-    # valendo. Com paradas, cada uma entra na ordem.
+    # Sem paradas, a chave é a mesma de antes. Com paradas, cada uma entra em ordem.
     for point in waypoints or []:
         parts += ["via", _quantize(point.latitude), _quantize(point.longitude)]
     raw = "|".join(parts)
@@ -68,7 +64,7 @@ class RouteCacheRepository:
             params={
                 "select": "distance_meters,duration_seconds,geometry,steps",
                 "cache_key": f"eq.{cache_key}",
-                # A validade é filtrada no banco: uma linha vencida nunca chega.
+                # A validade é filtrada no próprio banco: linha vencida nem chega aqui.
                 "expires_at": f"gt.{now}",
                 "limit": 1,
             },
@@ -88,7 +84,7 @@ class RouteCacheRepository:
         destination: Coordinate,
         route: ProviderRoute,
     ) -> None:
-        """Guarda a rota. A geometria vai como GeoJSON, em [longitude, latitude]."""
+        """Guarda a rota. A geometria vai em GeoJSON: [longitude, latitude]."""
         if self._ttl.total_seconds() <= 0:
             return
 
@@ -104,8 +100,7 @@ class RouteCacheRepository:
                 "distance_meters": route.distance_meters,
                 "duration_seconds": route.duration_seconds,
                 "geometry": [[c.longitude, c.latitude] for c in route.coordinates],
-                # As manobras vão como a API as expõe (camelCase), para que a
-                # leitura seja uma desserialização direta, sem tradução.
+                # As manobras vão no mesmo formato da API (camelCase), para ler de volta direto.
                 "steps": [step.model_dump(by_alias=True) for step in route.steps],
                 "expires_at": (datetime.now(UTC) + self._ttl).isoformat(),
             },
@@ -114,7 +109,7 @@ class RouteCacheRepository:
 
 
 def _row_to_route(row: dict) -> ProviderRoute | None:
-    """Reconstrói a rota a partir da linha, ou desiste se o corpo não confere."""
+    """Remonta a rota a partir da linha do banco, ou desiste se estiver inválida."""
     geometry = row.get("geometry")
 
     if not isinstance(geometry, list) or len(geometry) < 2:
@@ -137,11 +132,10 @@ def _row_to_route(row: dict) -> ProviderRoute | None:
 
 def _parse_steps(raw: object) -> list[RouteStep]:
     """
-    Reconstrói as manobras guardadas.
+    Remonta as manobras guardadas.
 
-    Uma linha gravada antes de as manobras existirem não tem nada aqui, e uma
-    linha corrompida não deve derrubar a rota — nos dois casos a resposta sai
-    sem instruções, que é degradação aceitável: o trajeto continua desenhado.
+    Linhas antigas (sem manobras) ou com dados estragados devolvem lista
+    vazia: a rota continua desenhada, só sem as instruções.
     """
     if not isinstance(raw, list):
         return []

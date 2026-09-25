@@ -1,18 +1,14 @@
 """
-Busca de lugares próximos — o contrato e duas das implementações (a terceira,
-TomTom, está em `tomtom.py`, junto da busca por texto).
+Busca de lugares próximos: o contrato e duas implementações (a da TomTom
+fica em `tomtom.py`).
 
-- **Google Places (API New)**, opcional: é a única com nota, e é o que o
-  escopo define (§9.1) — mas exige cartão para liberar a chave.
-- **TomTom**, grátis e sem cartão, sem nota.
-- **OpenStreetMap (Overpass)**, reserva: gratuito e sem chave, entra quando
-  nenhuma das outras está configurada, esgotou o limite do dia ou falhou.
-  Não tem nota.
+- Google Places (opcional): a única com nota, mas a chave exige cartão.
+- TomTom: grátis e sem cartão, sem nota.
+- OpenStreetMap (Overpass): reserva gratuita, sem chave e sem nota. É usada
+  quando as outras não estão configuradas, falharam ou passaram do limite.
 
-Nenhuma delas guarda resultado. Os termos do Google proíbem cachear o
-conteúdo do Places (nome, nota, endereço) — só o identificador pode ser
-guardado. O controle de custo é o limite diário em `nearby_service.py` e a
-cota configurada no console do Google.
+Nenhum resultado é guardado em cache (os termos do Google proíbem). O custo
+é controlado pelo limite diário em `nearby_service.py`.
 
 @see https://developers.google.com/maps/documentation/places/web-service/nearby-search
 @see https://wiki.openstreetmap.org/wiki/Overpass_API
@@ -38,7 +34,7 @@ class Candidate:
 
 
 class NearbyUnavailable(Exception):
-    """A fonte não respondeu — quem chama tenta a próxima."""
+    """A fonte não respondeu; quem chamou tenta a próxima."""
 
 
 class NearbyProvider(Protocol):
@@ -53,9 +49,8 @@ class NearbyProvider(Protocol):
 
 GOOGLE_URL = "https://places.googleapis.com/v1/places:searchNearby"
 
-# Só o que a tela usa. `rating` e `userRatingCount` puxam a consulta para o
-# plano Enterprise (1.000 grátis por mês); o resto é Pro. Cada campo a mais
-# além destes custa sem aparecer em lugar nenhum.
+# Só os campos que a tela usa. Nota e número de avaliações deixam a
+# consulta mais cara; campos a mais custariam sem aparecer em lugar nenhum.
 GOOGLE_FIELD_MASK = ",".join(
     (
         "places.id",
@@ -117,7 +112,7 @@ class GooglePlacesProvider:
             raise NearbyUnavailable(f"Google Places sem resposta: {error}") from error
 
         if response.is_error:
-            # 403 = chave inválida ou API não ativada; 429 = cota do console.
+            # 403 = chave inválida ou API desativada; 429 = cota estourada.
             raise NearbyUnavailable(
                 f"Google Places respondeu {response.status_code}: {response.text[:200]}"
             )
@@ -168,10 +163,8 @@ OSM_FILTERS: dict[NearbyCategory, list[str]] = {
 }
 
 
-# O Overpass público é compartilhado pelo mundo todo e, medido em 18/09/2026,
-# levou 23 s para responder uma busca de postos em Campinas. É reserva, não
-# fonte de demonstração: o prazo é longo para que a lista chegue, ainda que
-# devagar, em vez de a reserva desistir antes de responder.
+# O Overpass público é lento em horários de pico (já levou 23 s). Por isso o
+# tempo limite é longo: melhor a lista chegar devagar do que não chegar.
 OVERPASS_TIMEOUT_SECONDS = 25
 
 
@@ -187,9 +180,9 @@ class OverpassProvider:
     ) -> list[Candidate]:
         around = f"(around:{int(radius_meters)},{center.latitude},{center.longitude})"
         selectors = "".join(f"nwr{tag}[name]{around};" for tag in OSM_FILTERS[category])
-        # `out center` dá um ponto também para vias e áreas (um hospital
-        # desenhado como polígono, por exemplo). Pede mais que o necessário
-        # porque o Overpass não ordena por distância; quem ordena é o serviço.
+        # `out center` dá um ponto também para áreas (um hospital desenhado como
+        # polígono). Pedimos mais que o necessário porque o Overpass não ordena por
+        # distância; quem ordena é o serviço.
         query = (
             f"[out:json][timeout:{OVERPASS_TIMEOUT_SECONDS}];({selectors});out center {limit * 4};"
         )
@@ -205,9 +198,8 @@ class OverpassProvider:
         if response.is_error or not isinstance(payload, dict):
             raise NearbyUnavailable(f"Overpass respondeu {response.status_code}.")
 
-        # Sobrecarregado, o Overpass responde 200 com a lista vazia e o erro
-        # escondido em `remark` ("runtime error: ... timed out"). Tratar isso
-        # como "nenhum lugar por perto" seria mentir para quem está na estrada.
+        # Sobrecarregado, o Overpass responde 200 com lista vazia e o erro escondido
+        # em `remark`. Tratar isso como "nada por perto" seria enganar o usuário.
         remark = str(payload.get("remark") or "")
         if "error" in remark.lower():
             raise NearbyUnavailable(f"Overpass com erro interno: {remark[:120]}")

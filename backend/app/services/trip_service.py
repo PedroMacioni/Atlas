@@ -1,10 +1,8 @@
 """
-Sessão de viagem: início, diário de bordo, paradas, encerramento e histórico.
+Viagem: início, diário de bordo, paradas, fim e histórico.
 
-É o fio do fluxo macro do escopo — Iniciar → … → Registrar → Encerrar. Os
-modelos de IA ainda não existem, mas quando existirem escrevem aqui: uma
-recomendação é um evento do diário com `decision` e `justification`, uma
-emoção detectada é um evento com `emotion`. O resumo já sabe ler esses campos.
+As recomendações, emoções e leituras de câmera também viram eventos do
+diário, e o resumo final é calculado a partir deles.
 """
 
 import logging
@@ -32,8 +30,7 @@ from app.schemas.trip import (
     TripListResponse,
 )
 
-# Quantas viagens o histórico traz. Sem paginação: é um projeto de
-# demonstração, e cem viagens já é mais do que o grupo vai fazer.
+# Quantas viagens o histórico traz (sem paginação: é um projeto acadêmico).
 HISTORY_LIMIT = 100
 
 logger = logging.getLogger("atlas.api")
@@ -113,8 +110,8 @@ class TripService:
             }
         )
 
-        # A parada também entra no diário: o resumo lê a linha do tempo, e o
-        # "maior trecho sem parada" é medido entre eventos.
+        # A parada também vai para o diário: o resumo usa a linha do tempo para
+        # calcular o "maior trecho sem parada".
         await self._repository.add_event(
             {
                 "trip_id": trip["id"],
@@ -130,11 +127,17 @@ class TripService:
 
     async def finish(self, device: UUID, trip_id: UUID, payload: TripFinishRequest) -> TripDetail:
         device_id, trip = await self.open_trip(device, trip_id)
-        ended_at = payload.ended_at or datetime.now(UTC)
+        ended_at = _aware(payload.ended_at) if payload.ended_at else datetime.now(UTC)
         started_at = _parse_datetime(trip["started_at"])
 
         events = await self._repository.list_events(trip["id"])
-        emotion = predominant_emotion(event.get("emotion") for event in events)
+        # Só as leituras de voz de verdade: recomendações e alertas de emergência
+        # repetem uma emoção que já está no diário (ou inventada, na simulação).
+        emotion = predominant_emotion(
+            event.get("emotion")
+            for event in events
+            if event.get("kind") not in ("recommendation", "emergency")
+        )
 
         updated = await self._repository.finish_trip(
             device_id,
@@ -149,7 +152,7 @@ class TripService:
             },
         )
 
-        # Outra chamada encerrou a viagem entre a leitura e a escrita.
+        # Outra chamada encerrou a viagem ao mesmo tempo que esta.
         if updated is None:
             raise TripAlreadyFinished("Esta viagem já foi encerrada.")
 
@@ -187,10 +190,9 @@ class TripService:
 
     async def _photos(self, trip_id: Any) -> list[Photo]:
         """
-        As fotos da viagem, com URL temporária (RF-22, CA-14).
+        Fotos da viagem, com link temporário (RF-22, CA-14).
 
-        Uma falha aqui não derruba o resumo: sem armazenamento, a viagem
-        aparece sem as fotos, e é melhor que uma tela de erro.
+        Se o armazenamento falhar, a viagem aparece sem as fotos em vez de dar erro.
         """
         try:
             rows = await self._repository.list_photos(trip_id)
@@ -223,7 +225,7 @@ class TripService:
         return photos
 
     async def open_trip(self, device: UUID, trip_id: UUID) -> tuple[UUID, dict[str, Any]]:
-        """A viagem, desde que seja do aparelho e ainda esteja em andamento."""
+        """Busca a viagem, garantindo que é deste aparelho e que ainda não terminou."""
         device_id = await self._repository.ensure_device(device)
         trip = await self._repository.get_trip(device_id, trip_id)
 
@@ -248,11 +250,9 @@ _END_COMMANDS = {
 
 def predominant_emotion(emotions: Iterable[str | None]) -> Emotion | None:
     """
-    A emoção mais registrada na viagem, ou `None` se nenhuma foi.
+    A emoção que mais apareceu na viagem, ou `None` se não houve nenhuma.
 
-    Empate fica com a que apareceu primeiro — `Counter.most_common` preserva a
-    ordem de inserção entre iguais, e a primeira leitura é tão boa quanto
-    qualquer outra para desempatar.
+    Em caso de empate, vale a que apareceu primeiro.
     """
     valid = [Emotion(value) for value in emotions if value in Emotion._value2member_map_]
 
@@ -266,11 +266,11 @@ def longest_stretch_seconds(
     started_at: datetime, ended_at: datetime, stop_times: Iterable[datetime]
 ) -> float:
     """
-    Maior intervalo sem parada, do início ao fim da viagem (§7.2).
+    Maior tempo sem parar, do início ao fim da viagem (§7.2).
 
-    As paradas cortam a viagem em trechos; sem parada nenhuma, o trecho é a
-    viagem inteira. Paradas fora do intervalo — relógio do aparelho adiantado,
-    por exemplo — são presas às bordas em vez de gerar trecho negativo.
+    As paradas dividem a viagem em trechos; sem paradas, o trecho é a viagem
+    inteira. Paradas fora do intervalo (relógio do celular errado, por
+    exemplo) são ajustadas para as bordas, para não gerar trecho negativo.
     """
     marks = sorted(min(max(time, started_at), ended_at) for time in stop_times)
     boundaries = [started_at, *marks, ended_at]
@@ -363,7 +363,7 @@ def _stop(row: dict[str, Any]) -> Stop:
 
 
 def _path(raw: object) -> list[Coordinate]:
-    """Trajeto guardado em GeoJSON; um par malformado é descartado, não fatal."""
+    """Trajeto guardado em GeoJSON ([lon, lat]). Pares inválidos são ignorados."""
     if not isinstance(raw, list):
         return []
 
@@ -381,18 +381,24 @@ def _coordinate(latitude: object, longitude: object) -> Coordinate | None:
 
 
 def _embedded_count(raw: object) -> int:
-    """Lê o `stops(count)` do PostgREST, que chega como `[{"count": n}]`."""
+    """Lê a contagem `stops(count)` do PostgREST, que vem como `[{"count": n}]`."""
     if isinstance(raw, list) and raw and isinstance(raw[0], dict):
         return int(raw[0].get("count") or 0)
     return 0
 
 
 def _parse_datetime(value: str | datetime) -> datetime:
-    return value if isinstance(value, datetime) else datetime.fromisoformat(value)
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(value)
+    return _aware(parsed)
+
+
+def _aware(value: datetime) -> datetime:
+    """Data sem fuso horário é tratada como UTC (senão a subtração de datas quebra)."""
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _iso(value: datetime | None) -> str:
-    return (value or datetime.now(UTC)).isoformat()
+    return _aware(value).isoformat() if value else datetime.now(UTC).isoformat()
 
 
 def _value(member: Any) -> str | None:

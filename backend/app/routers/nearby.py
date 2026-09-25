@@ -1,5 +1,5 @@
 """
-Opções próximas — as categorias visuais (RF-07, RF-08), o hospital da
+Lugares próximos: as categorias da tela (RF-07, RF-08), o hospital da
 emergência (RF-24) e os locais de uma recomendação aceita (RF-19).
 """
 
@@ -27,10 +27,10 @@ async def nearby(
     ] = DEFAULT_RESULTS,
 ) -> NearbyResponse:
     """
-    As `limit` opções mais próximas **de carro**, com distância, tempo e nota.
+    Devolve os `limit` lugares mais próximos de carro, com distância, tempo e nota.
 
     `source` diz de onde vieram: `google-places` (com nota), `tomtom` ou
-    `openstreetmap` (reserva), esses dois sem nota. `fallbackReason` explica
-    por que a fonte preferida não respondeu.
+    `openstreetmap` (sem nota). `fallbackReason` explica por que a fonte
+    preferida não foi usada.
     """
     return await service.search(category, Coordinate(latitude=latitude, longitude=longitude), limit)

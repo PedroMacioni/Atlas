@@ -1,11 +1,9 @@
 """
-Leitura do catálogo de lugares.
+Leitura dos lugares salvos no banco.
 
-A busca por texto acontece **no banco**, pela função `search_places`, e não em
-memória: é a mesma regra de `features/destination/utils/filter-places.ts` —
-insensível a acento e a caixa, "sao paulo" encontra "São Paulo" — só que agora
-escalável para além dos oito registros de demonstração, e sem o termo do
-usuário nunca tocar a sintaxe de uma query.
+A busca por texto roda no banco, na função SQL `search_places`: ignora
+acentos e maiúsculas ("sao paulo" acha "São Paulo"), e o texto do usuário
+vai como parâmetro, nunca montado dentro da consulta.
 """
 
 from app.core.database import SupabaseRest
@@ -28,6 +26,11 @@ class PlaceRepository:
         category: PlaceCategory | None = None,
         limit: int = 20,
     ) -> list[Place]:
+        # "other" só existe na busca externa: no banco não há lugar assim (e o
+        # tipo da coluna nem aceita esse valor).
+        if category is PlaceCategory.OTHER:
+            return []
+
         rows = await self._database.rpc(
             SEARCH_FUNCTION,
             {

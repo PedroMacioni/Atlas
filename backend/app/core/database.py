@@ -1,15 +1,12 @@
 """
-Acesso ao Postgres do Supabase pela API REST (PostgREST).
+Acesso ao banco Supabase pela API REST (PostgREST), usando httpx.
 
-Por que não o SDK: o Atlas usa duas tabelas e três operações — selecionar
-lugares, ler o cache de rotas, gravar no cache de rotas. O PostgREST responde a
-isso com HTTP puro, e a API já mantém um cliente `httpx` para falar com o
-provider de rotas. Um cliente só, uma forma só de tratar timeout e erro —
-a mesma escolha que o aplicativo fez em `utils/http.ts` ao dispensar o Axios.
+Não usamos o SDK do Supabase: as operações são poucas e simples, e assim
+temos uma única forma de tratar tempo limite e erros.
 
-Autenticação usa a **chave de serviço**, que ignora RLS. É deliberado: o
-`route_cache` não tem policy alguma justamente para que só este processo o
-alcance.
+A autenticação usa a chave de serviço, que ignora as regras de RLS. É de
+propósito: tabelas como `route_cache` não têm regra nenhuma, então só este
+servidor consegue acessá-las.
 """
 
 from typing import Any
@@ -21,7 +18,7 @@ from app.core.errors import DatabaseUnavailable
 
 
 class SupabaseRest:
-    """Cliente fino do PostgREST, com o tempo limite e os erros já resolvidos."""
+    """Cliente simples do PostgREST e do Storage do Supabase."""
 
     def __init__(self, settings: Settings) -> None:
         base = str(settings.supabase_url).rstrip("/")
@@ -29,18 +26,16 @@ class SupabaseRest:
             "apikey": settings.supabase_service_key,
             "authorization": f"Bearer {settings.supabase_service_key}",
         }
-        # Storage é outra API do mesmo projeto, com a mesma chave: as fotos do
-        # diário de bordo ficam num bucket privado, e só este processo o alcança.
+        # Storage (arquivos): as fotos do diário ficam num bucket privado.
         self._storage = httpx.AsyncClient(
             base_url=f"{base}/storage/v1",
             headers=credentials,
             timeout=settings.outbound_timeout_seconds,
         )
         self._client = httpx.AsyncClient(
-            base_url=f"{str(settings.supabase_url).rstrip('/')}/rest/v1",
+            base_url=f"{base}/rest/v1",
             headers={
-                "apikey": settings.supabase_service_key,
-                "authorization": f"Bearer {settings.supabase_service_key}",
+                **credentials,
                 "accept": "application/json",
                 "content-type": "application/json",
             },
@@ -52,7 +47,7 @@ class SupabaseRest:
         await self._storage.aclose()
 
     async def upload(self, bucket: str, path: str, content: bytes, *, content_type: str) -> str:
-        """Grava um arquivo no bucket e devolve o caminho onde ele ficou."""
+        """Salva um arquivo no bucket e devolve o caminho dele."""
         try:
             response = await self._storage.post(
                 f"/object/{bucket}/{path}",
@@ -72,10 +67,10 @@ class SupabaseRest:
 
     async def sign(self, bucket: str, paths: list[str], *, expires_in: int) -> dict[str, str]:
         """
-        URLs temporárias para arquivos de um bucket privado.
+        Gera links temporários para arquivos de um bucket privado.
 
-        Uma chamada para a lista inteira, e o que falhar simplesmente não entra
-        no resultado — uma foto ilegível não pode derrubar o resumo da viagem.
+        Uma chamada só para a lista toda. Se um arquivo falhar, ele só fica de
+        fora do resultado, sem derrubar o resumo da viagem.
         """
         if not paths:
             return {}
@@ -109,7 +104,7 @@ class SupabaseRest:
         *,
         params: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Executa um GET e devolve as linhas já desserializadas."""
+        """Faz um GET na tabela e devolve as linhas."""
         response = await self._request("GET", f"/{table}", params=params)
         payload = self._json(response)
 
@@ -120,10 +115,10 @@ class SupabaseRest:
 
     async def rpc(self, function: str, arguments: dict[str, Any]) -> list[dict[str, Any]]:
         """
-        Chama uma função do Postgres.
+        Chama uma função SQL do banco.
 
-        Os argumentos vão no corpo, como JSON — é o que mantém o termo de busca
-        do usuário do lado dos dados, e nunca do lado da sintaxe da consulta.
+        Os argumentos vão como JSON no corpo, então o texto digitado pelo usuário
+        nunca vira parte da consulta (evita SQL injection).
         """
         response = await self._request("POST", f"/rpc/{function}", json=arguments)
         payload = self._json(response)
@@ -134,7 +129,7 @@ class SupabaseRest:
         return payload
 
     async def upsert(self, table: str, row: dict[str, Any], *, on_conflict: str) -> None:
-        """Insere ou sobrescreve uma linha. Não devolve corpo — ninguém precisa dele."""
+        """Insere ou atualiza uma linha, sem devolver nada."""
         await self._request(
             "POST",
             f"/{table}",
@@ -144,7 +139,7 @@ class SupabaseRest:
         )
 
     async def insert(self, table: str, row: dict[str, Any]) -> dict[str, Any]:
-        """Insere uma linha e devolve como o banco a gravou — com id e padrões."""
+        """Insere uma linha e devolve como ela ficou no banco (com id e padrões)."""
         response = await self._request(
             "POST",
             f"/{table}",
@@ -156,7 +151,7 @@ class SupabaseRest:
     async def upsert_returning(
         self, table: str, row: dict[str, Any], *, on_conflict: str
     ) -> dict[str, Any]:
-        """Como `upsert`, mas devolve a linha — nova ou a que já existia."""
+        """Igual ao `upsert`, mas devolve a linha gravada."""
         response = await self._request(
             "POST",
             f"/{table}",
@@ -170,10 +165,9 @@ class SupabaseRest:
         self, table: str, values: dict[str, Any], *, filters: dict[str, str]
     ) -> list[dict[str, Any]]:
         """
-        Atualiza as linhas que casam com `filters` (sintaxe PostgREST, `eq.x`).
+        Atualiza as linhas que batem com `filters` (sintaxe do PostgREST, ex. `eq.x`).
 
-        Devolve as linhas alteradas: uma lista vazia é como quem chama descobre
-        que o filtro não casou nada.
+        Devolve as linhas alteradas. Lista vazia = nenhuma linha bateu com o filtro.
         """
         response = await self._request(
             "PATCH",
@@ -190,7 +184,7 @@ class SupabaseRest:
         return payload
 
     async def ping(self) -> None:
-        """Confirma que o banco responde. Usado pelo /health."""
+        """Testa se o banco responde. Usado pelo /health."""
         await self._request("GET", "/places", params={"select": "id", "limit": 1})
 
     async def _request(
@@ -216,8 +210,7 @@ class SupabaseRest:
             ) from error
 
         if response.is_error:
-            # O corpo do PostgREST traz `message` e `hint`; ele vai para o log
-            # pela exceção, nunca para o cliente.
+            # O detalhe do erro vai para o log, nunca para o cliente.
             raise DatabaseUnavailable(
                 f"O banco de dados respondeu com erro ({response.status_code}): "
                 f"{response.text[:200]}"

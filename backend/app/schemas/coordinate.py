@@ -1,10 +1,10 @@
-"""Ponto geográfico. Espelha `features/map/types/coordinate.ts`."""
+"""Ponto geográfico (latitude e longitude). Igual ao tipo `Coordinate` do app."""
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class Coordinate(BaseModel):
-    """Grau decimal, WGS 84 — o mesmo formato que a `Polyline` consome."""
+    """Coordenada em graus decimais (padrão WGS 84)."""
 
     model_config = ConfigDict(frozen=True)
 

@@ -1,14 +1,11 @@
 """
-TomTom Search — busca de destino por texto e lugares próximos.
+TomTom Search: busca de destino por texto e lugares próximos.
 
-Gratuita sem cartão (plano Freemium) e, medida em 19/09/2026 com oito buscas
-em Campinas, a única fonte grátis que achou todas: "anhanguera taquaral",
-"marechal rondon 700" com o número certo, postos Shell da cidade. O Photon,
-sobre o OpenStreetMap, errou metade. Não tem nota.
+É grátis e sem cartão (plano Freemium). Nos nossos testes em Campinas foi a
+fonte grátis que achou mais lugares e endereços. Não tem nota.
 
-A chave vai na query string — é o único jeito que a TomTom aceita. Por isso
-nenhuma mensagem de erro daqui repete a URL, e o log do `httpx` fica abaixo
-de INFO em `main.py`.
+A chave vai na URL (é o único jeito que a TomTom aceita). Por isso nenhuma
+mensagem de erro daqui mostra a URL.
 
 @see https://developer.tomtom.com/search-api/documentation/search-service/fuzzy-search
 @see https://developer.tomtom.com/search-api/documentation/search-service/nearby-search
@@ -26,27 +23,26 @@ from app.schemas.place import Place, PlaceCategory
 
 BASE_URL = "https://api.tomtom.com/search/2"
 
-# Parâmetros comuns: resultado em português e só do Brasil.
+# Resultados em português e só do Brasil.
 _LOCALE = {"language": "pt-BR", "countrySet": "BR"}
 
-# Categorias de POI da TomTom (GET /search/2/poiCategories.json).
+# Códigos de categoria de POI da TomTom.
 NEARBY_CATEGORIES: dict[NearbyCategory, list[int]] = {
     NearbyCategory.POSTO: [7311],
     NearbyCategory.RESTAURANTE: [7315],
     NearbyCategory.HOTEL: [7314],
     # Atração turística, museu, mirante.
     NearbyCategory.PONTO_TURISTICO: [7376, 7317, 7337],
-    # Hospital e pronto-socorro. A categoria ampla de saúde (9663) fica de
-    # fora: ela inclui consultórios, vigilâncias e outros serviços que não
-    # atendem uma emergência.
+    # Hospital e pronto-socorro. A categoria geral de saúde fica de fora porque
+    # inclui consultórios e outros lugares que não atendem emergência.
     NearbyCategory.HOSPITAL: [7321, 9956],
     NearbyCategory.DESCANSO: [7314, 7311],
     # Área de serviço, posto, café.
     NearbyCategory.PARADA: [7395, 7311, 9376],
 }
 
-# Do POI da TomTom para as categorias do catálogo. Subcategorias têm 7
-# dígitos e começam pelos 4 da categoria (7315081 é um tipo de restaurante).
+# Categoria da TomTom → categoria do app. Subcategorias têm 7 dígitos e
+# começam pelos 4 da categoria (7315081 é um tipo de restaurante).
 _CATALOG_CATEGORY: dict[str, PlaceCategory] = {
     "7311": PlaceCategory.FUEL,
     "7315": PlaceCategory.FOOD,
@@ -58,7 +54,7 @@ _CATALOG_CATEGORY: dict[str, PlaceCategory] = {
 
 
 class PlaceSearchUnavailable(Exception):
-    """A busca por texto não respondeu — o catálogo responde sozinho."""
+    """A busca por texto não respondeu; a API responde só com os salvos."""
 
 
 class TomTomPlaceSearch:
@@ -72,13 +68,12 @@ class TomTomPlaceSearch:
         params: dict[str, Any] = {
             "key": self._api_key,
             "limit": limit,
-            # Aceita a palavra pela metade: é o que torna a busca um autocomplete.
+            # Aceita palavra pela metade (funciona como autocompletar).
             "typeahead": "true",
             **_LOCALE,
         }
         if near:
-            # Sem `radius`, é preferência e não restrição: "shopping iguatemi"
-            # traz o de Campinas primeiro, mas "museu do ipiranga" ainda acha.
+            # Sem `radius`, a posição só dá preferência aos lugares perto, sem excluir os longe.
             params |= {"lat": near.latitude, "lon": near.longitude}
 
         payload = await _get(
@@ -125,12 +120,11 @@ async def _get(client: httpx.AsyncClient, url: str, params: dict[str, Any]) -> d
     try:
         response = await client.get(url, params=params)
     except httpx.HTTPError as error:
-        # O nome da exceção, não a mensagem: a mensagem pode trazer a URL, e a
-        # URL traz a chave.
+        # Só o nome da exceção: a mensagem pode ter a URL, e a URL tem a chave.
         raise PlaceSearchUnavailable(f"TomTom sem resposta ({type(error).__name__})") from error
 
     if response.is_error:
-        # 403 = chave inválida ou limite do plano; 429 = muitas por segundo.
+        # 403 = chave inválida ou limite do plano; 429 = muitas chamadas por segundo.
         raise PlaceSearchUnavailable(f"TomTom respondeu {response.status_code}")
 
     try:
@@ -153,13 +147,12 @@ def _to_place(raw: Any) -> Place | None:
     poi = raw.get("poi") or {}
 
     if raw.get("type") == "POI" and poi.get("name"):
-        # "Shopping Iguatemi Campinas" / "Avenida Iguatemi, 777, Campinas"
+        # Ex.: "Shopping Iguatemi Campinas" / "Avenida Iguatemi, 777, Campinas"
         name = poi["name"]
         detail = _join(_street(address), address.get("municipality"))
         category = _catalog_category(poi)
     else:
-        # Endereço, rua ou cidade: o endereço é o próprio nome.
-        # "Avenida Marechal Rondon, 700" / "Jardim Chapadão, Campinas, SP"
+        # Endereço, rua ou cidade: o próprio endereço vira o nome.
         name = _street(address) or address.get("freeformAddress")
         detail = _join(
             address.get("municipalitySubdivision"),
@@ -201,22 +194,22 @@ def _to_candidate(raw: Any, category: NearbyCategory) -> Candidate | None:
 
 
 def _is_emergency_care(raw: Any) -> bool:
-    """Aceita somente hospital ou pronto-socorro na lista de emergência."""
+    """Na lista de emergência só entram hospital ou pronto-socorro."""
     if not isinstance(raw, dict):
         return False
 
     category_set = (raw.get("poi") or {}).get("categorySet") or []
     ids = [str(item.get("id", "")) for item in category_set if isinstance(item, dict)]
-    # 7321 inclui as subcategorias de hospital; 9956 é pronto-socorro.
-    return any(category_id.startswith("7321") or category_id.startswith("9956") for category_id in ids)
+    # 7321 = hospitais (e subcategorias); 9956 = pronto-socorro.
+    return any(category_id.startswith(("7321", "9956")) for category_id in ids)
 
 
 def _point(raw: Any) -> Coordinate | None:
     """
-    A entrada principal quando existe, senão o centro.
+    Usa a entrada principal do lugar, quando existir; senão, o centro.
 
-    Num shopping ou num hospital, o centro fica no meio do terreno e a rota
-    termina numa rua de trás; a entrada é onde o carro chega.
+    Num shopping ou hospital, o centro fica no meio do terreno e a rota
+    terminaria numa rua de trás. A entrada é onde o carro chega.
     """
     if not isinstance(raw, dict):
         return None

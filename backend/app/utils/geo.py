@@ -1,4 +1,4 @@
-"""Geometria sobre coordenadas — espelha `src/utils/geo.ts` do aplicativo."""
+"""Cálculos com coordenadas (igual ao `src/utils/geo.ts` do app)."""
 
 import math
 
@@ -8,7 +8,7 @@ EARTH_RADIUS_METERS = 6_371_008.8
 
 
 def distance_meters(origin: Coordinate, target: Coordinate) -> float:
-    """Distância em linha reta pela fórmula de Haversine."""
+    """Distância em linha reta entre dois pontos (fórmula de Haversine)."""
     lat1, lat2 = math.radians(origin.latitude), math.radians(target.latitude)
     d_lat = lat2 - lat1
     d_lon = math.radians(target.longitude - origin.longitude)

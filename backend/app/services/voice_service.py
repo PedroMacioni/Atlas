@@ -1,15 +1,12 @@
 """
-O comando falado vira evento do diário, com a emoção junto (RF-15, CA-07).
+Comando de voz vira evento do diário, junto com a emoção (RF-15, CA-07).
 
-O aplicativo já grava o áudio de cada comando para reconhecer a fala; ele
-sobe para cá, o modelo lê a emoção e o comando entra no diário com `emotion` e
-`emotion_confidence` preenchidos. A partir daí tudo que já existia funciona
-sozinho: a leitura alimenta a variável "emoção" do Random Forest, uma emoção
-relevante antecipa a próxima avaliação, e tensão forte e confiante faz o Atlas
-oferecer a emergência (§4.7).
+O app já grava o áudio de cada comando para reconhecer a fala. Esse áudio é
+enviado para cá, o modelo lê a emoção, e o evento é gravado com `emotion` e
+`emotion_confidence`. Essa leitura depois alimenta o Random Forest.
 
-Se o modelo não estiver pronto, o comando é gravado **mesmo assim**, só sem
-emoção. Perder a frase falada seria pior que perder a emoção dela.
+Se o modelo não estiver pronto, o comando é gravado mesmo assim, só que sem
+emoção. Perder a frase seria pior que perder a emoção.
 """
 
 import logging
@@ -79,7 +76,7 @@ class VoiceService:
         )
 
     async def _read_emotion(self, audio: bytes | None) -> tuple[EmotionReading | None, str | None]:
-        """A emoção do áudio, ou o motivo de não haver uma."""
+        """Lê a emoção do áudio, ou devolve o motivo de não ter emoção."""
         if not audio:
             return None, "no_audio"
 

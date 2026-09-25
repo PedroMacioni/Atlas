@@ -1,12 +1,9 @@
 """
-Persistência de viagens, diário de bordo e paradas.
+Acesso ao banco para viagens, diário de bordo, paradas, fotos e
+recomendações.
 
-Toda consulta de viagem filtra pelo aparelho dono dela. Não existe leitura
-"por id" solta: uma viagem de outro aparelho é, para quem pergunta, uma viagem
-que não existe.
-
-As linhas saem como o banco as tem (snake_case, colunas planas); a montagem
-das respostas é do serviço.
+Toda consulta de viagem filtra pelo aparelho dono dela: a viagem de outro
+aparelho, para quem pergunta, simplesmente não existe.
 """
 
 from typing import Any
@@ -28,7 +25,7 @@ class TripRepository:
         self._database = database
 
     async def ensure_device(self, anonymous_uuid: UUID) -> UUID:
-        """Devolve o id interno do aparelho, registrando-o na primeira vez."""
+        """Devolve o id interno do aparelho, cadastrando-o na primeira vez."""
         row = await self._database.upsert_returning(
             "devices", {"anonymous_uuid": str(anonymous_uuid)}, on_conflict="anonymous_uuid"
         )
@@ -53,8 +50,7 @@ class TripRepository:
         return rows[0] if rows else None
 
     async def list_trips(self, device_id: UUID, *, limit: int) -> list[Row]:
-        # `stops(count)` é a contagem embutida do PostgREST, pela chave
-        # estrangeira: uma consulta só, em vez de uma por card.
+        # `stops(count)` conta as paradas na mesma consulta, em vez de uma consulta por card.
         return await self._database.select(
             "trips",
             params={
@@ -66,8 +62,8 @@ class TripRepository:
         )
 
     async def finish_trip(self, device_id: UUID, trip_id: UUID, values: Row) -> Row | None:
-        # `ended_at=is.null` no filtro faz o encerramento ser atômico: duas
-        # chamadas simultâneas não encerram a mesma viagem duas vezes.
+        # O filtro `ended_at=is.null` garante que duas chamadas ao mesmo tempo
+        # não encerram a mesma viagem duas vezes.
         rows = await self._database.update(
             "trips",
             values,
@@ -99,11 +95,11 @@ class TripRepository:
         return await self._database.insert("photos", row)
 
     async def list_photos(self, trip_id: UUID) -> list[Row]:
-        """As fotos da viagem, com o evento do diário que cada uma registra."""
+        """Fotos da viagem, junto com o evento do diário de cada uma."""
         return await self._database.select(
             "photos",
             params={
-                # `!inner` vira JOIN: só as fotos de eventos desta viagem.
+                # `!inner` funciona como JOIN: só fotos de eventos desta viagem.
                 "select": (
                     "id,storage_path,created_at,"
                     "trip_events!inner(id,trip_id,occurred_at,latitude,longitude,image_class)"
@@ -123,12 +119,11 @@ class TripRepository:
         return await self._database.insert("recommendations", row)
 
     async def list_recommendations(self, trip_id: UUID) -> list[Row]:
-        """As recomendações da viagem, pelo evento do diário a que pertencem."""
+        """Recomendações da viagem (pelo evento do diário ligado a cada uma)."""
         return await self._database.select(
             "recommendations",
             params={
-                # `!inner` transforma o embed num JOIN: só vêm as recomendações
-                # cujo evento pertence a esta viagem.
+                # `!inner` funciona como JOIN: só recomendações desta viagem.
                 "select": (
                     "id,decision,confidence,accepted,simulated,created_at,"
                     "trip_events!inner(trip_id)"
@@ -141,7 +136,7 @@ class TripRepository:
     async def respond_recommendation(
         self, trip_id: UUID, recommendation_id: UUID, values: Row
     ) -> Row | None:
-        """Grava a resposta do usuário, uma vez só — `accepted=is.null`."""
+        """Grava a resposta do usuário uma única vez (`accepted=is.null`)."""
         known = [
             r for r in await self.list_recommendations(trip_id) if r["id"] == str(recommendation_id)
         ]

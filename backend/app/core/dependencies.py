@@ -1,10 +1,9 @@
 """
-Montagem das dependências.
+Injeção de dependências do FastAPI.
 
-Os objetos de longa vida — o cliente HTTP de saída, o cliente do Supabase, o
-provider de rotas — nascem uma vez no `lifespan` e ficam no estado do
-aplicativo. Os routers pedem o que precisam por `Depends`, e nenhum deles
-conhece `httpx`, URL de serviço ou chave de API.
+Os objetos que vivem o tempo todo (cliente HTTP, banco, provider de rotas)
+são criados uma vez no `lifespan` (main.py). As rotas pedem o que precisam
+com `Depends` e não sabem nada de URL ou chave.
 """
 
 from typing import Annotated
@@ -114,7 +113,7 @@ SceneServiceDep = Annotated[SceneService, Depends(get_scene_service)]
 VoiceServiceDep = Annotated[VoiceService, Depends(get_voice_service)]
 RecommendationServiceDep = Annotated[RecommendationService, Depends(get_recommendation_service)]
 
-# Identificador anônimo do aparelho (escopo §8). Sem login: o aplicativo gera
-# um UUID na primeira execução e o manda em toda chamada de viagem. Ausente ou
-# malformado, o pedido cai no envelope `invalid_request`.
+# Identificador anônimo do aparelho, enviado no cabeçalho `X-Atlas-Device`.
+# Não há login: o app gera um UUID na primeira execução. Sem ele (ou
+# inválido), o pedido é recusado com `invalid_request`.
 DeviceDep = Annotated[UUID, Header(alias="X-Atlas-Device")]

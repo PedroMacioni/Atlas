@@ -1,7 +1,4 @@
-"""
-Classificação de cena (RF-16, RF-22): o que o app manda e o que recebe de
-volta ao enviar uma foto.
-"""
+"""Classificação de cena (RF-16, RF-22): o que o app envia e o que recebe."""
 
 from enum import StrEnum
 from uuid import UUID
@@ -11,21 +8,20 @@ from app.schemas.trip import ImageClass, Photo
 
 
 class ScenePurpose(StrEnum):
-    """Para que a foto foi tirada — é o que decide se ela é guardada."""
+    """Para que a foto foi tirada. Decide se ela é guardada ou não."""
 
-    # Leitura automática da câmera: vira classe, não vira foto guardada.
+    # Leitura automática da câmera: só a classe fica, a foto é descartada.
     CONTEXT = "context"
-    # "Registrar ponto turístico": a foto fica.
+    # "Registrar ponto turístico": a foto é guardada.
     TOURIST_SPOT = "tourist_spot"
 
 
 class SceneResponse(ApiModel):
     image_class: ImageClass
     confidence: float
-    # A probabilidade de cada uma das 4 classes, como o modelo as viu.
+    # Probabilidade de cada uma das 4 classes.
     probabilities: dict[str, float]
-    # `false` quando a leitura não virou evento — cena repetida ou confiança
-    # baixa demais para valer um registro.
+    # `false` quando a leitura não virou evento (cena repetida ou confiança baixa).
     recorded: bool
     # `low_confidence` ou `unchanged`, quando não foi registrada.
     reason: str | None = None

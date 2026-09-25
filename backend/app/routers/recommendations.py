@@ -1,10 +1,9 @@
 """
 Recomendações do Random Forest durante a viagem (RF-17, RF-18, RF-19).
 
-O app chama `trigger: "check"` periodicamente e o backend decide se é hora —
-a regra de "a cada 1 hora e a cada mudança relevante" mora aqui, onde está o
-diário inteiro. `manual` é o pedido do usuário; `simulation` é o modo de
-demonstração.
+O app pergunta de tempos em tempos com `trigger: "check"` e o backend decide
+se já é hora de avaliar (a cada 1 hora ou quando algo importante muda).
+`manual` é o pedido do usuário; `simulation` é o modo de demonstração.
 """
 
 from uuid import UUID
@@ -29,7 +28,7 @@ async def evaluate(
     device: DeviceDep,
     service: RecommendationServiceDep,
 ) -> RecommendationResponse:
-    """Avalia a viagem agora e, se for o caso, recomenda — com justificativa."""
+    """Avalia a viagem agora e, se for o caso, recomenda algo com justificativa."""
     return await service.evaluate(device, trip_id, payload)
 
 

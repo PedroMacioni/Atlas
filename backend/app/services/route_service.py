@@ -1,17 +1,13 @@
 """
-Ponto único de acesso a rotas — o gêmeo servidor de
-`features/routing/services/route-service.ts`.
+Serviço de rotas: sempre na mesma ordem.
 
-A ordem importa e é sempre a mesma:
+    1. procura a rota no cache;
+    2. se não achar, pede ao serviço de rotas (OSRM);
+    3. guarda o resultado no cache;
+    4. devolve, dizendo se veio do cache ou não.
 
-    1. procura no cache;
-    2. se não achou, pergunta ao provider;
-    3. guarda o que recebeu;
-    4. devolve, dizendo de onde veio.
-
-Uma falha ao **gravar** o cache não derruba a resposta: a rota já está em mãos,
-e perder a economia da próxima chamada é preferível a negar esta. Uma falha ao
-**ler** também não — o provider é a fonte da verdade, o cache é conveniência.
+Se o cache falhar (na leitura ou na escrita), a rota é entregue mesmo assim.
+O cache só serve para economizar chamadas.
 """
 
 import logging

@@ -1,20 +1,16 @@
 """
-A câmera no fluxo da viagem (RF-16, RF-22, CA-06).
+A câmera durante a viagem (RF-16, RF-22, CA-06).
 
-Dois usos, como o escopo separa:
+Dois usos:
 
-- **`context`** — a leitura automática. O app fotografa a estrada de tempos em
-  tempos, a API classifica e **só a classe fica**. É ela que mantém a variável
-  "imagem" do Random Forest viva: uma leitura de posto ou de restaurante ainda
-  dispara a próxima avaliação (`ml/policy.evaluation_due`).
-- **`tourist_spot`** — "Atlas, registrar ponto turístico". A foto é guardada no
-  bucket privado, o evento entra no diário e ela aparece no resumo final e no
-  detalhe do histórico.
+- `context`: leitura automática. A API classifica a foto e só a classe
+  fica no diário. Ela alimenta a variável "imagem" do Random Forest.
+- `tourist_spot`: "Atlas, registrar ponto turístico". A foto é guardada no
+  bucket privado e aparece no resumo e no histórico.
 
-A leitura automática não vira evento toda vez. Gravar uma cena a cada cinco
-minutos encheria o diário de "estrada, estrada, estrada" e não diria nada a
-mais ao modelo: só entra quando a classe muda, quando a leitura anterior está
-perto de envelhecer, ou quando é a primeira da viagem.
+A leitura automática não vira evento toda vez (senão o diário encheria de
+"estrada, estrada, estrada"). Ela só é gravada quando a classe muda, quando
+a leitura anterior está ficando velha, ou quando é a primeira da viagem.
 """
 
 import logging
@@ -32,13 +28,13 @@ from app.vision.scene_classifier import InvalidImage, SceneClassifier, VisionUna
 
 logger = logging.getLogger("atlas.api")
 
-# Abaixo disso a câmera não viu nada que valha um evento — o painel do carro,
-# o céu, a lateral de um caminhão. O ponto turístico pedido pelo usuário é
-# gravado de qualquer jeito: quem mandou registrar foi ele.
+# Abaixo desta confiança a leitura automática é descartada (a câmera pode ter
+# visto o painel do carro ou o céu). O ponto turístico pedido pelo usuário é
+# gravado sempre.
 MIN_CONTEXT_CONFIDENCE = 0.5
 
-# Uma leitura vale 30 minutos para o modelo (`reading_max_age_minutes`).
-# Renovar aos 20 mantém a variável sempre fresca sem gravar a cada foto.
+# O modelo usa leituras de até 30 minutos. Renovar aos 20 mantém a variável
+# sempre atual sem gravar a cada foto.
 READING_REFRESH_MINUTES = 20
 
 
@@ -112,7 +108,7 @@ class SceneService:
     def _is_news(
         self, events: list[dict[str, Any]], image_class: ImageClass, now: datetime
     ) -> bool:
-        """A leitura muda alguma coisa para o modelo?"""
+        """Esta leitura muda alguma coisa para o modelo?"""
         previous = [event for event in events if event.get("image_class")]
 
         if not previous:
@@ -146,8 +142,7 @@ class SceneService:
             }
         )
 
-        # A foto depois do evento: sem evento não há a que prender a foto, e
-        # uma foto órfã no bucket não aparece em lugar nenhum.
+        # A foto é salva depois do evento, porque ela precisa estar ligada a ele.
         path = f"{trip['id']}/{uuid4().hex}.jpg"
         await self._repository.upload_photo(path, image)
         row = await self._repository.add_photo({"trip_event_id": event["id"], "storage_path": path})

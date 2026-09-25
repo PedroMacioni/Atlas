@@ -1,29 +1,23 @@
 """
-Gera o dataset sintético do Random Forest.
+Gera o dataset sintético (dados de treino) do Random Forest.
 
     uv run python -m ml.generate_dataset
 
-Saída: `ml/data/synthetic.csv`. Reprodutível — a semente é fixa, e rodar de
-novo produz o mesmo arquivo byte a byte.
+Saída: `ml/data/synthetic.csv`. A semente é fixa, então rodar de novo gera
+exatamente o mesmo arquivo.
 
-Como cada linha nasce:
+Como cada linha é criada:
 
-1. **Situação plausível.** Tempo de viagem, velocidade média (para derivar a
-   distância), tempo desde a última parada (nunca maior que a viagem), horário,
-   emoção e imagem. As proporções imitam uma viagem real: na maior parte do
-   tempo não há leitura de voz nem de câmera — daí o peso alto de
-   "desconhecido".
-2. **Rótulo com limiares individuais.** Cada linha usa os limiares de
-   `labeling.py` deslocados em até ±15%, como motoristas diferentes.
-3. **Cobertura de casos raros.** 30% das linhas saem de um "foco": restaurante
-   em horário de refeição, posto na estrada, ponto turístico com cada emoção,
-   madrugada, tensão. Sorteadas ao acaso, essas combinações quase não
-   apareceriam — e o modelo não aprende o que não viu. As regras de rótulo
-   continuam as mesmas; só a amostragem muda.
-4. **Ruído de rótulo.** 5% das linhas trocam para uma decisão vizinha
-   plausível (DESCANSAR ↔ FAZER UMA PARADA, por exemplo). Pessoas não são
-   consistentes, e um modelo que só viu regras perfeitas fica frágil na
-   fronteira.
+1. Situação realista: tempo de viagem, velocidade média (para calcular a
+   distância), tempo sem parar, horário, emoção e imagem. Na maior parte do
+   tempo não há leitura de voz nem de câmera ("desconhecido").
+2. Rótulo pelas regras de `labeling.py`, com os limites variando até ±15%
+   (como motoristas diferentes).
+3. Casos raros: 30% das linhas focam em situações que quase nunca
+   apareceriam por acaso (restaurante na hora do almoço, posto na estrada,
+   madrugada, tensão...). Assim o modelo também aprende esses casos.
+4. Ruído: 5% das linhas recebem uma decisão "vizinha" (ex.: DESCANSAR no
+   lugar de FAZER UMA PARADA), porque pessoas não decidem sempre igual.
 """
 
 import csv
@@ -70,7 +64,7 @@ IMAGE_WEIGHTS = {
     "ponto_turistico": 8,
 }
 
-# Para onde um rótulo "escorrega" quando uma pessoa decide diferente.
+# Para qual decisão um rótulo pode "escorregar" no ruído.
 NEIGHBORS = {
     "descansar": ("fazer_parada",),
     "fazer_parada": ("descansar", "continuar"),
@@ -86,8 +80,7 @@ def _weighted(rng: random.Random, weights: dict[str, int]) -> str:
 
 
 def sample_context(rng: random.Random) -> TripContext:
-    # Viagens curtas são mais comuns que longas, mas as longas são onde as
-    # decisões interessantes acontecem — por isso uma mistura.
+    # Mistura viagens curtas (mais comuns) e longas (onde acontecem as decisões interessantes).
     trip_minutes = rng.uniform(5, 240) if rng.random() < 0.6 else rng.uniform(240, 600)
 
     average_speed_kmh = rng.uniform(35, 95)
@@ -117,7 +110,7 @@ def _night_hour(rng: random.Random) -> float:
     return rng.uniform(22, 24) if rng.random() < 0.4 else rng.uniform(0, 5)
 
 
-# Cada foco ajusta uma situação comum para uma combinação rara.
+# Cada "foco" transforma uma situação comum numa combinação rara.
 FOCUSES = {
     "restaurante_refeicao": lambda c, rng: replace(c, image="restaurante", hour=_meal_hour(rng)),
     "refeicao": lambda c, rng: replace(c, hour=_meal_hour(rng)),

@@ -1,20 +1,18 @@
 """
 Emoção na voz (RF-15, CA-07): Cansado, Neutro, Animado, Tenso ou Bravo.
 
-O modelo é o `audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim`, treinado
-no MSP-Podcast para prever **dimensões** da fala — arousal, dominância e
-valência. A escolha é deliberada:
+Usamos o modelo `audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim`,
+que não devolve emoções prontas: ele devolve três números (arousal,
+dominância e valência). Motivos da escolha:
 
-- não existe modelo pronto e confiável para as 5 emoções do escopo em
-  português, e o grupo não tem dataset rotulado para treinar um;
-- as dimensões dependem mais de **como** se fala (energia, entonação) do que
-  das palavras, então atravessam melhor a barreira do idioma;
-- a tradução para os 5 estados fica em `emotion_rules.py`, legível e testável
-  sem `torch` — a decisão do projeto separada do peso do modelo.
+- não existe modelo pronto e confiável para as 5 emoções em português;
+- esses números dependem mais de como se fala (energia, entonação) do que
+  das palavras, então funcionam melhor entre idiomas;
+- a conversão para as 5 emoções fica em `emotion_rules.py`, simples de ler
+  e de testar sem precisar do `torch`.
 
-O áudio chega do aplicativo como WAV (Android) ou CAF (iOS), gravado junto do
-comando de voz pelo `expo-speech-recognition`. Aqui ele vira mono 16 kHz, que
-é o que o modelo espera.
+O áudio chega do app em WAV (Android) ou CAF (iOS) e é convertido para mono
+16 kHz, que é o formato que o modelo espera.
 
 @see https://huggingface.co/audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim
 """
@@ -31,22 +29,20 @@ logger = logging.getLogger("atlas.api")
 
 MODEL_SAMPLE_RATE = 16_000
 
-# Menos que isso não é fala: é o clique do botão ou um segundo de silêncio.
+# Menos que isso não é fala (é um clique ou silêncio).
 MIN_SECONDS = 0.4
-# Silêncio não é emoção nenhuma. Sem esta guarda o modelo inventa: medido em
-# 20/09/2026, três segundos de silêncio saíam como "tenso", arousal 0,60.
+# Silêncio não tem emoção. Sem esta regra o modelo "inventava" uma emoção.
 MIN_LOUDNESS = 0.005
-# O modelo olha a fala inteira de uma vez; 30 s cobrem qualquer comando e
-# evitam que um áudio esquecido aberto trave a CPU.
+# Corta o áudio em 30 s para um arquivo esquecido não travar a CPU.
 MAX_SECONDS = 30
 
 
 class InvalidAudio(Exception):
-    """O arquivo não é um áudio legível, ou é curto demais para dizer algo."""
+    """O arquivo não é um áudio válido ou é curto demais."""
 
 
 class EmotionUnavailable(Exception):
-    """O classificador não está pronto — carregando ou sem dependências."""
+    """O classificador não está pronto (carregando ou sem dependências)."""
 
 
 class EmotionClassifier(Protocol):
@@ -69,7 +65,7 @@ class Wav2VecEmotionClassifier:
         return self._model is not None
 
     def load_in_background(self) -> None:
-        """Carrega numa thread: a API responde enquanto o modelo baixa."""
+        """Carrega o modelo numa thread separada; a API continua respondendo enquanto isso."""
         threading.Thread(target=self._load, name="emotion-loader", daemon=True).start()
 
     def _load(self) -> None:
@@ -102,7 +98,7 @@ class Wav2VecEmotionClassifier:
 
         with self._lock, torch.no_grad():
             inputs = self._processor(samples, sampling_rate=MODEL_SAMPLE_RATE, return_tensors="pt")
-            # Saída na ordem do modelo: arousal, dominância, valência.
+            # O modelo devolve nesta ordem: arousal, dominância, valência.
             arousal, dominance, valence = self._model(inputs["input_values"])[0].tolist()
 
         return to_emotion(arousal=arousal, valence=valence, dominance=dominance)
@@ -110,10 +106,9 @@ class Wav2VecEmotionClassifier:
 
 def decode(audio: bytes):
     """
-    Os bytes do aplicativo viram mono 16 kHz, que é o que o modelo espera.
+    Converte os bytes do app para mono 16 kHz, o formato do modelo.
 
-    O Android grava WAV 16 kHz e o iOS grava CAF — o `soundfile` lê os dois
-    pela libsndfile, sem depender de `ffmpeg` instalado na máquina.
+    O `soundfile` lê WAV e CAF sem precisar do `ffmpeg` instalado.
     """
     import numpy as np
     import soundfile
@@ -123,7 +118,7 @@ def decode(audio: bytes):
     except Exception as error:  # libsndfile levanta tipos próprios
         raise InvalidAudio("O arquivo enviado não é um áudio legível.") from error
 
-    # Mono: a média dos canais preserva a fala melhor que descartar um lado.
+    # Mono: a média dos canais.
     mono = samples.mean(axis=1)
 
     if mono.size < MIN_SECONDS * rate:

@@ -1,15 +1,15 @@
 """
-Recomendações durante a viagem — o Random Forest ligado ao diário de bordo.
+Recomendações durante a viagem: liga o Random Forest ao diário de bordo.
 
-O caminho de uma avaliação:
+Caminho de uma avaliação:
 
     diário + relógio + distância do app
-        → as 6 variáveis              (ml/policy.build_context)
-        → é hora de avaliar?          (ml/policy.evaluation_due)
+        → monta as 6 variáveis        (ml/policy.build_context)
+        → já é hora de avaliar?       (ml/policy.evaluation_due)
         → tensão forte? emergência    (ml/policy.needs_assistance)
         → Random Forest + explicação  (ml/model, ml/explanation)
-        → interromper ou não?         (ml/policy.notification_policy)
-        → evento `recommendation` no diário + linha em `recommendations`
+        → vale avisar o motorista?    (ml/policy.notification_policy)
+        → grava o evento no diário e a linha em `recommendations`
 """
 
 from datetime import UTC, datetime
@@ -123,14 +123,14 @@ class RecommendationService:
             context = apply_overrides(context, overrides)
             emotion_confidence = overrides.get("emotion_confidence", emotion_confidence)
 
-        # 1. É hora? Só a consulta periódica pode ouvir "ainda não".
+        # 1. Já é hora? Só a consulta periódica pode receber "ainda não".
         cause = None
         if request.trigger == "check":
             cause = evaluation_due(trip, events, history, now=now, policy=self._policy)
             if cause is None:
                 return RecommendationResponse(evaluated=False, notify=False, reason="not_due")
 
-        # 2. Emergência antes do modelo.
+        # 2. Emergência vem antes do modelo.
         if needs_assistance(context.emotion, emotion_confidence, self._policy):
             await self._repository.add_event(
                 {
@@ -140,8 +140,8 @@ class RecommendationService:
                     **_location(request),
                     "command": "Assistência sugerida: tensão forte na voz"
                     + (" (simulação)" if simulated else ""),
-                    # Na simulação a emoção é inventada: gravá-la aqui a faria
-                    # contar como leitura real de voz nas próximas avaliações.
+                    # Na simulação a emoção é inventada. Gravar aqui faria ela contar
+                    # como leitura real de voz nas próximas avaliações.
                     "emotion": None if simulated else context.emotion,
                     "emotion_confidence": None if simulated else emotion_confidence,
                 }
@@ -150,11 +150,11 @@ class RecommendationService:
                 evaluated=True, notify=True, assistance=True, reason="assistance"
             )
 
-        # 3. O modelo.
+        # 3. Pergunta ao modelo.
         prediction = self._model.predict(context)
         justification = explain(prediction.decision, prediction.contributions, context)
 
-        # 4. Interromper ou não. Pedido do usuário e simulação sempre respondem.
+        # 4. Avisar ou não? Pedido do usuário e simulação sempre respondem.
         record, notify, reason = True, True, None
         if request.trigger == "check":
             record, notify, reason = notification_policy(
@@ -164,7 +164,7 @@ class RecommendationService:
         if not record:
             return RecommendationResponse(evaluated=True, notify=False, reason=reason)
 
-        # 5. Diário de bordo e registro da recomendação.
+        # 5. Grava no diário e na tabela de recomendações.
         event = await self._repository.add_event(
             {
                 "trip_id": trip["id"],
@@ -228,9 +228,16 @@ class RecommendationService:
     async def answer(
         self, device: UUID, trip_id: UUID, recommendation_id: UUID, answer: RecommendationAnswer
     ) -> RecommendationAnswerResponse:
-        """Aceita ou recusa (CA-10). Vira rótulo real para o dataset (§4.6)."""
+        """Aceita ou recusa (CA-10). A resposta vira rótulo real para o dataset (§4.6)."""
         _, trip = await self._trips.open_trip(device, trip_id)
         now = self._clock()
+
+        # Já respondida antes: devolve a resposta que valeu, sem gravar outro
+        # evento no diário (que poderia dizer o contrário da primeira resposta).
+        history = await self._repository.list_recommendations(trip["id"])
+        known = next((r for r in history if str(r["id"]) == str(recommendation_id)), None)
+        if known is not None and known.get("accepted") is not None:
+            return RecommendationAnswerResponse(id=known["id"], accepted=bool(known["accepted"]))
 
         row = await self._repository.respond_recommendation(
             trip["id"],

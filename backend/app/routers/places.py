@@ -1,10 +1,9 @@
 """
-Catálogo de destinos.
+Busca de destinos.
 
-Substitui `features/destination/constants/demo-places.ts`: a tela "Definir
-destino" passa a receber os lugares da API — os salvos, do banco, e com texto
-digitado também os da TomTom. Os nomes dos campos são os mesmos do tipo
-`Place` do aplicativo.
+A tela "Definir destino" recebe daqui os lugares salvos (do banco) e, quando
+há texto digitado, também os resultados da TomTom. Os campos têm os mesmos
+nomes do tipo `Place` do aplicativo.
 """
 
 from typing import Annotated
@@ -41,10 +40,10 @@ async def list_places(
     longitude: Annotated[float | None, Query(ge=-180, le=180)] = None,
 ) -> PlaceListResponse:
     """
-    Lista lugares, com busca e filtro opcionais. Salvos vêm primeiro; com
-    texto, os achados da TomTom vêm depois deles, os mais perto primeiro.
+    Lista lugares, com busca e filtro opcionais. Os salvos vêm primeiro; com
+    texto, os resultados da TomTom vêm depois, os mais perto primeiro.
     """
-    # Só uma das duas não localiza ninguém: a busca segue sem preferência.
+    # Só com latitude E longitude dá para saber onde o usuário está.
     near = (
         Coordinate(latitude=latitude, longitude=longitude)
         if latitude is not None and longitude is not None
@@ -58,5 +57,5 @@ async def get_place(
     service: PlaceServiceDep,
     place_id: Annotated[str, Path(max_length=120, examples=["viracopos"])],
 ) -> Place:
-    """Um lugar pelo identificador — útil para retomar uma viagem por link."""
+    """Busca um lugar pelo id."""
     return await service.get(place_id)

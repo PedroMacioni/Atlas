@@ -1,17 +1,16 @@
 """
-A política em volta do modelo: quando perguntar, o que perguntar e quando
-ficar quieto.
+Regras em volta do modelo: quando perguntar, o que perguntar e quando ficar
+quieto.
 
-O Random Forest responde "o que fazer agora". Estas regras respondem o resto,
-e são funções puras sobre o diário de bordo — testáveis sem banco, sem modelo
-e sem relógio.
+O Random Forest responde "o que fazer agora". Estas funções respondem o
+resto, olhando só o diário de bordo (dá para testar sem banco e sem modelo):
 
-- **Montar as 6 variáveis** a partir da viagem e do diário (`build_context`).
-- **Quando avaliar** (RF-18): a cada 1 hora e a cada mudança relevante
-  (`evaluation_due`).
-- **Quando interromper** o motorista: confiança mínima, tempo de espera entre
-  recomendações iguais, CONTINUAR em silêncio (`notification_policy`).
-- **Emergência antes do modelo** (§11): tensão forte na voz não passa pelo
+- montar as 6 variáveis a partir da viagem (`build_context`);
+- quando avaliar (RF-18): a cada 1 hora ou quando algo importante muda
+  (`evaluation_due`);
+- quando avisar o motorista: confiança mínima, espera entre recomendações
+  iguais, CONTINUAR em silêncio (`notification_policy`);
+- emergência antes do modelo (§11): tensão forte na voz não passa pelo
   Random Forest (`needs_assistance`).
 """
 
@@ -30,24 +29,22 @@ Row = dict[str, Any]
 class PolicySettings:
     # RF-18: "analisar o contexto a cada 1 hora".
     interval_minutes: float = 60
-    # Uma leitura de voz ou de câmera mais velha que isto já não descreve o
-    # agora, e vira "desconhecida".
+    # Leitura de voz ou câmera mais velha que isto vira "desconhecida".
     reading_max_age_minutes: float = 30
-    # Abaixo disto o Atlas não interrompe — uma recomendação fraca falada em
-    # voz alta atrapalha mais do que ajuda.
+    # Abaixo desta confiança o Atlas não avisa (recomendação fraca atrapalha).
     min_confidence: float = 0.5
-    # A mesma recomendação não volta antes disto, aceita ou recusada.
+    # A mesma recomendação não se repete antes disto, aceita ou recusada.
     cooldown_minutes: float = 30
-    # Tempo sem parada que, cruzado, dispara uma avaliação fora de hora.
+    # Tempo sem parar que, quando ultrapassado, dispara uma avaliação extra.
     stop_alert_minutes: float = 120
-    # Tensão ou raiva com confiança acima disto vão para a assistência.
+    # Tensão ou raiva com confiança acima disto vão para a emergência.
     assistance_confidence: float = 0.85
     timezone: str = "America/Sao_Paulo"
 
 
 DEFAULT_POLICY = PolicySettings()
 
-# Leituras que, quando aparecem, justificam uma avaliação fora de hora.
+# Leituras que justificam uma avaliação fora de hora.
 RELEVANT_EMOTIONS = {"cansado", "tenso", "bravo"}
 RELEVANT_IMAGES = {"posto", "restaurante", "ponto_turistico"}
 
@@ -60,9 +57,14 @@ def _minutes(delta: timedelta) -> float:
     return max(0.0, delta.total_seconds() / 60)
 
 
+# Eventos que só copiam uma leitura que já estava no diário: não são leituras
+# novas de voz ou câmera.
+_COPIED_READINGS = {"recommendation", "emergency"}
+
+
 def _readings(events: Sequence[Row], field: str) -> list[Row]:
-    """Eventos que trazem uma leitura de voz ou câmera — nunca as recomendações."""
-    return [e for e in events if e.get(field) and e.get("kind") != "recommendation"]
+    """Eventos com leitura de voz ou câmera (recomendações e emergências não contam)."""
+    return [e for e in events if e.get(field) and e.get("kind") not in _COPIED_READINGS]
 
 
 def last_stop_time(trip: Row, events: Sequence[Row]) -> datetime:
@@ -73,7 +75,7 @@ def last_stop_time(trip: Row, events: Sequence[Row]) -> datetime:
 def latest_reading(
     events: Sequence[Row], field: str, now: datetime, max_age_minutes: float
 ) -> Row | None:
-    """A leitura mais recente de `emotion` ou `image_class`, se ainda for atual."""
+    """Leitura mais recente de `emotion` ou `image_class`, se ainda for atual."""
     readings = _readings(events, field)
     if not readings:
         return None
@@ -92,10 +94,10 @@ def build_context(
     policy: PolicySettings = DEFAULT_POLICY,
 ) -> TripContext:
     """
-    As 6 variáveis da viagem, agora.
+    Monta as 6 variáveis da viagem neste momento.
 
-    Quatro vêm do diário e do relógio — o app não precisa calculá-las. Só a
-    distância percorrida vem do aparelho, que é quem soma o GPS.
+    Quase tudo vem do diário e do relógio. Só a distância percorrida vem do
+    app, que soma o GPS.
     """
     local = now.astimezone(ZoneInfo(policy.timezone))
     emotion = latest_reading(events, "emotion", now, policy.reading_max_age_minutes)
@@ -112,7 +114,7 @@ def build_context(
 
 
 def apply_overrides(context: TripContext, overrides: dict[str, Any]) -> TripContext:
-    """Simulação: troca as variáveis informadas e mantém as demais reais."""
+    """Simulação: troca as variáveis informadas e mantém as outras reais."""
     mapping = {
         "hour": "hour",
         "trip_minutes": "trip_minutes",
@@ -124,15 +126,24 @@ def apply_overrides(context: TripContext, overrides: dict[str, Any]) -> TripCont
     changes = {mapping[k]: v for k, v in overrides.items() if k in mapping and v is not None}
     simulated = replace(context, **changes)
 
-    # Consistência: nunca "sem parar há mais tempo do que viaja".
+    # Não pode estar sem parar há mais tempo do que está viajando.
     if simulated.minutes_since_stop > simulated.trip_minutes:
         simulated = replace(simulated, trip_minutes=simulated.minutes_since_stop)
 
     return simulated
 
 
-def last_evaluation_time(trip: Row, recommendations: Sequence[Row]) -> datetime:
+def last_evaluation_time(
+    trip: Row, recommendations: Sequence[Row], events: Sequence[Row] = ()
+) -> datetime:
+    """Quando foi a última avaliação real (ou o início da viagem, se não houve)."""
     real = [_time(r["created_at"]) for r in recommendations if not r.get("simulated")]
+    # O alerta automático de tensão (evento `emergency` com a emoção gravada)
+    # também conta como avaliação. Sem isso, a mesma leitura de voz faria o
+    # alerta aparecer de novo a cada consulta do app (a cada 5 minutos).
+    real += [
+        _time(e["occurred_at"]) for e in events if e.get("kind") == "emergency" and e.get("emotion")
+    ]
     return max(real) if real else _time(trip["started_at"])
 
 
@@ -145,18 +156,18 @@ def evaluation_due(
     policy: PolicySettings = DEFAULT_POLICY,
 ) -> str | None:
     """
-    Por que avaliar agora — ou `None` se ainda não é hora.
+    Motivo para avaliar agora, ou `None` se ainda não é hora.
 
-    O app consulta periodicamente e o backend decide, porque é ele que tem o
-    diário inteiro. Os motivos, em ordem:
+    O app pergunta de tempos em tempos e o backend decide, porque é ele que
+    tem o diário inteiro. Os motivos, em ordem:
 
     1. passou 1 hora desde a última avaliação (ou desde a partida);
-    2. chegou uma leitura de emoção relevante (cansado, tenso, bravo);
-    3. chegou uma leitura de imagem relevante (posto, restaurante, ponto
+    2. chegou uma leitura de emoção importante (cansado, tenso, bravo);
+    3. chegou uma leitura de imagem importante (posto, restaurante, ponto
        turístico);
-    4. o tempo sem parada acabou de cruzar 2 horas.
+    4. o tempo sem parar acabou de passar de 2 horas.
     """
-    since = last_evaluation_time(trip, recommendations)
+    since = last_evaluation_time(trip, recommendations, events)
 
     if _minutes(now - since) >= policy.interval_minutes:
         return "Análise periódica (1 hora)"
@@ -197,12 +208,11 @@ def notification_policy(
     policy: PolicySettings = DEFAULT_POLICY,
 ) -> tuple[bool, bool, str | None]:
     """
-    Para uma avaliação automática: `(gravar no diário, avisar, motivo)`.
+    Para uma avaliação automática, decide `(gravar no diário, avisar, motivo)`.
 
-    - Confiança baixa: nem grava nem avisa — o modelo não tem o que dizer.
-    - Repetida dentro do tempo de espera: nem grava nem avisa.
-    - CONTINUAR: grava (o diário mostra que o Atlas avaliou), mas não
-      interrompe ninguém para dizer "continue".
+    - Confiança baixa: não grava nem avisa.
+    - Mesma recomendação há pouco tempo: não grava nem avisa.
+    - CONTINUAR: grava (para o diário mostrar que avaliou), mas não interrompe.
     - O resto: grava e avisa.
     """
     if confidence < policy.min_confidence:

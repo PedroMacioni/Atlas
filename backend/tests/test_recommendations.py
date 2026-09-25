@@ -154,6 +154,27 @@ def test_mudanca_relevante_antecipa_a_avaliacao():
     assert evaluation_due(TRIP, calm, [], now=T0 + timedelta(minutes=25)) is None
 
 
+def test_alerta_de_tensao_nao_se_repete_a_cada_consulta():
+    # Voz tensa aos 20 min: a consulta dos 25 min avalia (e oferece ajuda).
+    reading = _event("command", 20, emotion="tenso", emotion_confidence=0.9)
+    assert evaluation_due(TRIP, [reading], [], now=T0 + timedelta(minutes=25)) is not None
+
+    # O alerta automático fica no diário com a emoção copiada. Ele conta como
+    # avaliação, e a mesma leitura não dispara de novo na consulta seguinte.
+    alert = _event("emergency", 25, emotion="tenso", emotion_confidence=0.9)
+    assert evaluation_due(TRIP, [reading, alert], [], now=T0 + timedelta(minutes=30)) is None
+
+
+def test_emergencia_nao_conta_como_leitura_nova_de_voz():
+    # Uma emergência copia a emoção de uma leitura antiga; ela não pode
+    # "renovar" essa leitura, senão a emoção nunca envelheceria.
+    old_reading = _event("command", 10, emotion="tenso")
+    alert = _event("emergency", 50, emotion="tenso")
+    now = T0 + timedelta(minutes=55)
+    context = build_context(TRIP, [old_reading, alert], now=now, distance_km=0)
+    assert context.emotion == "desconhecido"
+
+
 def test_cruzar_duas_horas_sem_parada_dispara():
     last_eval = [{"created_at": (T0 + timedelta(minutes=100)).isoformat(), "decision": "x"}]
     due = evaluation_due(TRIP, [], last_eval, now=T0 + timedelta(minutes=121))
@@ -310,6 +331,40 @@ def test_aceitar_recomendacao_fica_registrado(api_with_clock):
     assert answer.json()["accepted"] is True
     assert repository.recommendations[0]["accepted"] is True
     assert repository.events[-1]["command"].startswith("Recomendação aceita")
+
+
+def test_responder_de_novo_nao_grava_evento_contraditorio(api_with_clock):
+    client, _, repository = api_with_clock
+    trip_id = _start(client)
+    recommendation = client.post(
+        f"/v1/trips/{trip_id}/recommendations",
+        json={"trigger": "manual", "distanceMeters": 500},
+    ).json()["recommendation"]
+    url = f"/v1/trips/{trip_id}/recommendations/{recommendation['id']}/answer"
+
+    client.post(url, json={"accepted": True})
+    events_before = len(repository.events)
+    second = client.post(url, json={"accepted": False})
+
+    # Vale a primeira resposta, e o diário não ganha um "recusada" falso.
+    assert second.json()["accepted"] is True
+    assert len(repository.events) == events_before
+
+
+def test_emocao_predominante_ignora_recomendacoes_simuladas(api_with_clock):
+    client, _, repository = api_with_clock
+    trip_id = _start(client)
+
+    # A simulação grava a emoção inventada no evento da recomendação.
+    client.post(
+        f"/v1/trips/{trip_id}/recommendations",
+        json={"trigger": "simulation", "distanceMeters": 0, "simulation": {"emotion": "cansado"}},
+    )
+    finished = client.post(
+        f"/v1/trips/{trip_id}/finish", json={"endReason": "button", "distanceMeters": 0}
+    ).json()
+
+    assert finished["predominantEmotion"] is None
 
 
 def test_simulacao_so_com_trigger_de_simulacao(api_with_clock):
